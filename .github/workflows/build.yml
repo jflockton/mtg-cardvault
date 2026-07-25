@@ -35,6 +35,9 @@ jobs:
       - name: Build Scryfall reference DB (bundled into the installer)
         run: npm run build:refdb -- --out resources/reference.db
 
+      - name: Fetch Tesseract traineddata (bundled into the installer)
+        run: npm run fetch:tessdata
+
       - name: Sanity-check reference DB
         run: npm run check:refdb -- --data resources
 

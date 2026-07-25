@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   CardRef,
+  CornerScanResult,
   Finish,
   InventoryItem,
   InventorySummary,
@@ -22,6 +23,8 @@ export interface CardVaultApi {
     quantity?: number
   ) => Promise<InventoryItem | null>
   listInventory: () => Promise<InventorySummary>
+  /** OCR + resolve a corner crop; variants are the same crop in different polarities. */
+  scanCorner: (imageVariants: string[]) => Promise<CornerScanResult>
 }
 
 const api: CardVaultApi = {
@@ -37,7 +40,8 @@ const api: CardVaultApi = {
   addCard: (card, finish, quantity) => ipcRenderer.invoke('inv:add', { card, finish, quantity }),
   removeCard: (scryfallId, finish, quantity) =>
     ipcRenderer.invoke('inv:remove', { scryfallId, finish, quantity }),
-  listInventory: () => ipcRenderer.invoke('inv:list')
+  listInventory: () => ipcRenderer.invoke('inv:list'),
+  scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants)
 }
 
 contextBridge.exposeInMainWorld('api', api)

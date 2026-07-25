@@ -2,13 +2,13 @@
 
 Webcam card scanner + local-first inventory app for a game shop's Magic: The Gathering singles (~3000+ loose cards, no existing inventory). Present a card to the camera, get a confident match, write it to the database, repeat — speed of entry is the top priority.
 
-**Status: build step 2 of 7** — camera feed + frame capture are in; OCR is next.
+**Status: build step 3 of 7** — scan-to-match works: capture → OCR → identified printing (or a tap-to-pick shortlist for old frames).
 
 | Step | What | Status |
 |---|---|---|
 | 1 | Scaffold + DB + Scryfall bulk import + manual add form | ✅ |
 | 2 | Camera feed + frame capture | ✅ |
-| 3 | OCR pipeline (Tesseract, region crops, set/collector parse) | ⬜ |
+| 3 | OCR pipeline (Tesseract, corner crop, set/collector parse + resolve) | ✅ |
 | 4 | Fast add loop (confidence gating, keyboard flow, audio confirm) | ⬜ |
 | 5 | Remove mode | ⬜ |
 | 6 | Search / browse UI + CSV export | ⬜ |
@@ -16,9 +16,10 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 
 ## How it works
 
-- **Primary match = set code + collector number** (bottom-left of every modern card, e.g. `0123/280` + `M21`). That pair uniquely identifies the exact printing. The card name (top) is OCR'd only as a cross-check — if they disagree, the match is flagged low-confidence instead of silently written.
+- **The bottom-left corner is the whole identity — nothing else is OCR'd.** Modern cards (~2015+) print `0123/280` + `M21 • EN` there: set code + collector number, a direct unique lookup. Older frames print **no set code at all** — just `13/150` and a copyright line — so the resolver identifies the set by its printed size (Scryfall's `printed_size`, exactly what the `/150` means) and breaks ties with the copyright year. `13/150` + `©2008` → Morningtide, one exact hit. Genuinely ambiguous reads produce a tap-to-pick shortlist, never a silent guess. (Name OCR was dropped: webcam-resolution title bars OCR too poorly to be a useful cross-check — the confirm-before-write step is the accuracy gate instead.)
 - **Finish (foil / etched) is not printed on the card**, so it's a manual toggle in the UI (default: nonfoil). Foil and nonfoil of the same printing are separate inventory stacks.
-- **Camera capture** (step 2): live `getUserMedia` feed with a card-outline guide — the operator fills the outline with the card. The on-screen guide and the frame cropper share one set of geometry constants ([src/renderer/src/scan/geometry.ts](src/renderer/src/scan/geometry.ts)), so what you align to is exactly what gets cropped: a title-bar strip (name cross-check) and a bottom-left corner box (set code + collector number), extracted at 3× scale for OCR. Space captures; camera choice is remembered.
+- **Camera capture** (step 2): live `getUserMedia` feed with a card-outline guide — the operator fills the outline with the card. The on-screen guide and the frame cropper share one set of geometry constants ([src/renderer/src/scan/geometry.ts](src/renderer/src/scan/geometry.ts)), so what you align to is exactly what gets cropped. Space captures; camera choice is remembered.
+- **OCR** (step 3): the corner crop is extracted at 3×, grayscaled with a percentile contrast stretch, and produced in both polarities (black-border cards print white-on-black; Tesseract wants dark-on-light). tesseract.js runs in the **main process** with bundled traineddata (`npm run fetch:tessdata`), so OCR is fully offline and the renderer carries no wasm/worker plumbing — a scan round-trip is well under 200 ms. The parser handles OCR digit confusions (O→0, I→1…) and both corner formats; the raw read is always shown in the UI for tuning.
 - **Offline-first Scryfall data.** No per-card API calls. The app imports Scryfall's `default_cards` bulk file (streamed to disk, then stream-parsed into SQLite) so every scan is an instant local lookup. Installers ship with a pre-built reference DB, so the app works on first launch with no internet. A "Refresh card data" button rebuilds it (needed roughly weekly / after a set release). Only a genuine cache miss (e.g. a brand-new set) falls back to one live API call, which is then cached locally.
 
 ## Tech stack
@@ -33,7 +34,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 
 Two SQLite files in the OS app-data dir (`%APPDATA%/mtg-cardvault/data` on Windows, `~/Library/Application Support/mtg-cardvault/data` on macOS) — they survive reinstalls and are what the shop backs up:
 
-- **`reference.db`** — `scryfall_cards` imported from bulk data; read-only after import, rebuilt wholesale on refresh (built to a `.tmp` and atomically swapped). Indexed on `(set_code, collector_number)` and `name`.
+- **`reference.db`** — `scryfall_cards` imported from bulk data plus `scryfall_sets` (set names, release dates, `printed_size` for old-frame resolution); read-only after import, rebuilt wholesale on refresh (built to a `.tmp` and atomically swapped). Indexed on `(set_code, collector_number)` and `name`.
 - **`inventory.db`** — `inventory` table: what the shop owns. Denormalised card fields (name, set, rarity, …) so the collection stays browsable independently of reference data. `UNIQUE(scryfall_id, finish)` — adding an existing stack increments `quantity`.
 
 Lookups normalise OCR-style input: `"M21"` + `"0123/274"` → set `m21`, collector `123`.
@@ -43,7 +44,8 @@ Lookups normalise OCR-style input: `"M21"` + `"0123/274"` → set `m21`, collect
 ```bash
 npm install                                  # deps; better-sqlite3 compiled for Node
 npm run build:refdb                          # one-off: build ./data/reference.db from Scryfall bulk (~2GB download, deleted after import)
-npm run check:refdb                          # sanity-check lookups + inventory logic
+npm run fetch:tessdata                       # one-off: Tesseract eng traineddata (~4MB) for offline OCR
+npm run check:refdb                          # sanity-check lookups, old-frame resolution, inventory logic
 npm run rebuild:electron                     # recompile better-sqlite3 for Electron's ABI
 MTG_CARDVAULT_DATA_DIR=./data npm run dev    # run the app against the local data dir
 ```

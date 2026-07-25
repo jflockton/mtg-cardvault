@@ -47,6 +47,22 @@ try {
   assert(results.length > 0, 'name search returned nothing')
   console.log(`search ok: "Lightning Bolt" → ${results.length} printings`)
 
+  // Old-frame resolution: no set code printed — number/total + copyright year.
+  if (store.hasSetMetadata()) {
+    const res = store.resolveCorner({
+      setCode: null,
+      number: '13',
+      total: 150,
+      year: 2008,
+      raw: ''
+    })
+    assert.equal(res.kind, 'exact', `old-frame resolve: expected exact, got ${res.kind}`)
+    assert.equal(res.card!.setCode, 'mor', `old-frame resolve landed on ${res.card!.setCode}`)
+    console.log(`resolve ok: 13/150 + ©2008 → ${res.card!.name} (MOR #13)`)
+  } else {
+    console.log('resolve skipped: no set metadata in this DB')
+  }
+
   // Inventory cycle: add, increment, separate foil stack, remove.
   const card = store.lookup('ltr', '246')!
   const first = store.addToInventory(card, 'nonfoil')

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import CameraPanel, { type CapturedFrame } from './components/CameraPanel'
 import type {
   CardRef,
+  CornerScanResult,
   Finish,
   InventorySummary,
   RefProgress,
@@ -9,12 +10,16 @@ import type {
 } from '../../shared/types'
 
 interface CapturePreview {
-  frameUrl: string
-  titleUrl: string
   cornerUrl: string
   width: number
   height: number
 }
+
+type ScanState =
+  | { status: 'idle' }
+  | { status: 'scanning' }
+  | { status: 'done'; result: CornerScanResult }
+  | { status: 'error'; message: string }
 
 function formatBytes(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`
@@ -173,6 +178,57 @@ function CardPreview({
   )
 }
 
+function ScanReadout({
+  result,
+  onPick
+}: {
+  result: CornerScanResult
+  onPick: (c: CardRef) => void
+}): React.JSX.Element {
+  const { resolution, parsed, confidence, ms } = result
+  return (
+    <div>
+      <p className="muted small">
+        read: set <b>{parsed.setCode?.toUpperCase() ?? '—'}</b> · №{' '}
+        <b>{parsed.number ?? '—'}</b>
+        {parsed.total != null && <>/{parsed.total}</>} · year <b>{parsed.year ?? '—'}</b> ·{' '}
+        {Math.round(confidence)}% conf · {ms} ms
+      </p>
+      {resolution.kind === 'exact' && (
+        <p className="message">Matched — confirm below (Enter adds).</p>
+      )}
+      {resolution.kind === 'candidates' && (
+        <>
+          <p className="warn">
+            Old frame (no set code printed) — {resolution.candidates!.length} sets share this
+            numbering. Pick the right one:
+          </p>
+          <ul className="search-results">
+            {resolution.candidates!.map((c) => (
+              <li key={c.scryfallId}>
+                <button className="link" onClick={() => onPick(c)}>
+                  {c.name} — {c.setName} ({c.setCode.toUpperCase()}) #{c.collectorNumber}
+                  {c.releasedAt ? ` · ${c.releasedAt.slice(0, 4)}` : ''}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {resolution.kind === 'none' && (
+        <p className="warn">
+          Couldn't identify the card — rescan (sharper, fill the outline) or use manual entry
+          below.
+        </p>
+      )}
+      <details>
+        <summary>raw OCR text</summary>
+        <pre className="ocr-raw">{parsed.raw || '(empty)'}</pre>
+      </details>
+    </div>
+  )
+}
+
 export default function App(): React.JSX.Element {
   const [refStatus, setRefStatus] = useState<RefStatus | null>(null)
   const [inventory, setInventory] = useState<InventorySummary | null>(null)
@@ -191,16 +247,7 @@ export default function App(): React.JSX.Element {
 
   const [cameraOn, setCameraOn] = useState(true)
   const [capture, setCapture] = useState<CapturePreview | null>(null)
-
-  const onCapture = useCallback((c: CapturedFrame) => {
-    setCapture({
-      frameUrl: c.frame.toDataURL('image/png'),
-      titleUrl: c.title.toDataURL('image/png'),
-      cornerUrl: c.corner.toDataURL('image/png'),
-      width: c.width,
-      height: c.height
-    })
-  }, [])
+  const [scan, setScan] = useState<ScanState>({ status: 'idle' })
 
   const setInputRef = useRef<HTMLInputElement>(null)
 
@@ -224,8 +271,17 @@ export default function App(): React.JSX.Element {
     setQuantity(1)
     setSearchResults([])
     setShowSearch(false)
-    setInputRef.current?.focus()
+    setCapture(null)
+    setScan({ status: 'idle' })
   }, [])
+
+  const applyCard = useCallback(
+    (c: CardRef) => {
+      setCard(c)
+      if (!c.finishes.includes(finish)) setFinish(c.finishes[0] ?? 'nonfoil')
+    },
+    [finish]
+  )
 
   const lookup = useCallback(async () => {
     if (!setCode.trim() || !collectorNumber.trim()) return
@@ -239,9 +295,34 @@ export default function App(): React.JSX.Element {
       )
       return
     }
-    setCard(found)
-    if (!found.finishes.includes(finish)) setFinish(found.finishes[0] ?? 'nonfoil')
-  }, [setCode, collectorNumber, finish])
+    applyCard(found)
+  }, [setCode, collectorNumber, applyCard])
+
+  const onCapture = useCallback(
+    async (c: CapturedFrame) => {
+      setCapture({
+        cornerUrl: c.corner.toDataURL('image/png'),
+        width: c.width,
+        height: c.height
+      })
+      setCard(null)
+      setMessage(null)
+      setScan({ status: 'scanning' })
+      try {
+        const result = await window.api.scanCorner(c.cornerVariants)
+        setScan({ status: 'done', result })
+        if (result.resolution.kind === 'exact' && result.resolution.card) {
+          applyCard(result.resolution.card)
+        }
+      } catch (err) {
+        setScan({
+          status: 'error',
+          message: err instanceof Error ? err.message : String(err)
+        })
+      }
+    },
+    [applyCard]
+  )
 
   const addCard = useCallback(async () => {
     if (!card) return
@@ -315,30 +396,48 @@ export default function App(): React.JSX.Element {
         {cameraOn && <CameraPanel onCapture={onCapture} />}
         {capture && (
           <div className="capture-preview">
-            <p className="muted">
-              Captured at {capture.width}×{capture.height} — OCR wiring lands in step 3; check
-              the two crops are sharp and fully inside their boxes.
-            </p>
             <div className="capture-row">
               <figure>
-                <img className="capture-frame" src={capture.frameUrl} alt="captured frame" />
-                <figcaption className="muted small">full frame</figcaption>
+                <img className="capture-crop" src={capture.cornerUrl} alt="collector info crop" />
+                <figcaption className="muted small">
+                  collector info crop ({capture.width}×{capture.height} frame)
+                </figcaption>
               </figure>
-              <div className="capture-crops">
-                <figure>
-                  <img className="capture-crop" src={capture.titleUrl} alt="name region" />
-                  <figcaption className="muted small">name region</figcaption>
-                </figure>
-                <figure>
-                  <img className="capture-crop" src={capture.cornerUrl} alt="set / collector region" />
-                  <figcaption className="muted small">set / collector region</figcaption>
-                </figure>
-                <button onClick={() => setCapture(null)}>Clear</button>
+              <div className="scan-status">
+                {scan.status === 'scanning' && <p className="muted">Reading…</p>}
+                {scan.status === 'error' && <p className="warn">OCR failed: {scan.message}</p>}
+                {scan.status === 'done' && (
+                  <ScanReadout
+                    result={scan.result}
+                    onPick={(c) => {
+                      applyCard(c)
+                      setScan({ status: 'idle' })
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>
         )}
       </section>
+
+      {(message || card) && (
+        <section className="panel">
+          <h2>Match</h2>
+          {message && <p className="message">{message}</p>}
+          {card && (
+            <CardPreview
+              card={card}
+              finish={finish}
+              setFinish={setFinish}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              onAdd={addCard}
+              onCancel={resetForNext}
+            />
+          )}
+        </section>
+      )}
 
       <section className="panel">
         <h2>Add card (manual)</h2>
@@ -368,20 +467,6 @@ export default function App(): React.JSX.Element {
           </button>
         </div>
 
-        {message && <p className="message">{message}</p>}
-
-        {card && (
-          <CardPreview
-            card={card}
-            finish={finish}
-            setFinish={setFinish}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            onAdd={addCard}
-            onCancel={resetForNext}
-          />
-        )}
-
         {showSearch && (
           <div className="search-area">
             <div className="lookup-row">
@@ -403,9 +488,8 @@ export default function App(): React.JSX.Element {
                     <button
                       className="link"
                       onClick={() => {
-                        setCard(c)
+                        applyCard(c)
                         setShowSearch(false)
-                        if (!c.finishes.includes(finish)) setFinish(c.finishes[0] ?? 'nonfoil')
                       }}
                     >
                       {c.name} — {c.setName} ({c.setCode.toUpperCase()}) #{c.collectorNumber}

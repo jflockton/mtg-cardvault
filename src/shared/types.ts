@@ -66,3 +66,25 @@ export interface LookupQuery {
   setCode: string
   collectorNumber: string
 }
+
+/** Outcome of resolving an OCR'd corner against the reference DB. */
+export interface ScanResolution {
+  kind: 'exact' | 'candidates' | 'none'
+  card?: CardRef
+  candidates?: CardRef[]
+}
+
+/** Full result of a corner scan, returned to the renderer. */
+export interface CornerScanResult {
+  resolution: ScanResolution
+  /** What the parser extracted (nulls where unreadable). */
+  parsed: {
+    setCode: string | null
+    number: string | null
+    total: number | null
+    year: number | null
+    raw: string
+  }
+  confidence: number
+  ms: number
+}

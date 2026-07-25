@@ -3,8 +3,16 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import { DataStore } from './store'
-import { buildReferenceDb, fetchCardLive } from './refdb'
-import type { Finish, LookupQuery, RefProgress } from '../shared/types'
+import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
+import { scanCorner, terminateOcr } from './ocr'
+import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
+
+/** Tesseract traineddata: repo-local in dev, resources/tessdata when packaged. */
+function resolveTessdataDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'tessdata')
+    : path.join(app.getAppPath(), 'resources', 'tessdata')
+}
 
 // Data lives in the OS app-data dir (survives reinstalls/updates, easy to
 // back up). MTG_CARDVAULT_DATA_DIR overrides for development so the repo's
@@ -109,6 +117,24 @@ function registerIpc(): void {
   )
 
   ipcMain.handle('inv:list', () => store.listInventory())
+
+  ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
+    const scan = await scanCorner(imageVariants, resolveTessdataDir())
+    let resolution = store.resolveCorner(scan.parse)
+    // Modern card whose set is newer than the reference DB: try live.
+    if (resolution.kind === 'none' && scan.parse.setCode && scan.parse.number) {
+      try {
+        const live = await fetchCardLive(scan.parse.setCode, scan.parse.number)
+        if (live) {
+          store.cacheCard(live)
+          resolution = { kind: 'exact', card: live }
+        }
+      } catch {
+        // offline/rate-limited — leave as none
+      }
+    }
+    return { resolution, parsed: scan.parse, confidence: scan.confidence, ms: scan.ms }
+  })
 }
 
 app.whenReady().then(() => {
@@ -127,6 +153,17 @@ app.whenReady().then(() => {
   console.log(`[cardvault] data dir: ${dataDir}`)
   console.log(`[cardvault] reference: ${JSON.stringify(store.refStatus())}`)
 
+  // Reference DBs built before set metadata existed: backfill in the
+  // background (one small API call). Fresh imports include it already.
+  if (store.refStatus().ready && !store.hasSetMetadata()) {
+    fetchSetsList()
+      .then((rows) => {
+        store.upsertSets(rows)
+        console.log(`[cardvault] backfilled ${rows.length} sets`)
+      })
+      .catch((err) => console.warn('[cardvault] sets backfill failed:', err))
+  }
+
   registerIpc()
   createWindow()
 
@@ -140,5 +177,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('quit', () => {
+  void terminateOcr()
   store?.close()
 })

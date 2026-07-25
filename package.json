@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "build:refdb": "tsx scripts/build-reference-db.ts",
     "check:refdb": "tsx scripts/check-refdb.ts",
+    "fetch:tessdata": "tsx scripts/fetch-tessdata.ts",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
@@ -25,7 +26,8 @@
     "better-sqlite3": "^13.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "stream-json": "^3.5.0"
+    "stream-json": "^3.5.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

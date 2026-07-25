@@ -16,7 +16,15 @@ import {
   normalizeCollectorNumber,
   rowToCardRef
 } from './refdb'
-import type { CardRef, Finish, InventoryItem, InventorySummary, RefStatus } from '../shared/types'
+import type {
+  CardRef,
+  Finish,
+  InventoryItem,
+  InventorySummary,
+  RefStatus,
+  ScanResolution
+} from '../shared/types'
+import type { CornerParse } from './cornerParse'
 
 const INV_SCHEMA = `
 CREATE TABLE IF NOT EXISTS inventory (
@@ -126,6 +134,84 @@ export class DataStore {
     } finally {
       this.openReferenceIfPresent()
     }
+  }
+
+  /** True if set metadata (printed_size) is loaded — needed for old frames. */
+  hasSetMetadata(): boolean {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return false
+    const row = this.refDb
+      .prepare(
+        "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'scryfall_sets'"
+      )
+      .get() as { n: number }
+    if (row.n === 0) return false
+    const count = this.refDb.prepare('SELECT COUNT(*) AS n FROM scryfall_sets').get() as {
+      n: number
+    }
+    return count.n > 0
+  }
+
+  upsertSets(rows: import('./refdb').ScryfallSetRow[]): void {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return
+    const insert = this.refDb.prepare(`
+      INSERT OR REPLACE INTO scryfall_sets
+        (code, name, released_at, card_count, printed_size, set_type, digital)
+      VALUES (@code, @name, @released_at, @card_count, @printed_size, @set_type, @digital)
+    `)
+    this.refDb.transaction((all: import('./refdb').ScryfallSetRow[]) => {
+      for (const r of all) insert.run(r)
+    })(rows)
+  }
+
+  /**
+   * Resolve an OCR'd corner to a printing.
+   * Modern cards: set code + number → direct lookup.
+   * No/failed set code: "number/total" identifies the set by its printed size
+   * (exactly what the "/150" on the card means); the copyright year breaks
+   * ties. Old frames print no set code at all, so this is their only path.
+   */
+  resolveCorner(parse: CornerParse): ScanResolution {
+    if (parse.setCode && parse.number) {
+      const card = this.lookup(parse.setCode, parse.number)
+      if (card) return { kind: 'exact', card }
+    }
+
+    if (parse.number && parse.total) {
+      this.openReferenceIfPresent()
+      if (!this.refDb) return { kind: 'none' }
+      const sets = this.refDb
+        .prepare(
+          `SELECT code, released_at FROM scryfall_sets
+           WHERE digital = 0
+             AND (printed_size = @total
+                  OR (printed_size IS NULL AND card_count = @total))`
+        )
+        .all({ total: parse.total }) as { code: string; released_at: string | null }[]
+
+      let matches = sets
+        .map((s) => ({
+          card: this.lookup(s.code, parse.number!),
+          year: s.released_at ? Number(s.released_at.slice(0, 4)) : null
+        }))
+        .filter((m): m is { card: CardRef; year: number | null } => m.card !== null)
+
+      // Progressive year narrowing: exact copyright-year matches beat ±1
+      // (a Jan/Feb release can carry the previous year's copyright).
+      if (parse.year !== null && matches.length > 1) {
+        const exact = matches.filter((m) => m.year === parse.year)
+        const near = matches.filter((m) => m.year !== null && Math.abs(m.year - parse.year!) <= 1)
+        matches = exact.length > 0 ? exact : near.length > 0 ? near : matches
+      }
+
+      if (matches.length === 1) return { kind: 'exact', card: matches[0].card }
+      if (matches.length > 1) {
+        return { kind: 'candidates', candidates: matches.slice(0, 8).map((m) => m.card) }
+      }
+    }
+
+    return { kind: 'none' }
   }
 
   lookup(setCode: string, collectorNumber: string): CardRef | null {

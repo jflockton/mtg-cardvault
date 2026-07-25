@@ -18,6 +18,15 @@ const SCRYFALL_HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' 
 const BULK_DATA_URL = 'https://api.scryfall.com/bulk-data'
 
 export const REF_SCHEMA = `
+CREATE TABLE IF NOT EXISTS scryfall_sets (
+  code         TEXT PRIMARY KEY,
+  name         TEXT NOT NULL DEFAULT '',
+  released_at  TEXT,
+  card_count   INTEGER,
+  printed_size INTEGER,
+  set_type     TEXT,
+  digital      INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS scryfall_cards (
   scryfall_id      TEXT PRIMARY KEY,
   name             TEXT NOT NULL,
@@ -152,6 +161,56 @@ export function rowToCardRef(row: RefRow, source: 'local' | 'live'): CardRef {
     releasedAt: row.released_at,
     source
   }
+}
+
+export interface ScryfallSetRow {
+  code: string
+  name: string
+  released_at: string | null
+  card_count: number | null
+  printed_size: number | null
+  set_type: string | null
+  digital: number
+}
+
+/**
+ * Fetch the full set list (~900 rows, one small call). printed_size is the
+ * total printed on cards ("13/150" → 150) — the key to identifying old
+ * frames that carry no set code.
+ */
+export async function fetchSetsList(): Promise<ScryfallSetRow[]> {
+  const rows: ScryfallSetRow[] = []
+  let url: string | null = 'https://api.scryfall.com/sets'
+  while (url) {
+    const res = await fetch(url, { headers: SCRYFALL_HEADERS })
+    if (!res.ok) throw new Error(`Scryfall sets listing failed: HTTP ${res.status}`)
+    const page = (await res.json()) as {
+      data: {
+        code: string
+        name: string
+        released_at?: string
+        card_count?: number
+        printed_size?: number
+        set_type?: string
+        digital?: boolean
+      }[]
+      has_more?: boolean
+      next_page?: string
+    }
+    for (const s of page.data) {
+      rows.push({
+        code: s.code,
+        name: s.name,
+        released_at: s.released_at ?? null,
+        card_count: s.card_count ?? null,
+        printed_size: s.printed_size ?? null,
+        set_type: s.set_type ?? null,
+        digital: s.digital ? 1 : 0
+      })
+    }
+    url = page.has_more && page.next_page ? page.next_page : null
+  }
+  return rows
 }
 
 /** Fetch the bulk-data listing and return the default_cards download URI + size. */
@@ -298,6 +357,13 @@ export async function buildReferenceDb(
     onProgress?.({ phase: 'import', imported })
   )
 
+  // Set metadata (printed_size etc.) — small, but powers old-frame resolution.
+  try {
+    upsertSetsIntoDb(tmpDbPath, await fetchSetsList())
+  } catch (err) {
+    console.warn('sets listing failed (non-fatal):', err)
+  }
+
   onProgress?.({ phase: 'finalize' })
   const doSwap = () => {
     fs.rmSync(targetDbPath, { force: true })
@@ -309,6 +375,23 @@ export async function buildReferenceDb(
   fs.rmSync(bulkPath, { force: true })
   onProgress?.({ phase: 'done', imported: count })
   return count
+}
+
+export function upsertSetsIntoDb(dbPath: string, rows: ScryfallSetRow[]): void {
+  const db = new Database(dbPath)
+  try {
+    db.exec(REF_SCHEMA)
+    const insert = db.prepare(`
+      INSERT OR REPLACE INTO scryfall_sets
+        (code, name, released_at, card_count, printed_size, set_type, digital)
+      VALUES (@code, @name, @released_at, @card_count, @printed_size, @set_type, @digital)
+    `)
+    db.transaction((all: ScryfallSetRow[]) => {
+      for (const r of all) insert.run(r)
+    })(rows)
+  } finally {
+    db.close()
+  }
 }
 
 /**

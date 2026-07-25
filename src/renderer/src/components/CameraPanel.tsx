@@ -13,10 +13,15 @@ const DEVICE_KEY = 'cardvault.cameraDeviceId'
 export interface CapturedFrame {
   /** Full frame at native camera resolution. */
   frame: HTMLCanvasElement
-  /** Title-bar crop (card name). */
+  /** Title-bar crop (card name — kept for a future cross-check). */
   title: HTMLCanvasElement
-  /** Bottom-left crop (collector number + set code). */
+  /** Bottom-left crop (collector number / set code / copyright). */
   corner: HTMLCanvasElement
+  /**
+   * OCR-ready corner variants (PNG data URLs), most-likely polarity first:
+   * grayscale + contrast-stretched, dark-text-on-light.
+   */
+  cornerVariants: string[]
   width: number
   height: number
 }
@@ -33,15 +38,86 @@ function cropRegion(video: HTMLVideoElement, region: NormRect, scale = 3): HTMLC
   return out
 }
 
+/**
+ * Prepare OCR variants: grayscale with a percentile contrast stretch, in both
+ * polarities. Tesseract strongly prefers dark text on a light background, and
+ * card corners come both ways (black-border cards print white-on-black), so
+ * we lead with whichever polarity this crop most likely needs.
+ */
+function toOcrVariants(src: HTMLCanvasElement): string[] {
+  const w = src.width
+  const h = src.height
+  const ctx = src.getContext('2d')!
+  const img = ctx.getImageData(0, 0, w, h)
+  const px = img.data
+  const n = w * h
+
+  const lum = new Uint8Array(n)
+  const hist = new Uint32Array(256)
+  for (let i = 0; i < n; i++) {
+    const l = (px[i * 4] * 299 + px[i * 4 + 1] * 587 + px[i * 4 + 2] * 114) / 1000
+    lum[i] = l
+    hist[l & 0xff]++
+  }
+
+  // 5th/95th percentile stretch — robust against glare pixels.
+  let lo = 0
+  let hi = 255
+  let acc = 0
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v]
+    if (acc >= n * 0.05) {
+      lo = v
+      break
+    }
+  }
+  acc = 0
+  for (let v = 255; v >= 0; v--) {
+    acc += hist[v]
+    if (acc >= n * 0.05) {
+      hi = v
+      break
+    }
+  }
+  const range = Math.max(1, hi - lo)
+
+  let meanSum = 0
+  for (let i = 0; i < n; i++) meanSum += lum[i]
+  const darkBackground = meanSum / n < 118
+
+  const render = (invert: boolean): string => {
+    const out = document.createElement('canvas')
+    out.width = w
+    out.height = h
+    const octx = out.getContext('2d')!
+    const oimg = octx.createImageData(w, h)
+    for (let i = 0; i < n; i++) {
+      let v = Math.max(0, Math.min(255, Math.round(((lum[i] - lo) / range) * 255)))
+      if (invert) v = 255 - v
+      oimg.data[i * 4] = v
+      oimg.data[i * 4 + 1] = v
+      oimg.data[i * 4 + 2] = v
+      oimg.data[i * 4 + 3] = 255
+    }
+    octx.putImageData(oimg, 0, 0)
+    return out.toDataURL('image/png')
+  }
+
+  // Dark background → the inverted (light) version is the likely winner.
+  return darkBackground ? [render(true), render(false)] : [render(false), render(true)]
+}
+
 export function captureFromVideo(video: HTMLVideoElement): CapturedFrame {
   const frame = document.createElement('canvas')
   frame.width = video.videoWidth
   frame.height = video.videoHeight
   frame.getContext('2d')!.drawImage(video, 0, 0)
+  const corner = cropRegion(video, CORNER_REGION)
   return {
     frame,
     title: cropRegion(video, TITLE_REGION),
-    corner: cropRegion(video, CORNER_REGION),
+    corner,
+    cornerVariants: toOcrVariants(corner),
     width: video.videoWidth,
     height: video.videoHeight
   }
@@ -191,18 +267,15 @@ export default function CameraPanel({
         <video ref={videoRef} muted playsInline />
         {running && (
           <div className="card-guide" style={guideStyle}>
-            <div className="region-guide title" style={regionStyle(TITLE_REGION)}>
-              <span>name</span>
-            </div>
             <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
-              <span>set / №</span>
+              <span>collector info</span>
             </div>
           </div>
         )}
       </div>
       <p className="muted small">
-        Fill the outline with the card — name in the top band, collector number in the
-        bottom-left box.
+        Fill the outline with the card — the bottom-left fine print (collector number) must
+        land in the dashed box, sharp.
       </p>
     </div>
   )

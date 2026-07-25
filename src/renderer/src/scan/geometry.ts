@@ -22,10 +22,12 @@ export const GUIDE_HEIGHT_FRAC = 0.92
 export const TITLE_REGION: NormRect = { x: 0.03, y: 0.03, w: 0.94, h: 0.085 }
 
 /**
- * Bottom-left corner: collector number + set code, two small lines
- * (e.g. "0123/280 R" over "M21 • EN"). The primary identifier.
+ * Bottom-left corner: the identifying fine print. The primary identifier.
+ * Modern cards: "0123/280 R" + "M21 • EN". Older frames print no set code —
+ * just "13/150" above the artist/copyright lines — so the region is tall
+ * enough to catch the whole text block; the parser picks out what it needs.
  */
-export const CORNER_REGION: NormRect = { x: 0.0, y: 0.895, w: 0.46, h: 0.105 }
+export const CORNER_REGION: NormRect = { x: 0.0, y: 0.85, w: 0.55, h: 0.15 }
 
 /** The card guide rect in display/frame pixels, centered horizontally. */
 export function cardGuideRect(frameWidth: number, frameHeight: number): {

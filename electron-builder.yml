@@ -15,6 +15,14 @@ files:
 extraResources:
   - from: resources/reference.db
     to: reference.db
+  # Tesseract traineddata (npm run fetch:tessdata) — OCR works fully offline.
+  - from: resources/tessdata
+    to: tessdata
+# tesseract.js spawns a worker thread from a real file path, and its wasm core
+# can't load from inside the asar archive.
+asarUnpack:
+  - '**/node_modules/tesseract.js/**'
+  - '**/node_modules/tesseract.js-core/**'
 win:
   target: nsis
   # Code signing is optional (unsigned = SmartScreen "unknown publisher"

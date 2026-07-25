@@ -331,10 +331,36 @@ select {
 
 .capture-crop {
   max-width: 420px;
-  max-height: 90px;
+  max-height: 120px;
   border-radius: 4px;
   border: 1px solid var(--border);
   background: #000;
+}
+
+.scan-status {
+  flex: 1;
+  min-width: 280px;
+}
+
+.scan-status b {
+  color: var(--text);
+}
+
+details summary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.ocr-raw {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  max-width: 480px;
 }
 
 table {
