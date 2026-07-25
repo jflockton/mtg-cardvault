@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell, systemPreferences } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -112,6 +112,15 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  // Webcam access: allow media permission requests from our own renderer,
+  // and trigger the one-time macOS system prompt.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === 'media')
+  })
+  if (process.platform === 'darwin') {
+    systemPreferences.askForMediaAccess('camera').catch(() => {})
+  }
+
   const dataDir = resolveDataDir()
   seedReferenceDbFromResources(dataDir)
   store = new DataStore(dataDir)

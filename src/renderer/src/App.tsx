@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import CameraPanel, { type CapturedFrame } from './components/CameraPanel'
 import type {
   CardRef,
   Finish,
@@ -6,6 +7,14 @@ import type {
   RefProgress,
   RefStatus
 } from '../../shared/types'
+
+interface CapturePreview {
+  frameUrl: string
+  titleUrl: string
+  cornerUrl: string
+  width: number
+  height: number
+}
 
 function formatBytes(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`
@@ -180,6 +189,19 @@ export default function App(): React.JSX.Element {
   const [searchResults, setSearchResults] = useState<CardRef[]>([])
   const [showSearch, setShowSearch] = useState(false)
 
+  const [cameraOn, setCameraOn] = useState(true)
+  const [capture, setCapture] = useState<CapturePreview | null>(null)
+
+  const onCapture = useCallback((c: CapturedFrame) => {
+    setCapture({
+      frameUrl: c.frame.toDataURL('image/png'),
+      titleUrl: c.title.toDataURL('image/png'),
+      cornerUrl: c.corner.toDataURL('image/png'),
+      width: c.width,
+      height: c.height
+    })
+  }, [])
+
   const setInputRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = useCallback(() => {
@@ -284,7 +306,42 @@ export default function App(): React.JSX.Element {
       <ReferencePanel status={refStatus} onStatusChange={loadStatus} />
 
       <section className="panel">
-        <h2>Add card (manual — scanner coming in step 2)</h2>
+        <div className="ref-row">
+          <h2>Scan card</h2>
+          <button onClick={() => setCameraOn((v) => !v)}>
+            {cameraOn ? 'Hide camera' : 'Show camera'}
+          </button>
+        </div>
+        {cameraOn && <CameraPanel onCapture={onCapture} />}
+        {capture && (
+          <div className="capture-preview">
+            <p className="muted">
+              Captured at {capture.width}×{capture.height} — OCR wiring lands in step 3; check
+              the two crops are sharp and fully inside their boxes.
+            </p>
+            <div className="capture-row">
+              <figure>
+                <img className="capture-frame" src={capture.frameUrl} alt="captured frame" />
+                <figcaption className="muted small">full frame</figcaption>
+              </figure>
+              <div className="capture-crops">
+                <figure>
+                  <img className="capture-crop" src={capture.titleUrl} alt="name region" />
+                  <figcaption className="muted small">name region</figcaption>
+                </figure>
+                <figure>
+                  <img className="capture-crop" src={capture.cornerUrl} alt="set / collector region" />
+                  <figcaption className="muted small">set / collector region</figcaption>
+                </figure>
+                <button onClick={() => setCapture(null)}>Clear</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Add card (manual)</h2>
         <div className="lookup-row">
           <label>
             Set code
