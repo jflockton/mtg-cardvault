@@ -1,0 +1,35 @@
+# Packaging config. The acceptance test for Windows: the .exe installer runs
+# on a machine with NO dev tools installed — Electron bundles Node + Chromium,
+# and the reference DB ships inside the installer via extraResources.
+appId: com.jflockton.mtgcardvault
+productName: MTG CardVault
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+# Pre-built Scryfall reference DB, produced by `npm run build:refdb -- --out
+# resources/reference.db` BEFORE running electron-builder. The app copies it
+# from the (read-only) install dir into writable app-data on first launch.
+extraResources:
+  - from: resources/reference.db
+    to: reference.db
+win:
+  target: nsis
+  # Code signing is optional (unsigned = SmartScreen "unknown publisher"
+  # warning, acceptable for a single shop). To sign, set certificateFile /
+  # certificatePassword here or via CSC_LINK / CSC_KEY_PASSWORD env vars.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+mac:
+  target: dmg
+  category: public.app-category.utilities
+# Rebuild native modules (better-sqlite3) against Electron's ABI on the
+# platform doing the packaging — this is why Windows installers are built on
+# a Windows runner in CI.
+npmRebuild: true

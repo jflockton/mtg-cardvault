@@ -1,0 +1,24 @@
+# deps / build output
+node_modules/
+out/
+dist/
+
+# local data — reference + inventory DBs and downloaded bulk files
+data/
+resources/reference.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# logs & OS noise
+npm-debug.log*
+*.log
+.DS_Store
+
+# env
+.env
+.env.local
+
+# TS incremental build info
+*.tsbuildinfo
