@@ -81,28 +81,27 @@ function ReferencePanel({
   }
 
   return (
-    <section className="panel ref-panel">
-      <div className="ref-row">
-        <div>
-          <h2>Card database</h2>
+    <div className="ref-inline">
+      <div>
           {status?.ready ? (
-            <p className="muted">
-              {status.cardCount.toLocaleString()} printings · Scryfall data from{' '}
+            <p className="muted small">
+              {status.cardCount.toLocaleString()} printings · Scryfall{' '}
               {status.updatedAt ? new Date(status.updatedAt).toLocaleDateString() : 'unknown'}
             </p>
           ) : (
-            <p className="warn">
-              No reference data yet — download it once to enable offline lookups.
+            <p className="warn small">
+              No card data yet — download it once to enable offline lookups.
             </p>
           )}
-        </div>
-        <button onClick={refresh} disabled={busy}>
+      </div>
+        <button className="slim" onClick={refresh} disabled={busy}>
           {busy ? 'Refreshing…' : status?.ready ? 'Refresh card data' : 'Download card data'}
         </button>
-      </div>
       {progressText && (
         <div className="progress-area">
-          <p className={progress?.phase === 'error' ? 'warn' : 'muted'}>{progressText}</p>
+          <p className={`small ${progress?.phase === 'error' ? 'warn' : 'muted'}`}>
+            {progressText}
+          </p>
           {pct !== null && (
             <div className="progress-bar">
               <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -110,7 +109,7 @@ function ReferencePanel({
           )}
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -838,9 +837,8 @@ export default function App(): React.JSX.Element {
     <div className={`app ${flash ? 'flash' : ''}`}>
       <header>
         <h1>🃏 MTG CardVault</h1>
+        <ReferencePanel status={refStatus} onStatusChange={loadStatus} />
       </header>
-
-      <ReferencePanel status={refStatus} onStatusChange={loadStatus} />
 
       <div className="columns">
       <div className="col scan-col">

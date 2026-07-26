@@ -58,8 +58,10 @@ function logScan(entry: Record<string, unknown>): void {
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    width: 1320,
+    height: 860,
+    minWidth: 1080,
+    minHeight: 720,
     title: 'MTG CardVault',
     webPreferences: {
       preload: path.join(import.meta.dirname, '../preload/index.mjs'),

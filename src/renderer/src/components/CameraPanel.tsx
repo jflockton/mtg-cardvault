@@ -8,7 +8,7 @@ import {
 } from '../scan/geometry'
 
 /** Maximum on-screen height of the camera stage (px). */
-const MAX_DISPLAY_HEIGHT = 420
+const MAX_DISPLAY_HEIGHT = 340
 
 const DEVICE_KEY = 'cardvault.cameraDeviceId'
 

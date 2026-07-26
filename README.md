@@ -2,7 +2,7 @@
 
 Webcam card scanner + local-first inventory app for a game shop's Magic: The Gathering singles (~3000+ loose cards, no existing inventory). Present a card to the camera, get a confident match, write it to the database, repeat — speed of entry is the top priority.
 
-**Status: build step 4 of 7** — hands-free entry works: hold a card up, it locks, beeps, and writes itself to inventory; swap to the next card.
+**Status: steps 1–4 done and battle-hardened in live scanning sessions.** Hold a card up, it locks, beeps, and writes itself to inventory; swap to the next card. The operator contract: **beep = counted, no beep = didn't count.**
 
 | Step | What | Status |
 |---|---|---|
@@ -10,8 +10,9 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 2 | Camera feed + frame capture | ✅ |
 | 3 | OCR pipeline (Tesseract, corner crop, set/collector parse + resolve) | ✅ |
 | 4 | Fast add loop (auto-lock, audio confirm, undo, keyboard flow) | ✅ |
+| — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, collection value + list export | ✅ |
 | 5 | Remove mode | ⬜ |
-| 6 | Search / browse UI + CSV export | ⬜ |
+| 6 | Search / browse UI + CSV export (collection view, value & copy-list export exist; filters/CSV pending) | 🟡 |
 | 7 | Packaging: NSIS installer via GitHub Actions | 🟡 config in place, unverified |
 
 ## How it works
