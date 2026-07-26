@@ -186,6 +186,10 @@ function registerIpc(): void {
     }
   )
 
+  // Renderer loop decisions (lock/stage/add/block) — same debug log, so the
+  // frame reads and the decisions they triggered line up on one timeline.
+  ipcMain.on('scan:note', (_e, note: string) => logScan({ mode: 'loop', note }))
+
   ipcMain.handle('precon:list', () => fetchPreconList())
 
   ipcMain.handle('precon:info', async (_e, fileName: string) => {

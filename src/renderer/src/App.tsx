@@ -406,15 +406,10 @@ export default function App(): React.JSX.Element {
   const pendingRef = useRef<{ card: CardRef; finish: Finish } | null>(null)
   const pendingClear = useRef(0) // frames since staging that did NOT show the pending card
   const pendingAgree = useRef(0) // further frames agreeing with the staged card
-  // Has the camera seen an EMPTY frame since staging? Only then did the card
-  // actually leave — a new lock without a gap is a competing interpretation
-  // of the SAME physical card, not the next one.
-  const pendingSawGap = useRef(false)
   const setPending = useCallback((p: { card: CardRef; finish: Finish } | null) => {
     pendingRef.current = p
     pendingClear.current = 0
     pendingAgree.current = 0
-    pendingSawGap.current = false
     setPendingState(p)
   }, [])
 
@@ -473,6 +468,7 @@ export default function App(): React.JSX.Element {
       // the loop moving. Foil-only printings land on their only finish.
       const addFinish: Finish =
         finishOverride ?? (c.finishes.includes('nonfoil') ? 'nonfoil' : (c.finishes[0] ?? 'nonfoil'))
+      window.api.note?.(`ADD ${c.name} [${c.setCode} #${c.collectorNumber}] ${addFinish}`)
       const item = await window.api.addCard(c, addFinish, 1)
       undoStack.current.push({ scryfallId: c.scryfallId, finish: addFinish, name: c.name })
       playSuccess()
@@ -599,6 +595,9 @@ export default function App(): React.JSX.Element {
             id === a.lastAddedId &&
             (a.clearFrames < 2 || Date.now() - a.lastAddTime < 2500)
           ) {
+            window.api.note?.(
+              `BLOCK cooldown ${res.card.name} clear=${a.clearFrames} dt=${Date.now() - a.lastAddTime}`
+            )
             // Same card shortly after its add. Crucially: seeing it again
             // RESETS the departure evidence — flaky cards (basic lands)
             // scatter unreadable frames while still being held, and those
@@ -627,16 +626,17 @@ export default function App(): React.JSX.Element {
             a.hits = 0
             a.lastId = null
             a.warned = false
+            window.api.note?.(`LOCK ${res.card.name} conf=${Math.round(lockConf)}`)
             const p = pendingRef.current
-            if (p && p.card.scryfallId !== id && !pendingSawGap.current) {
-              // No empty frame since staging: this lock and the staged card
-              // are rival readings of ONE physical card. Drop the stage —
-              // one presentation must never produce two adds.
+            if (p && p.card.scryfallId !== id) {
+              // A different card's lock NEVER commits a stage. Camera frames
+              // can't reliably tell "card swapped" from "same card flickered"
+              // (James's double-adds), so the rule is absolute: a stage only
+              // commits by confirming ITSELF (sustained agreement / Enter).
+              // No beep = didn't count.
+              window.api.note?.(`DROP stage ${p.card.name} (superseded by lock)`)
               setPending(null)
-              setMessage(`✗ dropped uncertain read: ${p.card.name}`)
-            } else {
-              // The card left the frame in between — the operator moved on.
-              await commitPending()
+              setMessage(`✗ not counted (uncertain read superseded): ${p.card.name}`)
             }
             if (lockConf >= 65) {
               a.lastAddedId = id
@@ -648,6 +648,7 @@ export default function App(): React.JSX.Element {
               // Shaky digit read: stage it, keep scanning. Visible for a
               // foil-flip or discard; the next lock commits it untouched.
               playAttention()
+              window.api.note?.(`STAGE ${res.card.name} conf=${Math.round(lockConf)}`)
               setPending({
                 card: res.card,
                 finish: res.card.finishes.includes('nonfoil')
@@ -698,11 +699,13 @@ export default function App(): React.JSX.Element {
           // Empty frame: episode over, ready for the next card.
           a.missStreak = 0
           a.warned = false
-          if (pendingRef.current) pendingSawGap.current = true
           setAutoStatus('watching — no card text in the strip')
         }
       } catch (err) {
-        setAutoStatus(`scan error: ${err instanceof Error ? err.message : String(err)}`)
+        const msg = err instanceof Error ? err.message : String(err)
+        window.api.note?.(`ERROR ${msg}`)
+        setMessage(`⚠ scan loop error: ${msg}`)
+        setAutoStatus(`scan error: ${msg}`)
       } finally {
         auto.current.busy = false
       }
@@ -951,8 +954,8 @@ export default function App(): React.JSX.Element {
           {pending && !card && (
             <div className="staged">
               <p className="warn">
-                ⏳ Staged — hold the card steady a moment to confirm, or just bring the next
-                card · Enter adds now · F finish · Backspace discards
+                ⏳ Uncertain read — hold the card steady until the beep to count it (or
+                Enter) · F finish · Backspace discards · swapping cards drops it
               </p>
               <CardPreview
                 card={pending.card}

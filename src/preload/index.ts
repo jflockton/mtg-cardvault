@@ -47,6 +47,8 @@ export interface CardVaultApi {
     imageVariants: string[],
     pinnedSet?: string | null
   ) => Promise<CornerScanResult>
+  /** Append a loop-decision note to the scan debug log. */
+  note: (text: string) => void
 }
 
 const api: CardVaultApi = {
@@ -71,7 +73,8 @@ const api: CardVaultApi = {
   preconAdd: (fileName) => ipcRenderer.invoke('precon:add', fileName),
   scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants),
   scanTitle: (imageVariants, pinnedSet) =>
-    ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet })
+    ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet }),
+  note: (text) => ipcRenderer.send('scan:note', text)
 }
 
 contextBridge.exposeInMainWorld('api', api)
