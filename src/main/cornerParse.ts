@@ -139,7 +139,12 @@ export function parseCornerText(rawText: string): CornerParse {
 
   if (!number) {
     for (const line of contentLines) {
-      const tokens = line.split(/[^A-Za-z0-9]+/)
+      // CRITICAL: a number right after "/" is the printed TOTAL, never the
+      // collector number. When the numerator garbles ("yos!/269"), the bare
+      // total must not leak through as a collector number — that phantom
+      // resolves to a real (wrong) card, e.g. AKH's total 269 → Forest #269.
+      const cleansed = line.replace(/\/\s*\d{1,4}/g, '/')
+      const tokens = cleansed.split(/[^A-Za-z0-9]+/)
       for (const t of tokens) {
         // Must contain at least one true digit pre-deconfusion, so "II"/"l"
         // can't fabricate a collector number out of letters.

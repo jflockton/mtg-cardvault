@@ -555,6 +555,8 @@ export default function App(): React.JSX.Element {
           const id = res.card.scryfallId
           const frameConf = result.numberConf ?? result.confidence
           a.missStreak = 0
+          // Seeing a different card is proof the last-added one left the frame.
+          if (a.lastAddedId && id !== a.lastAddedId) a.clearFrames++
           if (
             pendingRef.current &&
             id === pendingRef.current.card.scryfallId &&

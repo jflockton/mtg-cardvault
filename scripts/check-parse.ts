@@ -84,6 +84,19 @@ const cases: {
     expect: { number: null, year: 2008 }
   },
   {
+    // Real Bone Picker read (scan-debug.log): numerator garbled, so the
+    // printed total /269 must NOT become a collector number (phantom Forest).
+    name: 'garbled numerator: bare total never leaks through',
+    text: 'yos!/269 u\nAKH ¢ EN te YEONG-HAO HAN',
+    expect: { setCode: 'akh', number: null }
+  },
+  {
+    // Same card, cleaner frame: deconfusion recovers the real fraction.
+    name: 'deconfused fraction from noisy read',
+    text: 'wO8l/269  U\nAKH ¢ EN te YEONG-HAO HAN',
+    expect: { setCode: 'akh', number: '81', total: 269 }
+  },
+  {
     name: 'copyright year is never the collector number',
     text: '™ & © 2015 Wizards of the Coast',
     expect: { number: null, year: 2015 }
