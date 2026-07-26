@@ -398,6 +398,9 @@ export default function App(): React.JSX.Element {
     warned: false // attention beep already played this episode
   })
   const undoStack = useRef<{ scryfallId: string; finish: Finish; name: string }[]>([])
+  // While a candidates pick-list is on screen, noisy frames must not blink
+  // it away — the operator is trying to CLICK it (live-log finding).
+  const candidatesHold = useRef(0)
 
   // A low-confidence lock is STAGED, not blocking: shown for a glance/foil
   // flip, committed automatically when the next card locks. State drives the
@@ -554,13 +557,19 @@ export default function App(): React.JSX.Element {
         )
 
         // Liveness: refresh the crop thumbnail + readout on EVERY processed
-        // frame, so the operator can watch the loop thinking (~2/sec).
-        setCapture({
-          cornerUrl: (scanMode === 'name' ? c.title : c.corner).toDataURL('image/png'),
-          width: c.width,
-          height: c.height
-        })
-        setScan({ status: 'done', result })
+        // frame — EXCEPT while a pick-list is showing: it must hold still to
+        // be clickable, so only fresh candidates/exact results may replace it.
+        if (res.kind === 'candidates') candidatesHold.current = Date.now() + 6000
+        else if (res.kind === 'exact') candidatesHold.current = 0
+        const holdingList = Date.now() < candidatesHold.current && res.kind === 'none'
+        if (!holdingList) {
+          setCapture({
+            cornerUrl: (scanMode === 'name' ? c.title : c.corner).toDataURL('image/png'),
+            width: c.width,
+            height: c.height
+          })
+          setScan({ status: 'done', result })
+        }
 
         // Track whether the staged (pending) card has left the frame.
         const exactId = res.kind === 'exact' && res.card ? res.card.scryfallId : null
