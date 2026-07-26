@@ -72,6 +72,13 @@ const cases: {
     expect: { setCode: 'fin', number: '152', token: false }
   },
   {
+    // Real LCI read from James's scan-debug.log: OCR merged the collector
+    // column into the copyright line — the zero-padded number must survive.
+    name: 'zero-padded number inside a merged legal line',
+    text: 'wt 0398             ™ & © 2023 Wizards of the Coast\nLCi ¢ EN ADAM PAQUETTE',
+    expect: { setCode: 'lci', number: '398', year: 2023 }
+  },
+  {
     name: 'letters alone can never fabricate a number',
     text: 'II l Howard Lyon\n© 2008 Wizards',
     expect: { number: null, year: 2008 }

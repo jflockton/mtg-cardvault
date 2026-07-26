@@ -107,7 +107,10 @@ export function parseCornerText(rawText: string): CornerParse {
   }
 
   if (!number) {
-    for (const line of contentLines) {
+    // ALL lines, legal ones included: OCR often merges the collector column
+    // with the copyright text ("wt 0398   ™ & © 2023 Wizards…"), and a
+    // leading-zero token can never be a year or trademark digit anyway.
+    for (const line of lines) {
       // Tokens like "0152", "O1S2", "0152a" — possibly glued to a rarity
       // letter ("C0152"). Leading zero makes these safe to trust anywhere in
       // the line (years and totals never start with 0). Deconfuse BEFORE
