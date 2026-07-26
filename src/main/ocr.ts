@@ -47,7 +47,9 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
 /**
  * OCR the corner crop. `imageVariants` are the same crop in different
  * polarities/preprocessing (renderer sends most-likely-correct first);
- * we stop at the first variant that yields a usable parse.
+ * we stop at the first variant that yields a usable parse. If the block
+ * pass reads nothing usable, retry in sparse-text mode — corner text is a
+ * few scattered tokens, which PSM SINGLE_BLOCK sometimes glues into noise.
  */
 export async function scanCorner(
   imageVariants: string[],
@@ -56,20 +58,31 @@ export async function scanCorner(
   const worker = await getWorker(langPath)
   const started = Date.now()
 
+  const usable = (p: ReturnType<typeof parseCornerText>): boolean =>
+    Boolean(p.number && (p.setCode || p.total))
+  /** Prefer number+set/total, then number, then set code, then confidence. */
+  const score = (s: CornerScan): number =>
+    (usable(s.parse) ? 400 : 0) +
+    (s.parse.number ? 200 : 0) +
+    (s.parse.setCode ? 100 : 0) +
+    s.confidence
+
   let best: CornerScan | null = null
-  for (let i = 0; i < imageVariants.length; i++) {
-    const { data } = await worker.recognize(dataUrlToBuffer(imageVariants[i]))
-    const parse = parseCornerText(data.text ?? '')
-    const scan: CornerScan = {
-      parse,
-      confidence: data.confidence ?? 0,
-      variant: i,
-      ms: Date.now() - started
+  const passes: PSM[] = [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT]
+  for (const psm of passes) {
+    await worker.setParameters({ tessedit_pageseg_mode: psm })
+    for (let i = 0; i < imageVariants.length; i++) {
+      const { data } = await worker.recognize(dataUrlToBuffer(imageVariants[i]))
+      const parse = parseCornerText(data.text ?? '')
+      const scan: CornerScan = {
+        parse,
+        confidence: data.confidence ?? 0,
+        variant: i,
+        ms: Date.now() - started
+      }
+      if (usable(parse)) return scan
+      if (!best || score(scan) > score(best)) best = scan
     }
-    // Usable = we read a collector number (with a set code or a total),
-    // or at least a set code to pair with a retry.
-    if (parse.number && (parse.setCode || parse.total)) return scan
-    if (!best || (parse.number ? 1 : 0) > (best.parse.number ? 1 : 0)) best = scan
   }
   return best!
 }

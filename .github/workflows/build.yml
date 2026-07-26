@@ -41,6 +41,9 @@ jobs:
       - name: Sanity-check reference DB
         run: npm run check:refdb -- --data resources
 
+      - name: Corner-parser unit checks
+        run: npm run check:parse
+
       - name: Build app
         run: npm run build
 

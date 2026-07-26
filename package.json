@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "build:refdb": "tsx scripts/build-reference-db.ts",
     "check:refdb": "tsx scripts/check-refdb.ts",
+    "check:parse": "tsx scripts/check-parse.ts",
     "fetch:tessdata": "tsx scripts/fetch-tessdata.ts",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3",
