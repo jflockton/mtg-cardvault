@@ -318,8 +318,13 @@ export default function App(): React.JSX.Element {
 
   const autoAdd = useCallback(
     async (c: CardRef) => {
-      const item = await window.api.addCard(c, finish, 1)
-      undoStack.current.push({ scryfallId: c.scryfallId, finish, name: c.name })
+      // Finish decisions happen AFTER the scan (F key / row selects) — keep
+      // the loop moving. Foil-only printings land on their only finish.
+      const addFinish: Finish = c.finishes.includes('nonfoil')
+        ? 'nonfoil'
+        : (c.finishes[0] ?? 'nonfoil')
+      const item = await window.api.addCard(c, addFinish, 1)
+      undoStack.current.push({ scryfallId: c.scryfallId, finish: addFinish, name: c.name })
       playSuccess()
       setFlash(true)
       setTimeout(() => setFlash(false), 350)
@@ -328,8 +333,22 @@ export default function App(): React.JSX.Element {
       )
       loadInventory()
     },
-    [finish, loadInventory]
+    [loadInventory]
   )
+
+  /** F after a beep: cycle the just-added copy's finish (foil → etched → back). */
+  const flipLastFinish = useCallback(async () => {
+    const last = undoStack.current[undoStack.current.length - 1]
+    if (!last) return
+    const order: Finish[] = ['nonfoil', 'foil', 'etched']
+    const next = order[(order.indexOf(last.finish) + 1) % order.length]
+    const moved = await window.api.moveFinish(last.scryfallId, last.finish, next, 1)
+    if (!moved) return
+    last.finish = next
+    playUndo()
+    setMessage(`★ ${last.name} → ${next}`)
+    loadInventory()
+  }, [loadInventory])
 
   const undoLast = useCallback(async () => {
     const last = undoStack.current.pop()
@@ -510,7 +529,7 @@ export default function App(): React.JSX.Element {
       }
       if (inInput) return
       if (e.key === 'f' || e.key === 'F') {
-        setFinish(finish === 'nonfoil' ? 'foil' : finish === 'foil' ? 'etched' : 'nonfoil')
+        flipLastFinish()
       } else if (e.key === 'Backspace') {
         e.preventDefault()
         undoLast()
@@ -518,7 +537,7 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [card, finish, addCard, resetForNext, undoLast])
+  }, [card, finish, addCard, resetForNext, undoLast, flipLastFinish])
 
   const runSearch = useCallback(async () => {
     if (!searchQuery.trim()) return
@@ -584,19 +603,9 @@ export default function App(): React.JSX.Element {
             <span className={`auto-status ${autoStatus.startsWith('✓') ? 'ok' : ''}`}>
               {autoStatus || 'watching…'}
             </span>
-            <span className="finish-row">
-              {(['nonfoil', 'foil', 'etched'] as Finish[]).map((f) => (
-                <button
-                  key={f}
-                  className={`finish-btn ${finish === f ? 'active' : ''}`}
-                  onClick={() => setFinish(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </span>
             <span className="muted small">
-              hold card until the beep · F finish · Backspace undo · Space force scan
+              hold card until the beep, then next card · F = last card was foil · Backspace
+              undo · Space force scan
             </span>
           </div>
         )}
@@ -731,7 +740,25 @@ export default function App(): React.JSX.Element {
                   <td>{item.name}</td>
                   <td>{item.setCode.toUpperCase()}</td>
                   <td>{item.collectorNumber}</td>
-                  <td>{item.finish}</td>
+                  <td>
+                    <select
+                      className="finish-select"
+                      value={item.finish}
+                      title="change finish (moves one copy)"
+                      onChange={async (e) => {
+                        const to = e.target.value as Finish
+                        await window.api.moveFinish(item.scryfallId, item.finish, to, 1)
+                        setMessage(`★ ${item.name}: 1× ${item.finish} → ${to}`)
+                        loadInventory()
+                      }}
+                    >
+                      {(['nonfoil', 'foil', 'etched'] as Finish[]).map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td>{item.rarity}</td>
                   <td>
                     <button

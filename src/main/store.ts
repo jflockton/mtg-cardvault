@@ -327,6 +327,62 @@ export class DataStore {
     return rowToItem(row)
   }
 
+  /**
+   * Move copies between finish stacks of the same printing (e.g. "that last
+   * scan was actually foil"). Creates the target stack from the source row's
+   * denormalised fields if needed.
+   */
+  moveFinish(
+    scryfallId: string,
+    from: Finish,
+    to: Finish,
+    quantity = 1
+  ): InventoryItem | null {
+    if (from === to) return null
+    const src = this.invDb
+      .prepare('SELECT * FROM inventory WHERE scryfall_id = ? AND finish = ?')
+      .get(scryfallId, from) as InvRow | undefined
+    if (!src) return null
+    const moved = Math.min(quantity, src.quantity)
+    const doMove = this.invDb.transaction(() => {
+      if (src.quantity - moved <= 0) {
+        this.invDb.prepare('DELETE FROM inventory WHERE id = ?').run(src.id)
+      } else {
+        this.invDb
+          .prepare("UPDATE inventory SET quantity = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(src.quantity - moved, src.id)
+      }
+      this.invDb
+        .prepare(
+          `INSERT INTO inventory
+             (scryfall_id, name, set_code, collector_number, rarity, type_line,
+              mana_cost, colors, finish, quantity, image_uri)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (scryfall_id, finish) DO UPDATE SET
+             quantity = quantity + excluded.quantity,
+             updated_at = datetime('now')`
+        )
+        .run(
+          src.scryfall_id,
+          src.name,
+          src.set_code,
+          src.collector_number,
+          src.rarity,
+          src.type_line,
+          src.mana_cost,
+          src.colors,
+          to,
+          moved,
+          src.image_uri
+        )
+    })
+    doMove()
+    const row = this.invDb
+      .prepare('SELECT * FROM inventory WHERE scryfall_id = ? AND finish = ?')
+      .get(scryfallId, to) as InvRow
+    return rowToItem(row)
+  }
+
   /** Decrement a stack; the row is deleted when it reaches zero. */
   removeFromInventory(
     scryfallId: string,

@@ -23,6 +23,13 @@ export interface CardVaultApi {
     quantity?: number
   ) => Promise<InventoryItem | null>
   listInventory: () => Promise<InventorySummary>
+  /** Move copies between finish stacks of the same printing. */
+  moveFinish: (
+    scryfallId: string,
+    from: Finish,
+    to: Finish,
+    quantity?: number
+  ) => Promise<InventoryItem | null>
   /** OCR + resolve a corner crop; variants are the same crop in different polarities. */
   scanCorner: (imageVariants: string[]) => Promise<CornerScanResult>
 }
@@ -41,6 +48,8 @@ const api: CardVaultApi = {
   removeCard: (scryfallId, finish, quantity) =>
     ipcRenderer.invoke('inv:remove', { scryfallId, finish, quantity }),
   listInventory: () => ipcRenderer.invoke('inv:list'),
+  moveFinish: (scryfallId, from, to, quantity) =>
+    ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
   scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants)
 }
 

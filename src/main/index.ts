@@ -118,6 +118,12 @@ function registerIpc(): void {
 
   ipcMain.handle('inv:list', () => store.listInventory())
 
+  ipcMain.handle(
+    'inv:moveFinish',
+    (_e, args: { scryfallId: string; from: Finish; to: Finish; quantity?: number }) =>
+      store.moveFinish(args.scryfallId, args.from, args.to, args.quantity ?? 1)
+  )
+
   ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
     const scan = await scanCorner(imageVariants, resolveTessdataDir())
     let resolution = store.resolveCorner(scan.parse)
