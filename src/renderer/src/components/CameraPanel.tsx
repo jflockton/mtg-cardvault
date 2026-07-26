@@ -175,7 +175,7 @@ export function captureFromVideo(video: HTMLVideoElement): CapturedFrame {
 export default function CameraPanel({
   onCapture,
   autoMode = false,
-  autoIntervalMs = 600,
+  autoIntervalMs = 500,
   guideRegion = 'corner'
 }: {
   onCapture: (capture: CapturedFrame, auto: boolean) => void

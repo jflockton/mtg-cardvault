@@ -586,7 +586,13 @@ export default function App(): React.JSX.Element {
             a.hits = 1
             a.lockConf = frameConf
           }
-          if (a.hits >= 2) {
+          // Corner mode needs two agreeing frames (a digit misread can name a
+          // different VALID card). An exact name-mode hit can't — OCR would
+          // have to garble one real card name into another — so it locks on
+          // the first frame.
+          const framesNeeded =
+            result.parsed.nameRead !== undefined && frameConf >= 85 ? 1 : 2
+          if (a.hits >= framesNeeded) {
             const lockConf = a.lockConf
             a.hits = 0
             a.lastId = null
@@ -624,9 +630,12 @@ export default function App(): React.JSX.Element {
         a.clearFrames++
 
         if (res.kind === 'candidates') {
-          // Needs a human tap — pause by showing the shortlist.
-          playAttention()
-          setAutoStatus('ambiguous — pick from the list')
+          // Needs a human tap — ask ONCE per presentation, not every frame.
+          if (!a.warned) {
+            a.warned = true
+            playAttention()
+          }
+          setAutoStatus('ambiguous — pick from the list (or set a set pin)')
           return
         }
 

@@ -18,8 +18,12 @@ export const CARD_ASPECT = 63 / 88
 /** Fraction of the video frame height the card guide occupies. */
 export const GUIDE_HEIGHT_FRAC = 0.92
 
-/** Title bar: the card name across the top. OCR cross-check source. */
-export const TITLE_REGION: NormRect = { x: 0.03, y: 0.03, w: 0.94, h: 0.085 }
+/**
+ * Title bar: the card NAME only — deliberately stops short of the mana cost
+ * on the right, which otherwise OCRs into trailing junk that breaks exact
+ * name matches.
+ */
+export const TITLE_REGION: NormRect = { x: 0.04, y: 0.03, w: 0.68, h: 0.085 }
 
 /**
  * The identifying fine print — a full-width strip across the card's bottom,
