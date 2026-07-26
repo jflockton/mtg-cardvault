@@ -252,7 +252,10 @@ export default function App(): React.JSX.Element {
   const [capture, setCapture] = useState<CapturePreview | null>(null)
   const [scan, setScan] = useState<ScanState>({ status: 'idle' })
 
-  const [autoMode, setAutoMode] = useState(false)
+  // Auto scan is the shop's default mode — remembered across launches.
+  const [autoMode, setAutoMode] = useState(
+    () => localStorage.getItem('cardvault.autoScan') !== '0'
+  )
   const [autoStatus, setAutoStatus] = useState<string>('')
   // Lock loop state — a ref, not state: it mutates on every pumped frame.
   const auto = useRef({
@@ -363,12 +366,26 @@ export default function App(): React.JSX.Element {
   const onAutoFrame = useCallback(
     async (c: CapturedFrame) => {
       const a = auto.current
-      if (a.busy || card) return // don't fight an open preview/candidate pick
+      if (card) {
+        // Never silent: say WHY the loop is holding.
+        setAutoStatus('paused — match open below (Enter adds, Esc dismisses)')
+        return
+      }
+      if (a.busy) return
       a.busy = true
       try {
         const result = await window.api.scanCorner(c.cornerVariants)
         const res = result.resolution
         const readSomething = Boolean(result.parsed.number || result.parsed.setCode)
+
+        // Liveness: refresh the crop thumbnail + readout on EVERY processed
+        // frame, so the operator can watch the loop thinking (~2/sec).
+        setCapture({
+          cornerUrl: c.corner.toDataURL('image/png'),
+          width: c.width,
+          height: c.height
+        })
+        setScan({ status: 'done', result })
 
         if (res.kind === 'exact' && res.card) {
           const id = res.card.scryfallId
@@ -421,42 +438,36 @@ export default function App(): React.JSX.Element {
         if (res.kind === 'candidates') {
           // Needs a human tap — pause by showing the shortlist.
           playAttention()
-          setCapture({
-            cornerUrl: c.corner.toDataURL('image/png'),
-            width: c.width,
-            height: c.height
-          })
-          setScan({ status: 'done', result })
           setAutoStatus('ambiguous — pick from the list')
           return
         }
 
         if (readSomething) {
           a.missStreak++
+          const p = result.parsed
+          setAutoStatus(
+            `saw ${p.setCode?.toUpperCase() ?? '—'} #${p.number ?? '—'}${
+              p.total ? `/${p.total}` : ''
+            } — no match yet, adjusting…`
+          )
           if (a.missStreak >= 4 && !a.warned) {
             a.warned = true
             playAttention()
-            setCapture({
-              cornerUrl: c.corner.toDataURL('image/png'),
-              width: c.width,
-              height: c.height
-            })
-            setScan({ status: 'done', result })
-            setAutoStatus("can't lock — nudge the card or check focus")
+            setAutoStatus("can't lock — nudge the card or check focus (raw read below)")
           }
         } else {
           // Empty frame: episode over, ready for the next card.
           a.missStreak = 0
           a.warned = false
-          if (!a.lastAddedId) setAutoStatus('watching…')
+          setAutoStatus('watching — no card text in the strip')
         }
-      } catch {
-        // transient OCR error — just skip this frame
+      } catch (err) {
+        setAutoStatus(`scan error: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         auto.current.busy = false
       }
     },
-    [card, autoAdd]
+    [card, autoAdd, applyCard]
   )
 
   const onCapture = useCallback(
@@ -588,6 +599,7 @@ export default function App(): React.JSX.Element {
                 }
                 setAutoStatus(next ? 'watching…' : '')
                 setAutoMode(next)
+                localStorage.setItem('cardvault.autoScan', next ? '1' : '0')
               }}
               disabled={!refStatus?.ready}
             >
