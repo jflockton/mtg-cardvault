@@ -178,6 +178,17 @@ export class DataStore {
     }
   }
 
+  /** Is this a real set code (or its token set)? Gates the live-API fallback. */
+  isKnownSet(setCode: string): boolean {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return false
+    const code = normalizeSetCode(setCode)
+    const row = this.refDb
+      .prepare('SELECT 1 AS x FROM scryfall_sets WHERE code IN (?, ?) LIMIT 1')
+      .get(code, `t${code}`)
+    return Boolean(row)
+  }
+
   /** True if set metadata (printed_size) is loaded — needed for old frames. */
   hasSetMetadata(): boolean {
     this.openReferenceIfPresent()

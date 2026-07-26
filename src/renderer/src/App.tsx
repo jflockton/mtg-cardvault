@@ -387,6 +387,7 @@ export default function App(): React.JSX.Element {
   // Lock loop state — a ref, not state: it mutates on every pumped frame.
   const auto = useRef({
     busy: false,
+    busySince: 0, // watchdog: a wedged scan call must never freeze the loop
     lastId: null as string | null, // exact id seen on the previous frame
     hits: 0, // consecutive frames agreeing on lastId
     lockConf: 0, // lowest number-token confidence across the agreeing frames
@@ -527,8 +528,17 @@ export default function App(): React.JSX.Element {
         setAutoStatus('paused — match open below (Enter adds, Esc dismisses)')
         return
       }
-      if (a.busy) return
+      if (a.busy) {
+        // Watchdog: if a scan call has been stuck >8s (hung network, dead
+        // worker), abandon it and let the loop breathe again.
+        if (Date.now() - a.busySince > 8000) {
+          a.busy = false
+          setAutoStatus('scan call timed out — resuming…')
+        }
+        return
+      }
       a.busy = true
+      a.busySince = Date.now()
       try {
         const result = await scanFrame(c)
         const res = result.resolution
@@ -801,6 +811,7 @@ export default function App(): React.JSX.Element {
                 if (!next) commitPending() // staged card was "probably right"
                 auto.current = {
                   busy: false,
+                  busySince: 0,
                   lastId: null,
                   hits: 0,
                   lockConf: 0,

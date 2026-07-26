@@ -182,7 +182,7 @@ export async function fetchSetsList(): Promise<ScryfallSetRow[]> {
   const rows: ScryfallSetRow[] = []
   let url: string | null = 'https://api.scryfall.com/sets'
   while (url) {
-    const res = await fetch(url, { headers: SCRYFALL_HEADERS })
+    const res = await fetch(url, { headers: SCRYFALL_HEADERS, signal: AbortSignal.timeout(30000) })
     if (!res.ok) throw new Error(`Scryfall sets listing failed: HTTP ${res.status}`)
     const page = (await res.json()) as {
       data: {
@@ -219,7 +219,10 @@ export async function getDefaultCardsBulkInfo(): Promise<{
   size: number
   updatedAt: string
 }> {
-  const res = await fetch(BULK_DATA_URL, { headers: SCRYFALL_HEADERS })
+  const res = await fetch(BULK_DATA_URL, {
+    headers: SCRYFALL_HEADERS,
+    signal: AbortSignal.timeout(30000)
+  })
   if (!res.ok) throw new Error(`Scryfall bulk-data listing failed: HTTP ${res.status}`)
   const listing = (await res.json()) as {
     data: { type: string; download_uri: string; size: number; updated_at: string }[]
@@ -405,8 +408,11 @@ export async function fetchCardLive(
 ): Promise<CardRef | null> {
   const set = encodeURIComponent(normalizeSetCode(setCode))
   const cn = encodeURIComponent(normalizeCollectorNumber(collectorNumber))
+  // Hard timeout: this runs inside the scan loop — a hanging fetch on flaky
+  // Wi-Fi must never wedge scanning.
   const res = await fetch(`https://api.scryfall.com/cards/${set}/${cn}`, {
-    headers: SCRYFALL_HEADERS
+    headers: SCRYFALL_HEADERS,
+    signal: AbortSignal.timeout(4000)
   })
   if (res.status === 404) return null
   if (res.status === 429) throw new Error('Scryfall rate limit hit (429) — wait 30s and retry')

@@ -226,8 +226,14 @@ function registerIpc(): void {
   ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
     const scan = await scanCorner(imageVariants, resolveTessdataDir())
     let resolution = store.resolveCorner(scan.parse)
-    // Modern card whose set is newer than the reference DB: try live.
-    if (resolution.kind === 'none' && scan.parse.setCode && scan.parse.number) {
+    // Modern card whose set is newer than the reference DB: try live — but
+    // only for REAL set codes; garbled reads ("LCIE") shouldn't hit the API.
+    if (
+      resolution.kind === 'none' &&
+      scan.parse.setCode &&
+      scan.parse.number &&
+      store.isKnownSet(scan.parse.setCode)
+    ) {
       try {
         const live = await fetchCardLive(scan.parse.setCode, scan.parse.number)
         if (live) {
