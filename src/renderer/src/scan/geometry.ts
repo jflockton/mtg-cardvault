@@ -22,12 +22,14 @@ export const GUIDE_HEIGHT_FRAC = 0.92
 export const TITLE_REGION: NormRect = { x: 0.03, y: 0.03, w: 0.94, h: 0.085 }
 
 /**
- * Bottom-left corner: the identifying fine print. The primary identifier.
- * Modern cards: "0123/280 R" + "M21 • EN". Older frames print no set code —
- * just "13/150" above the artist/copyright lines — so the region is tall
- * enough to catch the whole text block; the parser picks out what it needs.
+ * The identifying fine print — a full-width strip across the card's bottom,
+ * because its position moved over the years:
+ *   2015+ :  bottom-LEFT, two lines ("0123/280 R" + "M21 • EN")
+ *   2003–14: bottom-RIGHT, end of the copyright line ("…Inc. 12/150")
+ *   1998–03: bottom-right on the classic frame
+ * The parser ignores the artist/legal noise and picks out what it needs.
  */
-export const CORNER_REGION: NormRect = { x: 0.0, y: 0.85, w: 0.55, h: 0.15 }
+export const CORNER_REGION: NormRect = { x: 0.0, y: 0.85, w: 1.0, h: 0.15 }
 
 /** The card guide rect in display/frame pixels, centered horizontally. */
 export function cardGuideRect(frameWidth: number, frameHeight: number): {

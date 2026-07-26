@@ -23,6 +23,13 @@ const cases: {
     expect: { setCode: null, number: '13', total: 150, year: 2008 }
   },
   {
+    // James's Idyllic Tutor (MOR #12): 2003–2014 frames put the fraction at
+    // the END of the copyright line, bottom-right of the card.
+    name: '2003-14 frame: fraction inside the legal line',
+    text: 'Howard Lyon\n™ & © 1993-2008 Wizards of the Coast, Inc. 12/150',
+    expect: { setCode: null, number: '12', total: 150, year: 2008 }
+  },
+  {
     name: 'modern frame: fraction + set line',
     text: '123/274 M\nM21 • EN',
     expect: { setCode: 'm21', number: '123', total: 274 }

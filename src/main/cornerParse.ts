@@ -80,13 +80,16 @@ export function parseCornerText(rawText: string): CornerParse {
     }
   }
 
-  // --- Collector number, in priority order across all non-legal lines:
-  //  1. fraction "13/150" (old frames — also yields the printed total)
+  // --- Collector number, in priority order:
+  //  1. fraction "13/150" — searched in ALL lines, because 2003–2014 frames
+  //     print it at the END of the copyright line ("…Inc. 12/150"); years
+  //     never contain a slash, so legal lines can't fake a fraction
   //  2. leading-zero token "0152" / "O152" (unambiguously a collector number)
   //  3. a standalone 1–4 digit token that isn't a year
+  // Tiers 2–3 skip legal lines, where stray digits are years/trademarks.
   const contentLines = lines.filter((l) => !isLegalLine(l))
 
-  for (const line of contentLines) {
+  for (const line of lines) {
     const frac = deconfuseDigits(line).match(/(\d{1,4})\s*\/\s*(\d{2,4})/)
     if (frac) {
       number = String(Number(frac[1]))
