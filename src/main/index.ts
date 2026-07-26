@@ -41,6 +41,21 @@ function seedReferenceDbFromResources(dataDir: string): void {
 let store: DataStore
 let refreshing = false
 
+/**
+ * One NDJSON line per scan decision → <dataDir>/scan-debug.log. Cheap,
+ * append-only, and exactly what's needed to diagnose "why didn't it lock".
+ */
+function logScan(entry: Record<string, unknown>): void {
+  try {
+    fs.appendFileSync(
+      path.join(store.dataDir, 'scan-debug.log'),
+      JSON.stringify({ t: new Date().toISOString(), ...entry }) + '\n'
+    )
+  } catch {
+    // never let diagnostics break scanning
+  }
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -138,6 +153,20 @@ function registerIpc(): void {
       // Exact name matches are trustworthy regardless of raw OCR confidence;
       // fuzzy ones stage (the sustained-agreement path still commits them).
       const confidence = match.quality === 'exact' ? 90 : match.quality === 'fuzzy' ? 55 : 0
+      logScan({
+        mode: 'name',
+        pin: args.pinnedSet ?? null,
+        raw: scan.text.slice(0, 160),
+        cleaned: match.cleaned,
+        quality: match.quality,
+        ocrConf: Math.round(scan.confidence),
+        result: match.resolution.kind,
+        card: match.resolution.card
+          ? `${match.resolution.card.name} [${match.resolution.card.setCode} #${match.resolution.card.collectorNumber}]`
+          : null,
+        candidates: match.resolution.candidates?.length ?? 0,
+        ms: scan.ms
+      })
       return {
         resolution: match.resolution,
         parsed: {
@@ -209,6 +238,21 @@ function registerIpc(): void {
         // offline/rate-limited — leave as none
       }
     }
+    logScan({
+      mode: 'corner',
+      raw: scan.parse.raw.slice(0, 160),
+      set: scan.parse.setCode,
+      num: scan.parse.number,
+      total: scan.parse.total,
+      year: scan.parse.year,
+      token: scan.parse.token,
+      conf: Math.round(scan.confidence),
+      numConf: scan.numberConf === null ? null : Math.round(scan.numberConf),
+      result: resolution.kind,
+      card: resolution.card ? `${resolution.card.name} [${resolution.card.setCode} #${resolution.card.collectorNumber}]` : null,
+      candidates: resolution.candidates?.length ?? 0,
+      ms: scan.ms
+    })
     return {
       resolution,
       parsed: scan.parse,
