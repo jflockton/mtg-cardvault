@@ -202,6 +202,17 @@ export default function CameraPanel({
     return () => ro.disconnect()
   }, [])
 
+  // Cameras come and go (iPhone Continuity Camera appears/vanishes as the
+  // phone sleeps or leaves range) — keep the picker list live.
+  useEffect(() => {
+    const refresh = async (): Promise<void> => {
+      const all = await navigator.mediaDevices.enumerateDevices()
+      setDevices(all.filter((d) => d.kind === 'videoinput'))
+    }
+    navigator.mediaDevices.addEventListener('devicechange', refresh)
+    return () => navigator.mediaDevices.removeEventListener('devicechange', refresh)
+  }, [])
+
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
