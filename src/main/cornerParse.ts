@@ -98,7 +98,14 @@ export function parseCornerText(rawText: string): CornerParse {
   const contentLines = lines.filter((l) => !isLegalLine(l))
 
   for (const line of lines) {
-    const frac = deconfuseDigits(line).match(/(\d{1,4})\s*\/\s*(\d{2,4})/)
+    const d = deconfuseDigits(line)
+    // Zero-padded numerators ("081/269") are self-delimiting — years and
+    // totals never start with 0, so a leading garble character is harmless.
+    let frac = d.match(/(?:^|[^0-9])(0\d{1,3})\s*\/\s*(\d{2,4})/)
+    // Unpadded numerators need a CLEAN left boundary: in "3'2/280" the true
+    // numerator (312) garbled, and matching the trailing "2/280" would name
+    // a real wrong card (#2). Better no read than a truncated one.
+    if (!frac) frac = d.match(/(?<![A-Za-z0-9'’!?|])(\d{1,4})\s*\/\s*(\d{2,4})/)
     if (frac) {
       number = String(Number(frac[1]))
       total = Number(frac[2])

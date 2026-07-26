@@ -70,14 +70,25 @@ function deconfuse(s: string): string {
   return s.replace(/[OoQ]/g, '0').replace(/[Il|]/g, '1').replace(/S/g, '5').replace(/B/g, '8')
 }
 
-/** Confidence of the word that plausibly produced the parsed number. */
-function numberConfidence(words: OcrWord[], number: string): number | null {
+/**
+ * Confidence of the word that plausibly produced the parsed number. The
+ * word's digit content must BE the number (allowing zero-padding, and the
+ * total glued on for fraction words) — a word merely containing the digit
+ * ("3'2/280" ⊃ "2") must not lend its confidence to a truncated read.
+ */
+function numberConfidence(
+  words: OcrWord[],
+  number: string,
+  total: number | null
+): number | null {
   let best: number | null = null
   for (const w of words) {
-    const cleaned = deconfuse(w.text.replace(/[^A-Za-z0-9/]/g, ''))
-    if (cleaned.replace(/\D/g, '').includes(number)) {
-      best = best === null ? w.confidence : Math.max(best, w.confidence)
+    let digits = deconfuse(w.text).replace(/\D/g, '')
+    if (total !== null && digits.endsWith(String(total))) {
+      digits = digits.slice(0, digits.length - String(total).length)
     }
+    if (digits.length === 0 || Number(digits) !== Number(number)) continue
+    best = best === null ? w.confidence : Math.max(best, w.confidence)
   }
   return best
 }
@@ -137,7 +148,7 @@ export async function scanCorner(
       const scan: CornerScan = {
         parse,
         confidence: data.confidence ?? 0,
-        numberConf: parse.number ? numberConfidence(words, parse.number) : null,
+        numberConf: parse.number ? numberConfidence(words, parse.number, parse.total) : null,
         setConf: parse.setCode ? setConfidence(words, parse.setCode) : null,
         variant: i,
         ms: Date.now() - started

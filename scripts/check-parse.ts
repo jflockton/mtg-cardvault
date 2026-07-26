@@ -97,6 +97,18 @@ const cases: {
     expect: { setCode: 'akh', number: '81', total: 269 }
   },
   {
+    // Real Grasping Scoundrel read (312/280 garbled to 3'2/280): a truncated
+    // numerator must NOT match as "#2" — that added Aethershield Artificer.
+    name: 'truncated unpadded numerator is rejected',
+    text: "3'2/280 c\nM19 ¢EN STEVE PRESCOTT",
+    expect: { setCode: 'm19', number: null }
+  },
+  {
+    name: 'clean unpadded fraction still parses',
+    text: '312/280 C\nM19 ¢ EN te STEVE PRESCOTT',
+    expect: { setCode: 'm19', number: '312', total: 280 }
+  },
+  {
     name: 'copyright year is never the collector number',
     text: '™ & © 2015 Wizards of the Coast',
     expect: { number: null, year: 2015 }
