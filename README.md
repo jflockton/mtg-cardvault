@@ -2,14 +2,14 @@
 
 Webcam card scanner + local-first inventory app for a game shop's Magic: The Gathering singles (~3000+ loose cards, no existing inventory). Present a card to the camera, get a confident match, write it to the database, repeat — speed of entry is the top priority.
 
-**Status: build step 3 of 7** — scan-to-match works: capture → OCR → identified printing (or a tap-to-pick shortlist for old frames).
+**Status: build step 4 of 7** — hands-free entry works: hold a card up, it locks, beeps, and writes itself to inventory; swap to the next card.
 
 | Step | What | Status |
 |---|---|---|
 | 1 | Scaffold + DB + Scryfall bulk import + manual add form | ✅ |
 | 2 | Camera feed + frame capture | ✅ |
 | 3 | OCR pipeline (Tesseract, corner crop, set/collector parse + resolve) | ✅ |
-| 4 | Fast add loop (confidence gating, keyboard flow, audio confirm) | ⬜ |
+| 4 | Fast add loop (auto-lock, audio confirm, undo, keyboard flow) | ✅ |
 | 5 | Remove mode | ⬜ |
 | 6 | Search / browse UI + CSV export | ⬜ |
 | 7 | Packaging: NSIS installer via GitHub Actions | 🟡 config in place, unverified |
@@ -20,6 +20,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 - **Finish (foil / etched) is not printed on the card**, so it's a manual toggle in the UI (default: nonfoil). Foil and nonfoil of the same printing are separate inventory stacks.
 - **Camera capture** (step 2): live `getUserMedia` feed with a card-outline guide — the operator fills the outline with the card. The on-screen guide and the frame cropper share one set of geometry constants ([src/renderer/src/scan/geometry.ts](src/renderer/src/scan/geometry.ts)), so what you align to is exactly what gets cropped. Space captures; camera choice is remembered.
 - **OCR** (step 3): the corner crop is extracted at 3×, grayscaled with a percentile contrast stretch, and produced in both polarities (black-border cards print white-on-black; Tesseract wants dark-on-light). tesseract.js runs in the **main process** with bundled traineddata (`npm run fetch:tessdata`), so OCR is fully offline and the renderer carries no wasm/worker plumbing — a scan round-trip is well under 200 ms. The parser handles OCR digit confusions (O→0, I→1…) and both corner formats; the raw read is always shown in the UI for tuning.
+- **Auto scan — the fast loop** (step 4): toggle **▶ Auto scan** and the app OCRs frames continuously (~2/sec). A **lock requires two consecutive frames resolving to the same exact printing** — a single misread can never write a wrong card. On lock: the card is added (with the sticky finish toggle — tap **F** before presenting a foil), a soft two-tone beep confirms, and the same card won't re-add until it's seen leaving the frame — so duplicates count naturally as you feed them one by one. Can't lock after a few frames → one gentle low double-blip and the raw read is shown; ambiguous old frames pause with the tap-to-pick shortlist. **Backspace undoes the last add**, and every row in the Just Added list has a −1 button.
 - **Offline-first Scryfall data.** No per-card API calls. The app imports Scryfall's `default_cards` bulk file (streamed to disk, then stream-parsed into SQLite) so every scan is an instant local lookup. Installers ship with a pre-built reference DB, so the app works on first launch with no internet. A "Refresh card data" button rebuilds it (needed roughly weekly / after a set release). Only a genuine cache miss (e.g. a brand-new set) falls back to one live API call, which is then cached locally.
 
 ## Tech stack

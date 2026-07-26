@@ -238,6 +238,37 @@ button.link {
   overflow-y: auto;
 }
 
+.toolbar-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auto-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.auto-status {
+  color: var(--warn);
+  min-width: 14rem;
+}
+
+.auto-status.ok {
+  color: var(--ok);
+}
+
+.row-undo {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+}
+
 .camera-toolbar {
   display: flex;
   gap: 0.75rem;

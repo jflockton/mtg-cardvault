@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CameraPanel, { type CapturedFrame } from './components/CameraPanel'
+import { playSuccess, playAttention, playUndo } from './scan/audio'
 import type {
   CardRef,
   CornerScanResult,
@@ -249,6 +250,20 @@ export default function App(): React.JSX.Element {
   const [capture, setCapture] = useState<CapturePreview | null>(null)
   const [scan, setScan] = useState<ScanState>({ status: 'idle' })
 
+  const [autoMode, setAutoMode] = useState(false)
+  const [autoStatus, setAutoStatus] = useState<string>('')
+  // Lock loop state — a ref, not state: it mutates on every pumped frame.
+  const auto = useRef({
+    busy: false,
+    lastId: null as string | null, // exact id seen on the previous frame
+    hits: 0, // consecutive frames agreeing on lastId
+    lastAddedId: null as string | null,
+    clearFrames: 0, // frames since add that did NOT show lastAddedId
+    missStreak: 0, // consecutive frames with content but no lock
+    warned: false // attention beep already played this episode
+  })
+  const undoStack = useRef<{ scryfallId: string; finish: Finish; name: string }[]>([])
+
   const setInputRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = useCallback(() => {
@@ -298,8 +313,115 @@ export default function App(): React.JSX.Element {
     applyCard(found)
   }, [setCode, collectorNumber, applyCard])
 
-  const onCapture = useCallback(
+  const autoAdd = useCallback(
+    async (c: CardRef) => {
+      const item = await window.api.addCard(c, finish, 1)
+      undoStack.current.push({ scryfallId: c.scryfallId, finish, name: c.name })
+      playSuccess()
+      setFlash(true)
+      setTimeout(() => setFlash(false), 350)
+      setMessage(
+        `✓ ${item.name} (${item.setCode.toUpperCase()} #${item.collectorNumber}, ${item.finish}) — now ×${item.quantity}`
+      )
+      loadInventory()
+    },
+    [finish, loadInventory]
+  )
+
+  const undoLast = useCallback(async () => {
+    const last = undoStack.current.pop()
+    if (!last) return
+    await window.api.removeCard(last.scryfallId, last.finish, 1)
+    playUndo()
+    setMessage(`↩ Removed 1× ${last.name}`)
+    loadInventory()
+  }, [loadInventory])
+
+  /** The lock loop: act only on frames that keep agreeing with each other. */
+  const onAutoFrame = useCallback(
     async (c: CapturedFrame) => {
+      const a = auto.current
+      if (a.busy || card) return // don't fight an open preview/candidate pick
+      a.busy = true
+      try {
+        const result = await window.api.scanCorner(c.cornerVariants)
+        const res = result.resolution
+        const readSomething = Boolean(result.parsed.number || result.parsed.setCode)
+
+        if (res.kind === 'exact' && res.card) {
+          const id = res.card.scryfallId
+          a.missStreak = 0
+          if (id === a.lastAddedId && a.clearFrames < 2) {
+            // Same card still sitting in frame after its add — ignore until
+            // we've seen it leave (2 frames without it).
+            setAutoStatus(`✓ added — next card…`)
+            return
+          }
+          a.hits = id === a.lastId ? a.hits + 1 : 1
+          a.lastId = id
+          if (a.hits >= 2) {
+            a.hits = 0
+            a.lastId = null
+            a.lastAddedId = id
+            a.clearFrames = 0
+            a.warned = false
+            setAutoStatus('')
+            await autoAdd(res.card)
+          } else {
+            setAutoStatus(`locking: ${res.card.name}…`)
+          }
+          return
+        }
+
+        // Not an exact hit on this frame — counts as "last-added card gone".
+        a.lastId = null
+        a.hits = 0
+        a.clearFrames++
+
+        if (res.kind === 'candidates') {
+          // Needs a human tap — pause by showing the shortlist.
+          playAttention()
+          setCapture({
+            cornerUrl: c.corner.toDataURL('image/png'),
+            width: c.width,
+            height: c.height
+          })
+          setScan({ status: 'done', result })
+          setAutoStatus('ambiguous — pick from the list')
+          return
+        }
+
+        if (readSomething) {
+          a.missStreak++
+          if (a.missStreak >= 4 && !a.warned) {
+            a.warned = true
+            playAttention()
+            setCapture({
+              cornerUrl: c.corner.toDataURL('image/png'),
+              width: c.width,
+              height: c.height
+            })
+            setScan({ status: 'done', result })
+            setAutoStatus("can't lock — nudge the card or check focus")
+          }
+        } else {
+          // Empty frame: episode over, ready for the next card.
+          a.missStreak = 0
+          a.warned = false
+          if (!a.lastAddedId) setAutoStatus('watching…')
+        }
+      } catch {
+        // transient OCR error — just skip this frame
+      } finally {
+        auto.current.busy = false
+      }
+    },
+    [card, autoAdd]
+  )
+
+  const onCapture = useCallback(
+    async (c: CapturedFrame, isAuto: boolean) => {
+      if (isAuto) return onAutoFrame(c)
       setCapture({
         cornerUrl: c.corner.toDataURL('image/png'),
         width: c.width,
@@ -321,7 +443,7 @@ export default function App(): React.JSX.Element {
         })
       }
     },
-    [applyCard]
+    [applyCard, onAutoFrame]
   )
 
   const addCard = useCallback(async () => {
@@ -336,26 +458,38 @@ export default function App(): React.JSX.Element {
     resetForNext()
   }, [card, finish, quantity, loadInventory, resetForNext])
 
-  // Keyboard flow: Enter = confirm, F = toggle foil, Esc = reject.
+  // Keyboard flow. Preview open: Enter = confirm, F = toggle foil, Esc =
+  // reject. No preview: F = sticky finish for auto-adds, Backspace = undo
+  // the last add.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (!card) return
-      const inInput = (e.target as HTMLElement).tagName === 'INPUT'
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        addCard()
-      } else if (e.key === 'Escape') {
-        resetForNext()
-      } else if ((e.key === 'f' || e.key === 'F') && !inInput) {
-        const options = card.finishes
-        if (options.length > 1) {
-          setFinish(options[(options.indexOf(finish) + 1) % options.length])
+      const tag = (e.target as HTMLElement).tagName
+      const inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
+      if (card) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          addCard()
+        } else if (e.key === 'Escape') {
+          resetForNext()
+        } else if ((e.key === 'f' || e.key === 'F') && !inInput) {
+          const options = card.finishes
+          if (options.length > 1) {
+            setFinish(options[(options.indexOf(finish) + 1) % options.length])
+          }
         }
+        return
+      }
+      if (inInput) return
+      if (e.key === 'f' || e.key === 'F') {
+        setFinish(finish === 'nonfoil' ? 'foil' : finish === 'foil' ? 'etched' : 'nonfoil')
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        undoLast()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [card, finish, addCard, resetForNext])
+  }, [card, finish, addCard, resetForNext, undoLast])
 
   const runSearch = useCallback(async () => {
     if (!searchQuery.trim()) return
@@ -389,11 +523,54 @@ export default function App(): React.JSX.Element {
       <section className="panel">
         <div className="ref-row">
           <h2>Scan card</h2>
-          <button onClick={() => setCameraOn((v) => !v)}>
-            {cameraOn ? 'Hide camera' : 'Show camera'}
-          </button>
+          <div className="toolbar-right">
+            <button
+              className={autoMode ? 'primary' : ''}
+              onClick={() => {
+                const next = !autoMode
+                auto.current = {
+                  busy: false,
+                  lastId: null,
+                  hits: 0,
+                  lastAddedId: null,
+                  clearFrames: 0,
+                  missStreak: 0,
+                  warned: false
+                }
+                setAutoStatus(next ? 'watching…' : '')
+                setAutoMode(next)
+              }}
+              disabled={!refStatus?.ready}
+            >
+              {autoMode ? '⏸ Stop auto scan' : '▶ Auto scan'}
+            </button>
+            <button onClick={() => setCameraOn((v) => !v)}>
+              {cameraOn ? 'Hide camera' : 'Show camera'}
+            </button>
+          </div>
         </div>
-        {cameraOn && <CameraPanel onCapture={onCapture} />}
+        {autoMode && (
+          <div className="auto-bar">
+            <span className={`auto-status ${autoStatus.startsWith('✓') ? 'ok' : ''}`}>
+              {autoStatus || 'watching…'}
+            </span>
+            <span className="finish-row">
+              {(['nonfoil', 'foil', 'etched'] as Finish[]).map((f) => (
+                <button
+                  key={f}
+                  className={`finish-btn ${finish === f ? 'active' : ''}`}
+                  onClick={() => setFinish(f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </span>
+            <span className="muted small">
+              hold card until the beep · F finish · Backspace undo · Space force scan
+            </span>
+          </div>
+        )}
+        {cameraOn && <CameraPanel onCapture={onCapture} autoMode={autoMode} />}
         {capture && (
           <div className="capture-preview">
             <div className="capture-row">
@@ -514,6 +691,7 @@ export default function App(): React.JSX.Element {
                 <th>№</th>
                 <th>Finish</th>
                 <th>Rarity</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -525,6 +703,20 @@ export default function App(): React.JSX.Element {
                   <td>{item.collectorNumber}</td>
                   <td>{item.finish}</td>
                   <td>{item.rarity}</td>
+                  <td>
+                    <button
+                      className="row-undo"
+                      title="remove one"
+                      onClick={async () => {
+                        await window.api.removeCard(item.scryfallId, item.finish, 1)
+                        playUndo()
+                        setMessage(`↩ Removed 1× ${item.name}`)
+                        loadInventory()
+                      }}
+                    >
+                      −1
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

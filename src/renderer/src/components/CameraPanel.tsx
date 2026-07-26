@@ -167,9 +167,13 @@ export function captureFromVideo(video: HTMLVideoElement): CapturedFrame {
 }
 
 export default function CameraPanel({
-  onCapture
+  onCapture,
+  autoMode = false,
+  autoIntervalMs = 600
 }: {
-  onCapture: (capture: CapturedFrame) => void
+  onCapture: (capture: CapturedFrame, auto: boolean) => void
+  autoMode?: boolean
+  autoIntervalMs?: number
 }): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -237,11 +241,22 @@ export default function CameraPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
-  const capture = useCallback(() => {
-    const video = videoRef.current
-    if (!video || !running || video.videoWidth === 0) return
-    onCapture(captureFromVideo(video))
-  }, [running, onCapture])
+  const capture = useCallback(
+    (auto = false) => {
+      const video = videoRef.current
+      if (!video || !running || video.videoWidth === 0) return
+      onCapture(captureFromVideo(video), auto)
+    },
+    [running, onCapture]
+  )
+
+  // Auto mode: pump frames on an interval. The consumer decides whether a
+  // frame is worth acting on (it may still be busy with the previous one).
+  useEffect(() => {
+    if (!autoMode || !running) return
+    const id = window.setInterval(() => capture(true), autoIntervalMs)
+    return () => window.clearInterval(id)
+  }, [autoMode, running, autoIntervalMs, capture])
 
   // Space captures a frame (unless typing in an input).
   useEffect(() => {
@@ -249,7 +264,7 @@ export default function CameraPanel({
       const tag = (e.target as HTMLElement).tagName
       if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') {
         e.preventDefault()
-        capture()
+        capture(false)
       }
     }
     window.addEventListener('keydown', handler)
@@ -299,7 +314,7 @@ export default function CameraPanel({
             {error ? 'Retry' : 'Start camera'}
           </button>
         )}
-        <button className="primary" onClick={capture} disabled={!running}>
+        <button className="primary" onClick={() => capture(false)} disabled={!running}>
           Capture (Space)
         </button>
       </div>
