@@ -133,7 +133,14 @@ function registerIpc(): void {
         // offline/rate-limited — leave as none
       }
     }
-    return { resolution, parsed: scan.parse, confidence: scan.confidence, ms: scan.ms }
+    return {
+      resolution,
+      parsed: scan.parse,
+      confidence: scan.confidence,
+      numberConf: scan.numberConf,
+      setConf: scan.setConf,
+      ms: scan.ms
+    }
   })
 }
 

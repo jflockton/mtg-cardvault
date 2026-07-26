@@ -190,10 +190,12 @@ function ScanReadout({
   return (
     <div>
       <p className="muted small">
-        read: set <b>{parsed.setCode?.toUpperCase() ?? '—'}</b> · №{' '}
+        read: set <b>{parsed.setCode?.toUpperCase() ?? '—'}</b>
+        {result.setConf != null && <> ({Math.round(result.setConf)}%)</>} · №{' '}
         <b>{parsed.number ?? '—'}</b>
+        {result.numberConf != null && <> ({Math.round(result.numberConf)}%)</>}
         {parsed.total != null && <>/{parsed.total}</>} · year <b>{parsed.year ?? '—'}</b> ·{' '}
-        {Math.round(confidence)}% conf · {ms} ms
+        {Math.round(confidence)}% overall · {ms} ms
       </p>
       {resolution.kind === 'exact' && (
         <p className="message">Matched — confirm below (Enter adds).</p>
@@ -257,6 +259,7 @@ export default function App(): React.JSX.Element {
     busy: false,
     lastId: null as string | null, // exact id seen on the previous frame
     hits: 0, // consecutive frames agreeing on lastId
+    lockConf: 0, // lowest number-token confidence across the agreeing frames
     lastAddedId: null as string | null,
     clearFrames: 0, // frames since add that did NOT show lastAddedId
     missStreak: 0, // consecutive frames with content but no lock
@@ -350,6 +353,7 @@ export default function App(): React.JSX.Element {
 
         if (res.kind === 'exact' && res.card) {
           const id = res.card.scryfallId
+          const frameConf = result.numberConf ?? result.confidence
           a.missStreak = 0
           if (id === a.lastAddedId && a.clearFrames < 2) {
             // Same card still sitting in frame after its add — ignore until
@@ -357,16 +361,33 @@ export default function App(): React.JSX.Element {
             setAutoStatus(`✓ added — next card…`)
             return
           }
-          a.hits = id === a.lastId ? a.hits + 1 : 1
-          a.lastId = id
+          if (id === a.lastId) {
+            a.hits++
+            a.lockConf = Math.min(a.lockConf, frameConf)
+          } else {
+            a.lastId = id
+            a.hits = 1
+            a.lockConf = frameConf
+          }
           if (a.hits >= 2) {
+            const lockConf = a.lockConf
             a.hits = 0
             a.lastId = null
-            a.lastAddedId = id
-            a.clearFrames = 0
             a.warned = false
-            setAutoStatus('')
-            await autoAdd(res.card)
+            if (lockConf >= 65) {
+              a.lastAddedId = id
+              a.clearFrames = 0
+              setAutoStatus('')
+              await autoAdd(res.card)
+            } else {
+              // Agreeing frames but a shaky digit read (blur reads the same
+              // wrong way twice) — human glance instead of a silent write.
+              playAttention()
+              applyCard(res.card)
+              setAutoStatus(
+                `low confidence (${Math.round(lockConf)}%) — check the match, Enter adds, Esc rescans`
+              )
+            }
           } else {
             setAutoStatus(`locking: ${res.card.name}…`)
           }
@@ -449,6 +470,14 @@ export default function App(): React.JSX.Element {
   const addCard = useCallback(async () => {
     if (!card) return
     const item = await window.api.addCard(card, finish, quantity)
+    undoStack.current.push({ scryfallId: card.scryfallId, finish, name: card.name })
+    if (autoMode) {
+      // Confirmed via preview during auto scan: arm the same-card cooldown
+      // so the card still in frame doesn't immediately re-add.
+      auto.current.lastAddedId = card.scryfallId
+      auto.current.clearFrames = 0
+    }
+    playSuccess()
     setMessage(
       `Added ${item.name} (${item.setCode.toUpperCase()} #${item.collectorNumber}, ${item.finish}) — now ×${item.quantity}`
     )
@@ -456,7 +485,7 @@ export default function App(): React.JSX.Element {
     setTimeout(() => setFlash(false), 350)
     loadInventory()
     resetForNext()
-  }, [card, finish, quantity, loadInventory, resetForNext])
+  }, [card, finish, quantity, autoMode, loadInventory, resetForNext])
 
   // Keyboard flow. Preview open: Enter = confirm, F = toggle foil, Esc =
   // reject. No preview: F = sticky finish for auto-adds, Backspace = undo
@@ -532,6 +561,7 @@ export default function App(): React.JSX.Element {
                   busy: false,
                   lastId: null,
                   hits: 0,
+                  lockConf: 0,
                   lastAddedId: null,
                   clearFrames: 0,
                   missStreak: 0,

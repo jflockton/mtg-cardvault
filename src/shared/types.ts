@@ -86,5 +86,9 @@ export interface CornerScanResult {
     raw: string
   }
   confidence: number
+  /** Word-level confidence of the collector-number token (null if unknown). */
+  numberConf: number | null
+  /** Word-level confidence of the set-code token (null if unknown). */
+  setConf: number | null
   ms: number
 }

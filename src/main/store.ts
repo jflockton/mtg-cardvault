@@ -172,10 +172,40 @@ export class DataStore {
    * (exactly what the "/150" on the card means); the copyright year breaks
    * ties. Old frames print no set code at all, so this is their only path.
    */
+  /**
+   * OCR misreads set-code letters on stylized fonts (FIN → "PIN"). When the
+   * read code isn't a real set, try every known non-digital set code of the
+   * same length within one substitution and see which actually contain this
+   * collector number. One survivor → trust it; several → let the operator pick.
+   */
+  private repairSetCode(badCode: string, collectorNumber: string): CardRef[] {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return []
+    const known = this.refDb
+      .prepare('SELECT code FROM scryfall_sets WHERE digital = 0 AND length(code) = ?')
+      .all(badCode.length) as { code: string }[]
+    const hits: CardRef[] = []
+    for (const { code } of known) {
+      let diff = 0
+      for (let i = 0; i < code.length && diff < 2; i++) {
+        if (code[i] !== badCode[i]) diff++
+      }
+      if (diff !== 1) continue
+      const card = this.lookup(code, collectorNumber)
+      if (card) hits.push(card)
+    }
+    return hits
+  }
+
   resolveCorner(parse: CornerParse): ScanResolution {
     if (parse.setCode && parse.number) {
       const card = this.lookup(parse.setCode, parse.number)
       if (card) return { kind: 'exact', card }
+      const repaired = this.repairSetCode(parse.setCode, parse.number)
+      if (repaired.length === 1) return { kind: 'exact', card: repaired[0] }
+      if (repaired.length > 1) {
+        return { kind: 'candidates', candidates: repaired.slice(0, 8) }
+      }
     }
 
     if (parse.number && parse.total) {

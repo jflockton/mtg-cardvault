@@ -34,9 +34,64 @@ function getWorker(langPath: string): Promise<Worker> {
 export interface CornerScan {
   parse: CornerParse
   confidence: number
+  /** Word-level confidence of the token the collector number came from. */
+  numberConf: number | null
+  /** Word-level confidence of the token the set code came from. */
+  setConf: number | null
   /** Which of the supplied image variants produced the parse (for tuning). */
   variant: number
   ms: number
+}
+
+interface OcrWord {
+  text: string
+  confidence: number
+}
+
+/** Flatten tesseract's block tree into words; shapes vary, so walk defensively. */
+function collectWords(data: unknown): OcrWord[] {
+  const words: OcrWord[] = []
+  const blocks = (data as { blocks?: unknown }).blocks
+  if (!Array.isArray(blocks)) return words
+  for (const block of blocks) {
+    for (const para of (block as { paragraphs?: unknown[] }).paragraphs ?? []) {
+      for (const line of (para as { lines?: unknown[] }).lines ?? []) {
+        for (const w of (line as { words?: unknown[] }).words ?? []) {
+          const word = w as { text?: string; confidence?: number }
+          if (word.text) words.push({ text: word.text, confidence: word.confidence ?? 0 })
+        }
+      }
+    }
+  }
+  return words
+}
+
+function deconfuse(s: string): string {
+  return s.replace(/[OoQ]/g, '0').replace(/[Il|]/g, '1').replace(/S/g, '5').replace(/B/g, '8')
+}
+
+/** Confidence of the word that plausibly produced the parsed number. */
+function numberConfidence(words: OcrWord[], number: string): number | null {
+  let best: number | null = null
+  for (const w of words) {
+    const cleaned = deconfuse(w.text.replace(/[^A-Za-z0-9/]/g, ''))
+    if (cleaned.replace(/\D/g, '').includes(number)) {
+      best = best === null ? w.confidence : Math.max(best, w.confidence)
+    }
+  }
+  return best
+}
+
+/** Confidence of the word matching the parsed set code. */
+function setConfidence(words: OcrWord[], setCode: string): number | null {
+  const target = setCode.toUpperCase()
+  let best: number | null = null
+  for (const w of words) {
+    if (w.text.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === target) {
+      best = best === null ? w.confidence : Math.max(best, w.confidence)
+    }
+  }
+  return best
 }
 
 function dataUrlToBuffer(dataUrl: string): Buffer {
@@ -72,11 +127,18 @@ export async function scanCorner(
   for (const psm of passes) {
     await worker.setParameters({ tessedit_pageseg_mode: psm })
     for (let i = 0; i < imageVariants.length; i++) {
-      const { data } = await worker.recognize(dataUrlToBuffer(imageVariants[i]))
+      const { data } = await worker.recognize(
+        dataUrlToBuffer(imageVariants[i]),
+        {},
+        { text: true, blocks: true }
+      )
       const parse = parseCornerText(data.text ?? '')
+      const words = collectWords(data)
       const scan: CornerScan = {
         parse,
         confidence: data.confidence ?? 0,
+        numberConf: parse.number ? numberConfidence(words, parse.number) : null,
+        setConf: parse.setCode ? setConfidence(words, parse.setCode) : null,
         variant: i,
         ms: Date.now() - started
       }
