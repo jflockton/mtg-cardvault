@@ -742,6 +742,8 @@ export default function App(): React.JSX.Element {
                 <th>№</th>
                 <th>Finish</th>
                 <th>Rarity</th>
+                <th>Value</th>
+                <th>Scanned (UTC)</th>
                 <th></th>
               </tr>
             </thead>
@@ -772,6 +774,12 @@ export default function App(): React.JSX.Element {
                     </select>
                   </td>
                   <td>{item.rarity}</td>
+                  <td>{item.lastPrice != null ? `$${item.lastPrice.toFixed(2)}` : '—'}</td>
+                  <td className="muted small">
+                    {item.lastScannedAt
+                      ? item.lastScannedAt.replace('T', ' ').replace('Z', '')
+                      : '—'}
+                  </td>
                   <td>
                     <button
                       className="row-undo"

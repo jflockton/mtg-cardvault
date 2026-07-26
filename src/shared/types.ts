@@ -53,6 +53,10 @@ export interface InventoryItem {
   imageUri: string | null
   addedAt: string
   updatedAt: string
+  /** Market price (USD) recorded by the most recent scan of this stack. */
+  lastPrice: number | null
+  /** UTC timestamp of the most recent scan of this stack. */
+  lastScannedAt: string | null
 }
 
 export interface InventorySummary {

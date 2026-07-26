@@ -46,7 +46,26 @@ CREATE TABLE IF NOT EXISTS inventory (
 );
 CREATE INDEX IF NOT EXISTS idx_inv_name ON inventory (name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_inv_set ON inventory (set_code);
+
+-- One row per scan/add event: what came in, at what market price, when (UTC).
+CREATE TABLE IF NOT EXISTS scan_log (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  scryfall_id      TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  set_code         TEXT NOT NULL,
+  collector_number TEXT NOT NULL,
+  finish           TEXT NOT NULL,
+  quantity         INTEGER NOT NULL DEFAULT 1,
+  price_usd        REAL,
+  scanned_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_scanlog_stack ON scan_log (scryfall_id, finish, id);
 `
+
+/** Market price for a finish; etched falls back to foil (bulk data has no etched price). */
+function priceForFinish(pricesUsd: number | null, pricesUsdFoil: number | null, finish: Finish): number | null {
+  return finish === 'nonfoil' ? pricesUsd : (pricesUsdFoil ?? pricesUsd)
+}
 
 interface InvRow {
   id: number
@@ -63,10 +82,14 @@ interface InvRow {
   image_uri: string | null
   added_at: string
   updated_at: string
+  last_price: number | null
+  last_scanned_at: string | null
 }
 
 function rowToItem(r: InvRow): InventoryItem {
   return {
+    lastPrice: r.last_price ?? null,
+    lastScannedAt: r.last_scanned_at ?? null,
     id: r.id,
     scryfallId: r.scryfall_id,
     name: r.name,
@@ -296,31 +319,53 @@ export class DataStore {
       )
   }
 
-  /** Upsert: same (scryfall_id, finish) stack increments quantity. */
+  /**
+   * Upsert: same (scryfall_id, finish) stack increments quantity. Every add
+   * also appends a scan_log event carrying the market price at scan time
+   * and a UTC timestamp.
+   */
   addToInventory(card: CardRef, finish: Finish, quantity = 1): InventoryItem {
-    this.invDb
-      .prepare(
-        `INSERT INTO inventory
-           (scryfall_id, name, set_code, collector_number, rarity, type_line,
-            mana_cost, colors, finish, quantity, image_uri)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (scryfall_id, finish) DO UPDATE SET
-           quantity = quantity + excluded.quantity,
-           updated_at = datetime('now')`
-      )
-      .run(
-        card.scryfallId,
-        card.name,
-        card.setCode,
-        card.collectorNumber,
-        card.rarity,
-        card.typeLine,
-        card.manaCost,
-        JSON.stringify(card.colors),
-        finish,
-        quantity,
-        card.imageUri
-      )
+    const doAdd = this.invDb.transaction(() => {
+      this.invDb
+        .prepare(
+          `INSERT INTO inventory
+             (scryfall_id, name, set_code, collector_number, rarity, type_line,
+              mana_cost, colors, finish, quantity, image_uri)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (scryfall_id, finish) DO UPDATE SET
+             quantity = quantity + excluded.quantity,
+             updated_at = datetime('now')`
+        )
+        .run(
+          card.scryfallId,
+          card.name,
+          card.setCode,
+          card.collectorNumber,
+          card.rarity,
+          card.typeLine,
+          card.manaCost,
+          JSON.stringify(card.colors),
+          finish,
+          quantity,
+          card.imageUri
+        )
+      this.invDb
+        .prepare(
+          `INSERT INTO scan_log
+             (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          card.scryfallId,
+          card.name,
+          card.setCode,
+          card.collectorNumber,
+          finish,
+          quantity,
+          priceForFinish(card.pricesUsd, card.pricesUsdFoil, finish)
+        )
+    })
+    doAdd()
     const row = this.invDb
       .prepare('SELECT * FROM inventory WHERE scryfall_id = ? AND finish = ?')
       .get(card.scryfallId, finish) as InvRow
@@ -377,13 +422,73 @@ export class DataStore {
         )
     })
     doMove()
+    // The scan event's finish was a correction, not a new scan: re-point the
+    // newest matching log rows and re-price them for the new finish.
+    this.openReferenceIfPresent()
+    const ref = this.refDb
+      ?.prepare('SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?')
+      .get(scryfallId) as { prices_usd: number | null; prices_usd_foil: number | null } | undefined
+    let remaining = moved
+    while (remaining > 0) {
+      const last = this.invDb
+        .prepare(
+          `SELECT id, quantity FROM scan_log
+           WHERE scryfall_id = ? AND finish = ? ORDER BY id DESC LIMIT 1`
+        )
+        .get(scryfallId, from) as { id: number; quantity: number } | undefined
+      if (!last) break
+      const take = Math.min(last.quantity, remaining)
+      if (take === last.quantity) {
+        this.invDb
+          .prepare('UPDATE scan_log SET finish = ?, price_usd = ? WHERE id = ?')
+          .run(to, ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, to) : null, last.id)
+      } else {
+        this.invDb
+          .prepare('UPDATE scan_log SET quantity = quantity - ? WHERE id = ?')
+          .run(take, last.id)
+        this.invDb
+          .prepare(
+            `INSERT INTO scan_log
+               (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd, scanned_at)
+             SELECT scryfall_id, name, set_code, collector_number, ?, ?, ?, scanned_at
+             FROM scan_log WHERE id = ?`
+          )
+          .run(to, take, ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, to) : null, last.id)
+      }
+      remaining -= take
+    }
     const row = this.invDb
       .prepare('SELECT * FROM inventory WHERE scryfall_id = ? AND finish = ?')
       .get(scryfallId, to) as InvRow
     return rowToItem(row)
   }
 
-  /** Decrement a stack; the row is deleted when it reaches zero. */
+  /** Trim the newest scan_log events for a stack by `quantity` copies. */
+  private retractScanLog(scryfallId: string, finish: Finish, quantity: number): void {
+    let remaining = quantity
+    while (remaining > 0) {
+      const last = this.invDb
+        .prepare(
+          `SELECT id, quantity FROM scan_log
+           WHERE scryfall_id = ? AND finish = ? ORDER BY id DESC LIMIT 1`
+        )
+        .get(scryfallId, finish) as { id: number; quantity: number } | undefined
+      if (!last) return
+      if (last.quantity > remaining) {
+        this.invDb
+          .prepare('UPDATE scan_log SET quantity = quantity - ? WHERE id = ?')
+          .run(remaining, last.id)
+        return
+      }
+      this.invDb.prepare('DELETE FROM scan_log WHERE id = ?').run(last.id)
+      remaining -= last.quantity
+    }
+  }
+
+  /**
+   * Decrement a stack; the row is deleted when it reaches zero. The newest
+   * scan_log events are retracted with it (an undone scan didn't happen).
+   */
   removeFromInventory(
     scryfallId: string,
     finish: Finish,
@@ -394,20 +499,33 @@ export class DataStore {
       .get(scryfallId, finish) as InvRow | undefined
     if (!row) return null
     const newQty = row.quantity - quantity
-    if (newQty <= 0) {
-      this.invDb.prepare('DELETE FROM inventory WHERE id = ?').run(row.id)
-      return rowToItem({ ...row, quantity: 0 })
-    }
-    this.invDb
-      .prepare("UPDATE inventory SET quantity = ?, updated_at = datetime('now') WHERE id = ?")
-      .run(newQty, row.id)
-    return rowToItem({ ...row, quantity: newQty })
+    const doRemove = this.invDb.transaction(() => {
+      if (newQty <= 0) {
+        this.invDb.prepare('DELETE FROM inventory WHERE id = ?').run(row.id)
+      } else {
+        this.invDb
+          .prepare("UPDATE inventory SET quantity = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(newQty, row.id)
+      }
+      this.retractScanLog(scryfallId, finish, Math.min(quantity, row.quantity))
+    })
+    doRemove()
+    return rowToItem({ ...row, quantity: Math.max(0, newQty) })
   }
 
   listInventory(limit = 500): InventorySummary {
     const items = (
       this.invDb
-        .prepare('SELECT * FROM inventory ORDER BY updated_at DESC LIMIT ?')
+        .prepare(
+          `SELECT i.*,
+                  (SELECT s.price_usd FROM scan_log s
+                   WHERE s.scryfall_id = i.scryfall_id AND s.finish = i.finish
+                   ORDER BY s.id DESC LIMIT 1) AS last_price,
+                  (SELECT s.scanned_at FROM scan_log s
+                   WHERE s.scryfall_id = i.scryfall_id AND s.finish = i.finish
+                   ORDER BY s.id DESC LIMIT 1) AS last_scanned_at
+           FROM inventory i ORDER BY i.updated_at DESC LIMIT ?`
+        )
         .all(limit) as InvRow[]
     ).map(rowToItem)
     const totals = this.invDb

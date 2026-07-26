@@ -79,6 +79,19 @@ try {
   assert.equal(store.listInventory().distinctStacks, 1, 'zero-quantity row should be deleted')
   console.log('inventory ok: add → increment → foil stack → remove-at-zero all behave')
 
+  // Scan log: each add records a UTC timestamp + scan-time price; removes
+  // retract the newest events; the inventory listing surfaces the latest.
+  const listed = store.listInventory().items.find((i) => i.scryfallId === card.scryfallId)
+  assert(listed, 'added card missing from listing')
+  assert(
+    listed.lastScannedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(listed.lastScannedAt),
+    `lastScannedAt not UTC ISO: ${listed.lastScannedAt}`
+  )
+  if (card.pricesUsd != null) {
+    assert.equal(listed.lastPrice, card.pricesUsd, 'lastPrice should match scan-time price')
+  }
+  console.log(`scan log ok: ${listed.lastScannedAt} @ ${listed.lastPrice ?? '—'} USD`)
+
   console.log('\nAll checks passed ✅')
 } finally {
   store.close()
