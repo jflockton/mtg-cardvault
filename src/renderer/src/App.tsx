@@ -669,7 +669,9 @@ export default function App(): React.JSX.Element {
               )
             }
           } else {
-            setAutoStatus(`locking: ${res.card.name}…`)
+            // Don't parade names from junk reads — a phantom one-off match
+            // flashing 'locking: <random card>' reads as thrashing.
+            setAutoStatus(frameConf >= 35 ? `locking: ${res.card.name}…` : 'reading…')
           }
           return
         }
