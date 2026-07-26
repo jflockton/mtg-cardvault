@@ -642,16 +642,12 @@ export default function App(): React.JSX.Element {
     <div className={`app ${flash ? 'flash' : ''}`}>
       <header>
         <h1>🃏 MTG CardVault</h1>
-        {inventory && (
-          <p className="muted">
-            {inventory.totalCards.toLocaleString()} cards ·{' '}
-            {inventory.distinctStacks.toLocaleString()} stacks
-          </p>
-        )}
       </header>
 
       <ReferencePanel status={refStatus} onStatusChange={loadStatus} />
 
+      <div className="columns">
+      <div className="col scan-col">
       <section className="panel">
         <div className="ref-row">
           <h2>Scan card</h2>
@@ -758,8 +754,10 @@ export default function App(): React.JSX.Element {
         </section>
       )}
 
-      <section className="panel">
-        <h2>Add card (manual)</h2>
+      <details className="panel manual-panel" open={showSearch || undefined}>
+        <summary>
+          <h2>Add card manually / name search</h2>
+        </summary>
         <div className="lookup-row">
           <label>
             Set code
@@ -819,11 +817,22 @@ export default function App(): React.JSX.Element {
             )}
           </div>
         )}
-      </section>
+      </details>
+      </div>
 
-      <section className="panel">
-        <h2>Just added</h2>
+      <div className="col collection-col">
+      <section className="panel collection">
+        <div className="ref-row collection-head">
+          <h2>Collection</h2>
+          {inventory && (
+            <p className="muted">
+              {inventory.totalCards.toLocaleString()} cards ·{' '}
+              {inventory.distinctStacks.toLocaleString()} stacks
+            </p>
+          )}
+        </div>
         {inventory && inventory.items.length > 0 ? (
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -839,7 +848,7 @@ export default function App(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {inventory.items.slice(0, 20).map((item) => (
+              {inventory.items.map((item) => (
                 <tr key={item.id}>
                   <td>×{item.quantity}</td>
                   <td>{item.name}</td>
@@ -889,10 +898,13 @@ export default function App(): React.JSX.Element {
               ))}
             </tbody>
           </table>
+          </div>
         ) : (
           <p className="muted">Nothing in inventory yet.</p>
         )}
       </section>
+      </div>
+      </div>
     </div>
   )
 }

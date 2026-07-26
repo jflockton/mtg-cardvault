@@ -7,8 +7,8 @@ import {
   type NormRect
 } from '../scan/geometry'
 
-/** Fixed on-screen height of the camera stage (px). */
-const DISPLAY_HEIGHT = 420
+/** Maximum on-screen height of the camera stage (px). */
+const MAX_DISPLAY_HEIGHT = 420
 
 const DEVICE_KEY = 'cardvault.cameraDeviceId'
 
@@ -189,6 +189,18 @@ export default function CameraPanel({
   // Native stream dimensions — refreshed when the source flips orientation
   // mid-stream (iPhone Continuity Camera does this when the phone tilts).
   const [videoDims, setVideoDims] = useState<{ w: number; h: number } | null>(null)
+  // Available width for the stage (responsive two-column layout).
+  const stageWrapRef = useRef<HTMLDivElement>(null)
+  const [stageWidth, setStageWidth] = useState(0)
+
+  useEffect(() => {
+    const el = stageWrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setStageWidth(el.clientWidth))
+    ro.observe(el)
+    setStageWidth(el.clientWidth)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     const video = videoRef.current
@@ -305,12 +317,17 @@ export default function CameraPanel({
   }, [capture])
 
   // Overlay geometry in display pixels, from the SAME cardGuideRect the
-  // cropper uses — orientation-proof by construction. The displayed video is
-  // DISPLAY_HEIGHT tall with width following the stream's aspect ratio.
+  // cropper uses — orientation-proof by construction. The video scales to
+  // fit the available column width, capped in height.
   let guideStyle: React.CSSProperties = { display: 'none' }
+  let videoStyle: React.CSSProperties = { height: MAX_DISPLAY_HEIGHT }
   if (videoDims) {
-    const dispW = (DISPLAY_HEIGHT * videoDims.w) / videoDims.h
-    const g = cardGuideRect(dispW, DISPLAY_HEIGHT)
+    const maxW = stageWidth > 40 ? stageWidth : MAX_DISPLAY_HEIGHT * (videoDims.w / videoDims.h)
+    const scale = Math.min(maxW / videoDims.w, MAX_DISPLAY_HEIGHT / videoDims.h)
+    const dispW = videoDims.w * scale
+    const dispH = videoDims.h * scale
+    videoStyle = { width: dispW, height: dispH }
+    const g = cardGuideRect(dispW, dispH)
     guideStyle = { left: g.x, top: g.y, width: g.w, height: g.h }
   }
   const regionStyle = (r: NormRect): React.CSSProperties => ({
@@ -355,20 +372,18 @@ export default function CameraPanel({
 
       {error && <p className="warn">{error}</p>}
 
-      <div className="camera-stage">
-        <video ref={videoRef} muted playsInline style={{ height: DISPLAY_HEIGHT }} />
-        {running && videoDims && (
-          <div className="card-guide" style={guideStyle}>
-            <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
-              <span>collector info</span>
+      <div ref={stageWrapRef} className="camera-stage-wrap">
+        <div className="camera-stage">
+          <video ref={videoRef} muted playsInline style={videoStyle} />
+          {running && videoDims && (
+            <div className="card-guide" style={guideStyle}>
+              <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
+                <span>collector info</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-      <p className="muted small">
-        Fill the outline with the card — the bottom-left fine print (collector number) must
-        land in the dashed box, sharp.
-      </p>
     </div>
   )
 }
