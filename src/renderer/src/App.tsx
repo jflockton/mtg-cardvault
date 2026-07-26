@@ -276,9 +276,11 @@ export default function App(): React.JSX.Element {
   const [pending, setPendingState] = useState<{ card: CardRef; finish: Finish } | null>(null)
   const pendingRef = useRef<{ card: CardRef; finish: Finish } | null>(null)
   const pendingClear = useRef(0) // frames since staging that did NOT show the pending card
+  const pendingAgree = useRef(0) // further frames agreeing with the staged card
   const setPending = useCallback((p: { card: CardRef; finish: Finish } | null) => {
     pendingRef.current = p
     pendingClear.current = 0
+    pendingAgree.current = 0
     setPendingState(p)
   }, [])
 
@@ -429,8 +431,16 @@ export default function App(): React.JSX.Element {
             id === pendingRef.current.card.scryfallId &&
             pendingClear.current < 2
           ) {
-            // The staged card is still sitting in frame — hold it staged.
-            setAutoStatus('staged — next card commits it · Enter adds now · Backspace discards')
+            // Staged card still in frame and still reading the same: that
+            // sustained agreement IS confidence. One good read — or two more
+            // agreeing shaky ones — confirms it.
+            pendingAgree.current++
+            if (frameConf >= 65 || pendingAgree.current >= 2) {
+              setAutoStatus('')
+              await commitPending()
+            } else {
+              setAutoStatus('staged — hold steady to confirm, or bring the next card…')
+            }
             return
           }
           if (id === a.lastAddedId && a.clearFrames < 2) {
@@ -720,8 +730,8 @@ export default function App(): React.JSX.Element {
           {pending && !card && (
             <div className="staged">
               <p className="warn">
-                ⏳ Staged (shaky read) — the next card's lock adds this automatically · Enter
-                adds now · F finish · Backspace discards
+                ⏳ Staged — hold the card steady a moment to confirm, or just bring the next
+                card · Enter adds now · F finish · Backspace discards
               </p>
               <CardPreview
                 card={pending.card}
