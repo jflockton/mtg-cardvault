@@ -190,14 +190,20 @@ function ScanReadout({
   const { resolution, parsed, confidence, ms } = result
   return (
     <div>
-      <p className="muted small">
-        read: set <b>{parsed.setCode?.toUpperCase() ?? '—'}</b>
-        {result.setConf != null && <> ({Math.round(result.setConf)}%)</>} · №{' '}
-        <b>{parsed.number ?? '—'}</b>
-        {result.numberConf != null && <> ({Math.round(result.numberConf)}%)</>}
-        {parsed.total != null && <>/{parsed.total}</>} · year <b>{parsed.year ?? '—'}</b> ·{' '}
-        {Math.round(confidence)}% overall · {ms} ms
-      </p>
+      {parsed.nameRead !== undefined ? (
+        <p className="muted small">
+          read name: <b>{parsed.nameRead || '—'}</b> · {Math.round(confidence)}% · {ms} ms
+        </p>
+      ) : (
+        <p className="muted small">
+          read: set <b>{parsed.setCode?.toUpperCase() ?? '—'}</b>
+          {result.setConf != null && <> ({Math.round(result.setConf)}%)</>} · №{' '}
+          <b>{parsed.number ?? '—'}</b>
+          {result.numberConf != null && <> ({Math.round(result.numberConf)}%)</>}
+          {parsed.total != null && <>/{parsed.total}</>} · year <b>{parsed.year ?? '—'}</b> ·{' '}
+          {Math.round(confidence)}% overall · {ms} ms
+        </p>
+      )}
       {resolution.kind === 'exact' && (
         <p className="message">Matched — confirm below (Enter adds).</p>
       )}
@@ -362,6 +368,22 @@ export default function App(): React.JSX.Element {
     () => localStorage.getItem('cardvault.autoScan') !== '0'
   )
   const [autoStatus, setAutoStatus] = useState<string>('')
+
+  // Corner mode reads the collector info; Name mode reads the title bar
+  // (old cards / unreadable corners), optionally pinned to one set.
+  const [scanMode, setScanMode] = useState<'corner' | 'name'>(
+    () => (localStorage.getItem('cardvault.scanMode') === 'name' ? 'name' : 'corner')
+  )
+  const [pinnedSet, setPinnedSet] = useState(
+    () => localStorage.getItem('cardvault.pinnedSet') ?? ''
+  )
+  const scanFrame = useCallback(
+    (c: CapturedFrame): Promise<CornerScanResult> =>
+      scanMode === 'name'
+        ? window.api.scanTitle(c.titleVariants, pinnedSet.trim() || null)
+        : window.api.scanCorner(c.cornerVariants),
+    [scanMode, pinnedSet]
+  )
   // Lock loop state — a ref, not state: it mutates on every pumped frame.
   const auto = useRef({
     busy: false,
@@ -508,14 +530,16 @@ export default function App(): React.JSX.Element {
       if (a.busy) return
       a.busy = true
       try {
-        const result = await window.api.scanCorner(c.cornerVariants)
+        const result = await scanFrame(c)
         const res = result.resolution
-        const readSomething = Boolean(result.parsed.number || result.parsed.setCode)
+        const readSomething = Boolean(
+          result.parsed.number || result.parsed.setCode || result.parsed.nameRead
+        )
 
         // Liveness: refresh the crop thumbnail + readout on EVERY processed
         // frame, so the operator can watch the loop thinking (~2/sec).
         setCapture({
-          cornerUrl: c.corner.toDataURL('image/png'),
+          cornerUrl: (scanMode === 'name' ? c.title : c.corner).toDataURL('image/png'),
           width: c.width,
           height: c.height
         })
@@ -610,9 +634,11 @@ export default function App(): React.JSX.Element {
           a.missStreak++
           const p = result.parsed
           setAutoStatus(
-            `saw ${p.setCode?.toUpperCase() ?? '—'} #${p.number ?? '—'}${
-              p.total ? `/${p.total}` : ''
-            } — no match yet, adjusting…`
+            p.nameRead
+              ? `saw "${p.nameRead}" — no match yet, adjusting…`
+              : `saw ${p.setCode?.toUpperCase() ?? '—'} #${p.number ?? '—'}${
+                  p.total ? `/${p.total}` : ''
+                } — no match yet, adjusting…`
           )
           if (a.missStreak >= 4 && !a.warned) {
             a.warned = true
@@ -631,14 +657,14 @@ export default function App(): React.JSX.Element {
         auto.current.busy = false
       }
     },
-    [card, autoAdd, commitPending, setPending]
+    [card, autoAdd, commitPending, setPending, scanFrame, scanMode]
   )
 
   const onCapture = useCallback(
     async (c: CapturedFrame, isAuto: boolean) => {
       if (isAuto) return onAutoFrame(c)
       setCapture({
-        cornerUrl: c.corner.toDataURL('image/png'),
+        cornerUrl: (scanMode === 'name' ? c.title : c.corner).toDataURL('image/png'),
         width: c.width,
         height: c.height
       })
@@ -646,7 +672,7 @@ export default function App(): React.JSX.Element {
       setMessage(null)
       setScan({ status: 'scanning' })
       try {
-        const result = await window.api.scanCorner(c.cornerVariants)
+        const result = await scanFrame(c)
         setScan({ status: 'done', result })
         if (result.resolution.kind === 'exact' && result.resolution.card) {
           applyCard(result.resolution.card)
@@ -658,7 +684,7 @@ export default function App(): React.JSX.Element {
         })
       }
     },
-    [applyCard, onAutoFrame]
+    [applyCard, onAutoFrame, scanFrame, scanMode]
   )
 
   const addCard = useCallback(async () => {
@@ -785,18 +811,59 @@ export default function App(): React.JSX.Element {
             </button>
           </div>
         </div>
-        {autoMode && (
-          <div className="auto-bar">
-            <span className={`auto-status ${autoStatus.startsWith('✓') ? 'ok' : ''}`}>
-              {autoStatus || 'watching…'}
-            </span>
-            <span className="muted small">
-              hold card until the beep, then next card · F = last card was foil · Backspace
-              undo · Space force scan
-            </span>
-          </div>
+        <div className="auto-bar">
+          <span className="finish-row">
+            <button
+              className={`finish-btn ${scanMode === 'corner' ? 'active' : ''}`}
+              onClick={() => {
+                setScanMode('corner')
+                localStorage.setItem('cardvault.scanMode', 'corner')
+              }}
+            >
+              Corner №
+            </button>
+            <button
+              className={`finish-btn ${scanMode === 'name' ? 'active' : ''}`}
+              onClick={() => {
+                setScanMode('name')
+                localStorage.setItem('cardvault.scanMode', 'name')
+              }}
+            >
+              Name (old cards)
+            </button>
+          </span>
+          {scanMode === 'name' && (
+            <label className="pin-label">
+              Set pin
+              <input
+                value={pinnedSet}
+                placeholder="e.g. M19 (optional)"
+                maxLength={6}
+                onChange={(e) => {
+                  setPinnedSet(e.target.value)
+                  localStorage.setItem('cardvault.pinnedSet', e.target.value)
+                }}
+              />
+            </label>
+          )}
+          {autoMode && (
+            <>
+              <span className={`auto-status ${autoStatus.startsWith('✓') ? 'ok' : ''}`}>
+                {autoStatus || 'watching…'}
+              </span>
+              <span className="muted small">
+                hold card until the beep · F = last foil · Backspace undo
+              </span>
+            </>
+          )}
+        </div>
+        {cameraOn && (
+          <CameraPanel
+            onCapture={onCapture}
+            autoMode={autoMode}
+            guideRegion={scanMode === 'name' ? 'title' : 'corner'}
+          />
         )}
-        {cameraOn && <CameraPanel onCapture={onCapture} autoMode={autoMode} />}
         {capture && (
           <div className="capture-preview">
             <div className="capture-row">

@@ -104,7 +104,10 @@ export interface CornerScanResult {
     number: string | null
     total: number | null
     year: number | null
+    token?: boolean
     raw: string
+    /** Name mode: the cleaned title line that was matched. */
+    nameRead?: string | null
   }
   confidence: number
   /** Word-level confidence of the collector-number token (null if unknown). */

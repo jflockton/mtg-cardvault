@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import { DataStore } from './store'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
-import { scanCorner, terminateOcr } from './ocr'
+import { scanCorner, scanTitle, terminateOcr } from './ocr'
 import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
 
 /** Tesseract traineddata: repo-local in dev, resources/tessdata when packaged. */
@@ -126,6 +126,36 @@ function registerIpc(): void {
     clipboard.writeText(text)
     return { lines: text ? text.split('\n').length : 0 }
   })
+
+  ipcMain.handle(
+    'scan:title',
+    async (
+      _e,
+      args: { imageVariants: string[]; pinnedSet?: string | null }
+    ): Promise<CornerScanResult> => {
+      const scan = await scanTitle(args.imageVariants, resolveTessdataDir())
+      const match = store.matchName(scan.text, args.pinnedSet)
+      // Exact name matches are trustworthy regardless of raw OCR confidence;
+      // fuzzy ones stage (the sustained-agreement path still commits them).
+      const confidence = match.quality === 'exact' ? 90 : match.quality === 'fuzzy' ? 55 : 0
+      return {
+        resolution: match.resolution,
+        parsed: {
+          setCode: null,
+          number: null,
+          total: null,
+          year: null,
+          token: false,
+          raw: scan.text,
+          nameRead: match.cleaned
+        },
+        confidence,
+        numberConf: confidence,
+        setConf: null,
+        ms: scan.ms
+      }
+    }
+  )
 
   ipcMain.handle('precon:list', () => fetchPreconList())
 

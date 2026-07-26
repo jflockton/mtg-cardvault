@@ -338,6 +338,16 @@ button.link {
   min-width: 14rem;
 }
 
+.pin-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pin-label input {
+  width: 8.5rem;
+}
+
 .auto-status.ok {
   color: var(--ok);
 }

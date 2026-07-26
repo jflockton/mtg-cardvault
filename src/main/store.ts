@@ -86,6 +86,25 @@ interface InvRow {
   last_scanned_at: string | null
 }
 
+/** Banded Levenshtein with early exit once distance exceeds `limit`. */
+function editDistance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) >= limit) return limit
+  const prev = new Array(b.length + 1).fill(0).map((_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let rowMin = i
+    let diag = prev[0]
+    prev[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j]
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1))
+      diag = tmp
+      if (prev[j] < rowMin) rowMin = prev[j]
+    }
+    if (rowMin >= limit) return limit
+  }
+  return prev[b.length]
+}
+
 function rowToItem(r: InvRow): InventoryItem {
   return {
     lastPrice: r.last_price ?? null,
@@ -305,6 +324,77 @@ export class DataStore {
       )
       .all(`%${query.trim()}%`, limit)
     return rows.map((r) => rowToCardRef(r as never, 'local'))
+  }
+
+  /**
+   * Match an OCR'd title line to a card name. Exact (case-insensitive)
+   * first; then edit-distance ≤2 against names sharing the same first
+   * letters. A pinned set narrows printings to one — the old-card flow.
+   */
+  matchName(
+    rawLine: string,
+    pinnedSet?: string | null
+  ): { resolution: ScanResolution; cleaned: string; quality: 'exact' | 'fuzzy' | 'none' } {
+    this.openReferenceIfPresent()
+    const cleaned = rawLine
+      .replace(/[^A-Za-z'’\-, ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!this.refDb || cleaned.length < 3) {
+      return { resolution: { kind: 'none' }, cleaned, quality: 'none' }
+    }
+    const pin = pinnedSet ? normalizeSetCode(pinnedSet) : null
+
+    const printingsFor = (name: string): CardRef[] => {
+      const rows = pin
+        ? this.refDb!.prepare(
+            `SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE
+             AND set_code IN (?, ?) ORDER BY released_at ASC`
+          ).all(name, pin, `t${pin}`)
+        : this.refDb!.prepare(
+            `SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE
+             ORDER BY released_at ASC LIMIT 8`
+          ).all(name)
+      return rows.map((r) => rowToCardRef(r as never, 'local'))
+    }
+
+    const resolve = (
+      name: string,
+      quality: 'exact' | 'fuzzy'
+    ): { resolution: ScanResolution; cleaned: string; quality: 'exact' | 'fuzzy' | 'none' } => {
+      const printings = printingsFor(name)
+      if (printings.length === 0) return { resolution: { kind: 'none' }, cleaned, quality: 'none' }
+      if (printings.length === 1) {
+        return { resolution: { kind: 'exact', card: printings[0] }, cleaned, quality }
+      }
+      return { resolution: { kind: 'candidates', candidates: printings }, cleaned, quality }
+    }
+
+    const exact = this.refDb
+      .prepare('SELECT name FROM scryfall_cards WHERE name = ? COLLATE NOCASE LIMIT 1')
+      .get(cleaned) as { name: string } | undefined
+    if (exact) return resolve(exact.name, 'exact')
+
+    // Fuzzy: candidate names sharing the first 3 letters, close in length.
+    const prefix = cleaned.slice(0, 3)
+    const names = this.refDb
+      .prepare(
+        `SELECT DISTINCT name FROM scryfall_cards
+         WHERE name LIKE ? COLLATE NOCASE AND length(name) BETWEEN ? AND ?`
+      )
+      .all(`${prefix}%`, cleaned.length - 3, cleaned.length + 3) as { name: string }[]
+    let bestName: string | null = null
+    let bestDist = 3 // accept distance ≤ 2
+    const target = cleaned.toLowerCase()
+    for (const { name } of names) {
+      const d = editDistance(target, name.toLowerCase(), bestDist)
+      if (d < bestDist) {
+        bestDist = d
+        bestName = name
+      }
+    }
+    if (bestName) return resolve(bestName, 'fuzzy')
+    return { resolution: { kind: 'none' }, cleaned, quality: 'none' }
   }
 
   /** Cache a live-API hit so the next scan of the same card is offline. */

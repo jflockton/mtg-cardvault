@@ -149,6 +149,33 @@ export async function scanCorner(
   return best!
 }
 
+export interface TitleScan {
+  text: string
+  confidence: number
+  variant: number
+  ms: number
+}
+
+/** OCR the title-bar crop: a single line of large text. */
+export async function scanTitle(imageVariants: string[], langPath: string): Promise<TitleScan> {
+  const worker = await getWorker(langPath)
+  const started = Date.now()
+  await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE })
+  let best: TitleScan | null = null
+  for (let i = 0; i < imageVariants.length; i++) {
+    const { data } = await worker.recognize(dataUrlToBuffer(imageVariants[i]))
+    const scan: TitleScan = {
+      text: (data.text ?? '').trim(),
+      confidence: data.confidence ?? 0,
+      variant: i,
+      ms: Date.now() - started
+    }
+    if (scan.confidence >= 70 && scan.text.length >= 3) return scan
+    if (!best || scan.confidence > best.confidence) best = scan
+  }
+  return best!
+}
+
 export async function terminateOcr(): Promise<void> {
   if (workerPromise) {
     const w = await workerPromise.catch(() => null)

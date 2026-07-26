@@ -24,6 +24,8 @@ export interface CapturedFrame {
    * grayscale + contrast-stretched, dark-text-on-light.
    */
   cornerVariants: string[]
+  /** OCR-ready title-bar variants (name mode). */
+  titleVariants: string[]
   width: number
   height: number
 }
@@ -158,11 +160,13 @@ export function captureFromVideo(video: HTMLVideoElement): CapturedFrame {
   frame.height = video.videoHeight
   frame.getContext('2d')!.drawImage(video, 0, 0)
   const corner = cropRegion(video, CORNER_REGION)
+  const title = cropRegion(video, TITLE_REGION)
   return {
     frame,
-    title: cropRegion(video, TITLE_REGION),
+    title,
     corner,
     cornerVariants: toOcrVariants(corner),
+    titleVariants: toOcrVariants(title),
     width: video.videoWidth,
     height: video.videoHeight
   }
@@ -171,11 +175,14 @@ export function captureFromVideo(video: HTMLVideoElement): CapturedFrame {
 export default function CameraPanel({
   onCapture,
   autoMode = false,
-  autoIntervalMs = 600
+  autoIntervalMs = 600,
+  guideRegion = 'corner'
 }: {
   onCapture: (capture: CapturedFrame, auto: boolean) => void
   autoMode?: boolean
   autoIntervalMs?: number
+  /** Which crop the operator needs to land: corner (modern) or title (name mode). */
+  guideRegion?: 'corner' | 'title'
 }): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -388,9 +395,15 @@ export default function CameraPanel({
           <video ref={videoRef} muted playsInline style={videoStyle} />
           {running && videoDims && (
             <div className="card-guide" style={guideStyle}>
-              <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
-                <span>collector info</span>
-              </div>
+              {guideRegion === 'corner' ? (
+                <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
+                  <span>collector info</span>
+                </div>
+              ) : (
+                <div className="region-guide title" style={regionStyle(TITLE_REGION)}>
+                  <span>card name</span>
+                </div>
+              )}
             </div>
           )}
         </div>

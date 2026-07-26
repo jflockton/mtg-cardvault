@@ -42,6 +42,11 @@ export interface CardVaultApi {
   exportCollection: () => Promise<{ lines: number }>
   /** OCR + resolve a corner crop; variants are the same crop in different polarities. */
   scanCorner: (imageVariants: string[]) => Promise<CornerScanResult>
+  /** Name mode: OCR the title crop and match against card names. */
+  scanTitle: (
+    imageVariants: string[],
+    pinnedSet?: string | null
+  ) => Promise<CornerScanResult>
 }
 
 const api: CardVaultApi = {
@@ -64,7 +69,9 @@ const api: CardVaultApi = {
   preconList: () => ipcRenderer.invoke('precon:list'),
   preconInfo: (fileName) => ipcRenderer.invoke('precon:info', fileName),
   preconAdd: (fileName) => ipcRenderer.invoke('precon:add', fileName),
-  scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants)
+  scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants),
+  scanTitle: (imageVariants, pinnedSet) =>
+    ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet })
 }
 
 contextBridge.exposeInMainWorld('api', api)
