@@ -177,6 +177,9 @@ export default function CameraPanel({
 }): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  // Bumped on every start(); stale starts (dev double-mount, quick device
+  // switches) see a newer generation and bow out instead of erroring.
+  const startSeq = useRef(0)
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem(DEVICE_KEY) ?? '')
   const [running, setRunning] = useState(false)
@@ -190,6 +193,7 @@ export default function CameraPanel({
 
   const start = useCallback(
     async (preferredId?: string) => {
+      const mySeq = ++startSeq.current
       stop()
       setError(null)
       try {
@@ -201,6 +205,11 @@ export default function CameraPanel({
           },
           audio: false
         })
+        if (startSeq.current !== mySeq) {
+          // A newer start owns the camera now — release this stream quietly.
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
         streamRef.current = stream
         if (videoRef.current) {
           videoRef.current.srcObject = stream
@@ -217,6 +226,11 @@ export default function CameraPanel({
         }
       } catch (err) {
         const name = err instanceof Error ? err.name : ''
+        if (name === 'AbortError' || startSeq.current !== mySeq) {
+          // play() interrupted because a newer start replaced the source —
+          // harmless; the newer start reports its own outcome.
+          return
+        }
         if (preferredId && name === 'OverconstrainedError') {
           // Remembered camera is gone (unplugged) — fall back to any camera.
           localStorage.removeItem(DEVICE_KEY)
