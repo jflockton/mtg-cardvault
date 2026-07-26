@@ -270,6 +270,18 @@ export default function App(): React.JSX.Element {
   })
   const undoStack = useRef<{ scryfallId: string; finish: Finish; name: string }[]>([])
 
+  // A low-confidence lock is STAGED, not blocking: shown for a glance/foil
+  // flip, committed automatically when the next card locks. State drives the
+  // UI; the ref gives the frame loop a non-stale view.
+  const [pending, setPendingState] = useState<{ card: CardRef; finish: Finish } | null>(null)
+  const pendingRef = useRef<{ card: CardRef; finish: Finish } | null>(null)
+  const pendingClear = useRef(0) // frames since staging that did NOT show the pending card
+  const setPending = useCallback((p: { card: CardRef; finish: Finish } | null) => {
+    pendingRef.current = p
+    pendingClear.current = 0
+    setPendingState(p)
+  }, [])
+
   const setInputRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = useCallback(() => {
@@ -320,12 +332,11 @@ export default function App(): React.JSX.Element {
   }, [setCode, collectorNumber, applyCard])
 
   const autoAdd = useCallback(
-    async (c: CardRef) => {
+    async (c: CardRef, finishOverride?: Finish) => {
       // Finish decisions happen AFTER the scan (F key / row selects) — keep
       // the loop moving. Foil-only printings land on their only finish.
-      const addFinish: Finish = c.finishes.includes('nonfoil')
-        ? 'nonfoil'
-        : (c.finishes[0] ?? 'nonfoil')
+      const addFinish: Finish =
+        finishOverride ?? (c.finishes.includes('nonfoil') ? 'nonfoil' : (c.finishes[0] ?? 'nonfoil'))
       const item = await window.api.addCard(c, addFinish, 1)
       undoStack.current.push({ scryfallId: c.scryfallId, finish: addFinish, name: c.name })
       playSuccess()
@@ -338,6 +349,22 @@ export default function App(): React.JSX.Element {
     },
     [loadInventory]
   )
+
+  const commitPending = useCallback(async () => {
+    const p = pendingRef.current
+    if (!p) return
+    setPending(null)
+    await autoAdd(p.card, p.finish)
+  }, [autoAdd, setPending])
+
+  const discardPending = useCallback(() => {
+    const p = pendingRef.current
+    if (!p) return
+    setPending(null)
+    playUndo()
+    setMessage(`✗ Discarded staged ${p.card.name}`)
+    setAutoStatus('watching…')
+  }, [setPending])
 
   /** F after a beep: cycle the just-added copy's finish (foil → etched → back). */
   const flipLastFinish = useCallback(async () => {
@@ -387,10 +414,25 @@ export default function App(): React.JSX.Element {
         })
         setScan({ status: 'done', result })
 
+        // Track whether the staged (pending) card has left the frame.
+        const exactId = res.kind === 'exact' && res.card ? res.card.scryfallId : null
+        if (pendingRef.current && exactId !== pendingRef.current.card.scryfallId) {
+          pendingClear.current++
+        }
+
         if (res.kind === 'exact' && res.card) {
           const id = res.card.scryfallId
           const frameConf = result.numberConf ?? result.confidence
           a.missStreak = 0
+          if (
+            pendingRef.current &&
+            id === pendingRef.current.card.scryfallId &&
+            pendingClear.current < 2
+          ) {
+            // The staged card is still sitting in frame — hold it staged.
+            setAutoStatus('staged — next card commits it · Enter adds now · Backspace discards')
+            return
+          }
           if (id === a.lastAddedId && a.clearFrames < 2) {
             // Same card still sitting in frame after its add — ignore until
             // we've seen it leave (2 frames without it).
@@ -410,18 +452,25 @@ export default function App(): React.JSX.Element {
             a.hits = 0
             a.lastId = null
             a.warned = false
+            // A new lock commits whatever was staged — the operator moved on.
+            await commitPending()
             if (lockConf >= 65) {
               a.lastAddedId = id
               a.clearFrames = 0
               setAutoStatus('')
               await autoAdd(res.card)
             } else {
-              // Agreeing frames but a shaky digit read (blur reads the same
-              // wrong way twice) — human glance instead of a silent write.
+              // Shaky digit read: stage it, keep scanning. Visible for a
+              // foil-flip or discard; the next lock commits it untouched.
               playAttention()
-              applyCard(res.card)
+              setPending({
+                card: res.card,
+                finish: res.card.finishes.includes('nonfoil')
+                  ? 'nonfoil'
+                  : (res.card.finishes[0] ?? 'nonfoil')
+              })
               setAutoStatus(
-                `low confidence (${Math.round(lockConf)}%) — check the match, Enter adds, Esc rescans`
+                `staged at ${Math.round(lockConf)}% — next card commits · Enter now · F foil · Backspace discard`
               )
             }
           } else {
@@ -467,7 +516,7 @@ export default function App(): React.JSX.Element {
         auto.current.busy = false
       }
     },
-    [card, autoAdd, applyCard]
+    [card, autoAdd, commitPending, setPending]
   )
 
   const onCapture = useCallback(
@@ -539,6 +588,20 @@ export default function App(): React.JSX.Element {
         return
       }
       if (inInput) return
+      if (pending) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commitPending()
+        } else if (e.key === 'Escape' || e.key === 'Backspace') {
+          e.preventDefault()
+          discardPending()
+        } else if (e.key === 'f' || e.key === 'F') {
+          const options = pending.card.finishes.length > 0 ? pending.card.finishes : ['nonfoil' as Finish]
+          const next = options[(options.indexOf(pending.finish) + 1) % options.length]
+          setPending({ ...pending, finish: next })
+        }
+        return
+      }
       if (e.key === 'f' || e.key === 'F') {
         flipLastFinish()
       } else if (e.key === 'Backspace') {
@@ -548,7 +611,7 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [card, finish, addCard, resetForNext, undoLast, flipLastFinish])
+  }, [card, finish, pending, addCard, resetForNext, undoLast, flipLastFinish, commitPending, discardPending, setPending])
 
   const runSearch = useCallback(async () => {
     if (!searchQuery.trim()) return
@@ -587,6 +650,7 @@ export default function App(): React.JSX.Element {
               className={autoMode ? 'primary' : ''}
               onClick={() => {
                 const next = !autoMode
+                if (!next) commitPending() // staged card was "probably right"
                 auto.current = {
                   busy: false,
                   lastId: null,
@@ -649,10 +713,27 @@ export default function App(): React.JSX.Element {
         )}
       </section>
 
-      {(message || card) && (
+      {(message || card || pending) && (
         <section className="panel">
           <h2>Match</h2>
           {message && <p className="message">{message}</p>}
+          {pending && !card && (
+            <div className="staged">
+              <p className="warn">
+                ⏳ Staged (shaky read) — the next card's lock adds this automatically · Enter
+                adds now · F finish · Backspace discards
+              </p>
+              <CardPreview
+                card={pending.card}
+                finish={pending.finish}
+                setFinish={(f) => setPending({ ...pending, finish: f })}
+                quantity={1}
+                setQuantity={() => {}}
+                onAdd={commitPending}
+                onCancel={discardPending}
+              />
+            </div>
+          )}
           {card && (
             <CardPreview
               card={card}
@@ -782,8 +863,8 @@ export default function App(): React.JSX.Element {
                   </td>
                   <td>
                     <button
-                      className="row-undo"
-                      title="remove one"
+                      className="row-remove"
+                      title="remove one copy"
                       onClick={async () => {
                         await window.api.removeCard(item.scryfallId, item.finish, 1)
                         playUndo()
@@ -791,7 +872,7 @@ export default function App(): React.JSX.Element {
                         loadInventory()
                       }}
                     >
-                      −1
+                      Remove
                     </button>
                   </td>
                 </tr>

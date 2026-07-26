@@ -264,9 +264,24 @@ button.link {
   color: var(--ok);
 }
 
-.row-undo {
-  padding: 0.2rem 0.5rem;
+.row-remove {
+  padding: 0.2rem 0.6rem;
   font-size: 0.8rem;
+  color: #e5534b;
+  background: transparent;
+  border: 1px solid rgba(229, 83, 75, 0.4);
+}
+
+.row-remove:hover {
+  background: rgba(229, 83, 75, 0.12);
+  filter: none;
+}
+
+.staged {
+  border: 1px dashed var(--warn);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .finish-select {
