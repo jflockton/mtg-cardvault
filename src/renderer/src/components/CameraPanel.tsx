@@ -260,6 +260,21 @@ export default function CameraPanel({
           return
         }
         streamRef.current = stream
+        // A camera that disconnects mid-stream (Continuity Camera drop,
+        // USB unplug) freezes the video on its last frame with no error —
+        // the track's 'ended' event is the only signal. Detect it, stop the
+        // scan loop, and fall back to any still-available camera.
+        stream.getTracks().forEach((track) => {
+          track.addEventListener('ended', () => {
+            if (streamRef.current !== stream) return
+            streamRef.current = null
+            setRunning(false)
+            setError('Camera disconnected (device sleep / Continuity drop) — reconnecting…')
+            setTimeout(() => {
+              if (!streamRef.current) start(undefined)
+            }, 1200)
+          })
+        })
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
