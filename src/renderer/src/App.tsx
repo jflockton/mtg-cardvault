@@ -392,6 +392,7 @@ export default function App(): React.JSX.Element {
     hits: 0, // consecutive frames agreeing on lastId
     lockConf: 0, // lowest number-token confidence across the agreeing frames
     lastAddedId: null as string | null,
+    lastAddTime: 0, // same-card cooldown floor: flaky frames can't fake a swap
     clearFrames: 0, // frames since add that did NOT show lastAddedId
     missStreak: 0, // consecutive frames with content but no lock
     warned: false // attention beep already played this episode
@@ -405,10 +406,15 @@ export default function App(): React.JSX.Element {
   const pendingRef = useRef<{ card: CardRef; finish: Finish } | null>(null)
   const pendingClear = useRef(0) // frames since staging that did NOT show the pending card
   const pendingAgree = useRef(0) // further frames agreeing with the staged card
+  // Has the camera seen an EMPTY frame since staging? Only then did the card
+  // actually leave — a new lock without a gap is a competing interpretation
+  // of the SAME physical card, not the next one.
+  const pendingSawGap = useRef(false)
   const setPending = useCallback((p: { card: CardRef; finish: Finish } | null) => {
     pendingRef.current = p
     pendingClear.current = 0
     pendingAgree.current = 0
+    pendingSawGap.current = false
     setPendingState(p)
   }, [])
 
@@ -484,6 +490,11 @@ export default function App(): React.JSX.Element {
     const p = pendingRef.current
     if (!p) return
     setPending(null)
+    // Arm the same-card cooldown for the committed card too — if it's still
+    // (or back) in frame, it must not immediately re-stage.
+    auto.current.lastAddedId = p.card.scryfallId
+    auto.current.clearFrames = 0
+    auto.current.lastAddTime = Date.now()
     await autoAdd(p.card, p.finish)
   }, [autoAdd, setPending])
 
@@ -584,9 +595,14 @@ export default function App(): React.JSX.Element {
             }
             return
           }
-          if (id === a.lastAddedId && a.clearFrames < 2) {
-            // Same card still sitting in frame after its add — ignore until
-            // we've seen it leave (2 frames without it).
+          if (
+            id === a.lastAddedId &&
+            (a.clearFrames < 2 || Date.now() - a.lastAddTime < 2500)
+          ) {
+            // Same card shortly after its add: a couple of garbage frames
+            // while it's still being held can't fake a card swap — require
+            // clear frames AND a human-scale gap before the same printing
+            // can count again (×3 Swamps otherwise).
             setAutoStatus(`✓ added — next card…`)
             return
           }
@@ -609,11 +625,21 @@ export default function App(): React.JSX.Element {
             a.hits = 0
             a.lastId = null
             a.warned = false
-            // A new lock commits whatever was staged — the operator moved on.
-            await commitPending()
+            const p = pendingRef.current
+            if (p && p.card.scryfallId !== id && !pendingSawGap.current) {
+              // No empty frame since staging: this lock and the staged card
+              // are rival readings of ONE physical card. Drop the stage —
+              // one presentation must never produce two adds.
+              setPending(null)
+              setMessage(`✗ dropped uncertain read: ${p.card.name}`)
+            } else {
+              // The card left the frame in between — the operator moved on.
+              await commitPending()
+            }
             if (lockConf >= 65) {
               a.lastAddedId = id
               a.clearFrames = 0
+              a.lastAddTime = Date.now()
               setAutoStatus('')
               await autoAdd(res.card)
             } else {
@@ -670,6 +696,7 @@ export default function App(): React.JSX.Element {
           // Empty frame: episode over, ready for the next card.
           a.missStreak = 0
           a.warned = false
+          if (pendingRef.current) pendingSawGap.current = true
           setAutoStatus('watching — no card text in the strip')
         }
       } catch (err) {
@@ -717,6 +744,7 @@ export default function App(): React.JSX.Element {
       // so the card still in frame doesn't immediately re-add.
       auto.current.lastAddedId = card.scryfallId
       auto.current.clearFrames = 0
+      auto.current.lastAddTime = Date.now()
     }
     playSuccess()
     setMessage(
@@ -816,6 +844,7 @@ export default function App(): React.JSX.Element {
                   hits: 0,
                   lockConf: 0,
                   lastAddedId: null,
+                  lastAddTime: 0,
                   clearFrames: 0,
                   missStreak: 0,
                   warned: false
