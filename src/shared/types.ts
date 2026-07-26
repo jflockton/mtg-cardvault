@@ -73,6 +73,21 @@ export interface LookupQuery {
   collectorNumber: string
 }
 
+export interface PreconSummary {
+  name: string
+  code: string
+  fileName: string
+  releaseDate: string | null
+  type: string
+}
+
+export interface PreconAddResult {
+  deckName: string
+  added: number
+  /** "2× C21 #57"-style entries the reference DB couldn't resolve. */
+  missing: string[]
+}
+
 /** Outcome of resolving an OCR'd corner against the reference DB. */
 export interface ScanResolution {
   kind: 'exact' | 'candidates' | 'none'

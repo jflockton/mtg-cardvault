@@ -6,6 +6,8 @@ import type {
   InventoryItem,
   InventorySummary,
   LookupQuery,
+  PreconAddResult,
+  PreconSummary,
   RefProgress,
   RefStatus
 } from '../shared/types'
@@ -23,6 +25,12 @@ export interface CardVaultApi {
     quantity?: number
   ) => Promise<InventoryItem | null>
   listInventory: () => Promise<InventorySummary>
+  /** List all known preconstructed decks (MTGJSON). */
+  preconList: () => Promise<PreconSummary[]>
+  /** Name + card count for one precon (fetches its list). */
+  preconInfo: (fileName: string) => Promise<{ name: string; totalCards: number }>
+  /** Add every card of a precon to inventory. */
+  preconAdd: (fileName: string) => Promise<PreconAddResult>
   /** Move copies between finish stacks of the same printing. */
   moveFinish: (
     scryfallId: string,
@@ -53,6 +61,9 @@ const api: CardVaultApi = {
   moveFinish: (scryfallId, from, to, quantity) =>
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
   exportCollection: () => ipcRenderer.invoke('inv:exportCopy'),
+  preconList: () => ipcRenderer.invoke('precon:list'),
+  preconInfo: (fileName) => ipcRenderer.invoke('precon:info', fileName),
+  preconAdd: (fileName) => ipcRenderer.invoke('precon:add', fileName),
   scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants)
 }
 

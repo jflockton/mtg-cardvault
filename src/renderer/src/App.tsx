@@ -6,6 +6,7 @@ import type {
   CornerScanResult,
   Finish,
   InventorySummary,
+  PreconSummary,
   RefProgress,
   RefStatus
 } from '../../shared/types'
@@ -229,6 +230,110 @@ function ScanReadout({
         <pre className="ocr-raw">{parsed.raw || '(empty)'}</pre>
       </details>
     </div>
+  )
+}
+
+function PreconPanel({ onAdded }: { onAdded: (summary: string) => void }): React.JSX.Element {
+  const [decks, setDecks] = useState<PreconSummary[] | null>(null)
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<PreconSummary | null>(null)
+  const [info, setInfo] = useState<{ name: string; totalCards: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadList = async (): Promise<void> => {
+    if (decks) return
+    try {
+      setDecks(await window.api.preconList())
+    } catch (err) {
+      setError(`Couldn't fetch the deck list: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+
+  const filtered =
+    decks && query.trim().length >= 2
+      ? decks.filter((d) => d.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 12)
+      : []
+
+  const select = async (d: PreconSummary): Promise<void> => {
+    setSelected(d)
+    setInfo(null)
+    setError(null)
+    try {
+      setInfo(await window.api.preconInfo(d.fileName))
+    } catch (err) {
+      setError(`Couldn't fetch that deck: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+
+  const addAll = async (): Promise<void> => {
+    if (!selected || !info) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.api.preconAdd(selected.fileName)
+      playSuccess()
+      onAdded(
+        `📦 Added ${result.added} cards from "${result.deckName}"` +
+          (result.missing.length > 0
+            ? ` — ${result.missing.length} not resolved: ${result.missing.slice(0, 5).join(', ')}${result.missing.length > 5 ? '…' : ''}`
+            : '')
+      )
+      setSelected(null)
+      setInfo(null)
+      setQuery('')
+    } catch (err) {
+      setError(`Add failed: ${err instanceof Error ? err.message : err}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <details className="panel manual-panel" onToggle={(e) => e.currentTarget.open && loadList()}>
+      <summary>
+        <h2>Add a precon deck</h2>
+      </summary>
+      <p className="muted small">
+        Deck lists from MTGJSON — every card of the precon is added with its exact printing,
+        counts and foils, priced into the scan log.
+      </p>
+      <div className="lookup-row">
+        <label>
+          Precon name
+          <input
+            value={query}
+            placeholder="type at least 2 letters…"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+      </div>
+      {!decks && query.length >= 2 && <p className="muted">Loading deck list…</p>}
+      {filtered.length > 0 && (
+        <ul className="search-results">
+          {filtered.map((d) => (
+            <li key={d.fileName}>
+              <button className="link" onClick={() => select(d)}>
+                {d.name}
+                {d.releaseDate ? ` · ${d.releaseDate.slice(0, 4)}` : ''} · {d.code.toUpperCase()}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {selected && (
+        <div className="precon-confirm">
+          <p>
+            <b>{selected.name}</b>
+            {info ? ` — ${info.totalCards} cards` : ' — fetching list…'}
+          </p>
+          <button className="primary" onClick={addAll} disabled={!info || busy}>
+            {busy ? 'Adding…' : info ? `Add all ${info.totalCards} cards` : 'Loading…'}
+          </button>
+        </div>
+      )}
+      {error && <p className="warn">{error}</p>}
+    </details>
   )
 }
 
@@ -818,6 +923,13 @@ export default function App(): React.JSX.Element {
           </div>
         )}
       </details>
+
+      <PreconPanel
+        onAdded={(summary) => {
+          setMessage(summary)
+          loadInventory()
+        }}
+      />
       </div>
 
       <div className="col collection-col">

@@ -362,6 +362,15 @@ button.link {
   margin-bottom: 0.75rem;
 }
 
+.precon-confirm {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
 .finish-select {
   min-width: 6.5rem;
   padding: 0.25rem 0.4rem;

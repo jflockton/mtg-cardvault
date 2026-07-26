@@ -286,6 +286,15 @@ export class DataStore {
     return row ? rowToCardRef(row as never, 'local') : null
   }
 
+  byScryfallId(scryfallId: string): CardRef | null {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return null
+    const row = this.refDb
+      .prepare('SELECT * FROM scryfall_cards WHERE scryfall_id = ?')
+      .get(scryfallId)
+    return row ? rowToCardRef(row as never, 'local') : null
+  }
+
   searchByName(query: string, limit = 25): CardRef[] {
     this.openReferenceIfPresent()
     if (!this.refDb) return []

@@ -4,6 +4,7 @@ import fs from 'node:fs'
 
 import { DataStore } from './store'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
+import { fetchPreconList, fetchPrecon } from './precon'
 import { scanCorner, terminateOcr } from './ocr'
 import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
 
@@ -124,6 +125,37 @@ function registerIpc(): void {
     const text = store.exportList()
     clipboard.writeText(text)
     return { lines: text ? text.split('\n').length : 0 }
+  })
+
+  ipcMain.handle('precon:list', () => fetchPreconList())
+
+  ipcMain.handle('precon:info', async (_e, fileName: string) => {
+    const deck = await fetchPrecon(fileName)
+    return { name: deck.name, totalCards: deck.totalCards }
+  })
+
+  ipcMain.handle('precon:add', async (_e, fileName: string) => {
+    const deck = await fetchPrecon(fileName)
+    let added = 0
+    const missing: string[] = []
+    for (const pc of deck.cards) {
+      let card = pc.scryfallId ? store.byScryfallId(pc.scryfallId) : null
+      if (!card && pc.setCode && pc.number) card = store.lookup(pc.setCode, pc.number)
+      if (!card) {
+        missing.push(`${pc.count}× ${pc.setCode.toUpperCase()} #${pc.number}`)
+        continue
+      }
+      const finish = pc.foil
+        ? card.finishes.includes('foil')
+          ? ('foil' as const)
+          : (card.finishes[0] ?? ('nonfoil' as const))
+        : card.finishes.includes('nonfoil')
+          ? ('nonfoil' as const)
+          : (card.finishes[0] ?? ('nonfoil' as const))
+      store.addToInventory(card, finish, pc.count)
+      added += pc.count
+    }
+    return { deckName: deck.name, added, missing }
   })
 
   ipcMain.handle(
