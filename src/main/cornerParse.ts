@@ -22,6 +22,13 @@ export interface CornerParse {
   total: number | null
   /** Latest copyright year in the text (≈ the set's release year). */
   year: number | null
+  /**
+   * True when the collector line carries the token marker ("T 0008"):
+   * tokens print the PARENT set's code but live in Scryfall's t-prefixed
+   * token set (FIN token → tfin) — resolving into the parent set would
+   * match a completely different card.
+   */
+  token: boolean
   /** Raw OCR text, for debugging/UI. */
   raw: string
 }
@@ -56,6 +63,7 @@ export function parseCornerText(rawText: string): CornerParse {
   let number: string | null = null
   let total: number | null = null
   let year: number | null = null
+  let token = false
 
   // Copyright year: the LAST 4-digit 19xx/20xx in the whole text — ranges
   // print as "1993-2008" and the second year is the release year.
@@ -105,16 +113,22 @@ export function parseCornerText(rawText: string): CornerParse {
       // the line (years and totals never start with 0). Deconfuse BEFORE
       // stripping any rarity letter: in "O1S2" the leading O *is* the zero.
       const tokens = line.split(/[^A-Za-z0-9]+/)
+      let prev = ''
       for (const t of tokens) {
         const d = deconfuseDigits(t)
         for (const candidate of [d, d.replace(/^[A-Za-z]+/, '')]) {
           const m = candidate.match(/^0(\d{2,3})[a-z]?$/i)
           if (m) {
             number = String(Number(m[1]))
+            // Token marker: "T 0008" (or glued "T0008"). Only an exact T —
+            // C/U/R/M/L in the same position are rarity letters.
+            const glued = d.length > candidate.length ? d.slice(0, d.length - candidate.length) : ''
+            if (prev.toUpperCase() === 'T' || glued.toUpperCase() === 'T') token = true
             break
           }
         }
         if (number) break
+        prev = t
       }
       if (number) break
     }
@@ -140,5 +154,5 @@ export function parseCornerText(rawText: string): CornerParse {
     }
   }
 
-  return { setCode, number, total, year, raw }
+  return { setCode, number, total, year, token, raw }
 }

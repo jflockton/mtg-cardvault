@@ -222,8 +222,16 @@ export class DataStore {
 
   resolveCorner(parse: CornerParse): ScanResolution {
     if (parse.setCode && parse.number) {
-      const card = this.lookup(parse.setCode, parse.number)
-      if (card) return { kind: 'exact', card }
+      // Tokens print the parent set's code but live in the t-prefixed token
+      // set — and the parent set usually HAS a card at that number, so the
+      // token set must win when the T marker was read.
+      const setCandidates = parse.token
+        ? [`t${parse.setCode}`, parse.setCode]
+        : [parse.setCode]
+      for (const s of setCandidates) {
+        const card = this.lookup(s, parse.number)
+        if (card) return { kind: 'exact', card }
+      }
       const repaired = this.repairSetCode(parse.setCode, parse.number)
       if (repaired.length === 1) return { kind: 'exact', card: repaired[0] }
       if (repaired.length > 1) {

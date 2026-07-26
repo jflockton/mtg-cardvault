@@ -7,7 +7,13 @@ import { parseCornerText } from '../src/main/cornerParse'
 const cases: {
   name: string
   text: string
-  expect: { setCode?: string | null; number?: string | null; total?: number | null; year?: number | null }
+  expect: {
+    setCode?: string | null
+    number?: string | null
+    total?: number | null
+    year?: number | null
+    token?: boolean
+  }
 }[] = [
   {
     // Real read from James's webcam, FIN (Final Fantasy) card, 2026-07-26:
@@ -47,7 +53,23 @@ const cases: {
   {
     name: 'glued rarity letter',
     text: 'C0152 FFI\nFIN ★ EN',
-    expect: { setCode: 'fin', number: '152' }
+    expect: { setCode: 'fin', number: '152', token: false }
+  },
+  {
+    // James's FIN Hero token: T marker → must resolve into tfin, not fin.
+    name: 'token marker: separate T',
+    text: 'T 0008 FFXIV\nFIN • EN',
+    expect: { setCode: 'fin', number: '8', token: true }
+  },
+  {
+    name: 'token marker: glued T',
+    text: 'T0001 FFIV\nFIN • EN',
+    expect: { setCode: 'fin', number: '1', token: true }
+  },
+  {
+    name: 'rarity letter is not a token marker',
+    text: 'C 0152 FFI\nFIN • EN',
+    expect: { setCode: 'fin', number: '152', token: false }
   },
   {
     name: 'letters alone can never fabricate a number',

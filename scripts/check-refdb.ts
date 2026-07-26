@@ -54,6 +54,7 @@ try {
       number: '13',
       total: 150,
       year: 2008,
+      token: false,
       raw: ''
     })
     assert.equal(res.kind, 'exact', `old-frame resolve: expected exact, got ${res.kind}`)
@@ -62,6 +63,21 @@ try {
   } else {
     console.log('resolve skipped: no set metadata in this DB')
   }
+
+  // Token cards: "T 0008" + parent set code FIN must resolve into the token
+  // set (tfin Hero), NOT fin #8 (Auron's Inspiration — a real, wrong card).
+  const tokenRes = store.resolveCorner({
+    setCode: 'fin',
+    number: '8',
+    total: null,
+    year: null,
+    token: true,
+    raw: ''
+  })
+  assert.equal(tokenRes.kind, 'exact', 'token resolve should be exact')
+  assert.equal(tokenRes.card!.setCode, 'tfin', `token landed in ${tokenRes.card!.setCode}`)
+  assert.equal(tokenRes.card!.name, 'Hero', `token resolved to ${tokenRes.card!.name}`)
+  console.log(`resolve ok: T 0008 + FIN → ${tokenRes.card!.name} (TFIN #8, not fin #8)`)
 
   // Inventory cycle: add, increment, separate foil stack, remove.
   const card = store.lookup('ltr', '246')!
