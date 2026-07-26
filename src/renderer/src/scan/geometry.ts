@@ -31,15 +31,24 @@ export const TITLE_REGION: NormRect = { x: 0.03, y: 0.03, w: 0.94, h: 0.085 }
  */
 export const CORNER_REGION: NormRect = { x: 0.0, y: 0.85, w: 1.0, h: 0.15 }
 
-/** The card guide rect in display/frame pixels, centered horizontally. */
+/**
+ * The card guide rect in display/frame pixels, centered. Fits the frame in
+ * BOTH orientations: height-constrained on landscape feeds, width-constrained
+ * on portrait feeds (e.g. iPhone Continuity Camera after an orientation flip).
+ */
 export function cardGuideRect(frameWidth: number, frameHeight: number): {
   x: number
   y: number
   w: number
   h: number
 } {
-  const h = frameHeight * GUIDE_HEIGHT_FRAC
-  const w = h * CARD_ASPECT
+  let h = frameHeight * GUIDE_HEIGHT_FRAC
+  let w = h * CARD_ASPECT
+  const maxW = frameWidth * 0.95
+  if (w > maxW) {
+    w = maxW
+    h = w / CARD_ASPECT
+  }
   return { x: (frameWidth - w) / 2, y: (frameHeight - h) / 2, w, h }
 }
 

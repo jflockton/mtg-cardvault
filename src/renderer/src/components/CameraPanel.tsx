@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  CARD_ASPECT,
-  GUIDE_HEIGHT_FRAC,
   TITLE_REGION,
   CORNER_REGION,
+  cardGuideRect,
   regionToFrameRect,
   type NormRect
 } from '../scan/geometry'
+
+/** Fixed on-screen height of the camera stage (px). */
+const DISPLAY_HEIGHT = 420
 
 const DEVICE_KEY = 'cardvault.cameraDeviceId'
 
@@ -184,6 +186,23 @@ export default function CameraPanel({
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem(DEVICE_KEY) ?? '')
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Native stream dimensions — refreshed when the source flips orientation
+  // mid-stream (iPhone Continuity Camera does this when the phone tilts).
+  const [videoDims, setVideoDims] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const update = (): void => {
+      if (video.videoWidth > 0) setVideoDims({ w: video.videoWidth, h: video.videoHeight })
+    }
+    video.addEventListener('loadedmetadata', update)
+    video.addEventListener('resize', update)
+    return () => {
+      video.removeEventListener('loadedmetadata', update)
+      video.removeEventListener('resize', update)
+    }
+  }, [])
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -285,13 +304,14 @@ export default function CameraPanel({
     return () => window.removeEventListener('keydown', handler)
   }, [capture])
 
-  // Overlay geometry as CSS percentages — same constants the cropper uses.
-  const guideStyle: React.CSSProperties = {
-    height: `${GUIDE_HEIGHT_FRAC * 100}%`,
-    aspectRatio: `${CARD_ASPECT}`,
-    left: '50%',
-    top: `${((1 - GUIDE_HEIGHT_FRAC) / 2) * 100}%`,
-    transform: 'translateX(-50%)'
+  // Overlay geometry in display pixels, from the SAME cardGuideRect the
+  // cropper uses — orientation-proof by construction. The displayed video is
+  // DISPLAY_HEIGHT tall with width following the stream's aspect ratio.
+  let guideStyle: React.CSSProperties = { display: 'none' }
+  if (videoDims) {
+    const dispW = (DISPLAY_HEIGHT * videoDims.w) / videoDims.h
+    const g = cardGuideRect(dispW, DISPLAY_HEIGHT)
+    guideStyle = { left: g.x, top: g.y, width: g.w, height: g.h }
   }
   const regionStyle = (r: NormRect): React.CSSProperties => ({
     left: `${r.x * 100}%`,
@@ -336,8 +356,8 @@ export default function CameraPanel({
       {error && <p className="warn">{error}</p>}
 
       <div className="camera-stage">
-        <video ref={videoRef} muted playsInline />
-        {running && (
+        <video ref={videoRef} muted playsInline style={{ height: DISPLAY_HEIGHT }} />
+        {running && videoDims && (
           <div className="card-guide" style={guideStyle}>
             <div className="region-guide corner" style={regionStyle(CORNER_REGION)}>
               <span>collector info</span>
