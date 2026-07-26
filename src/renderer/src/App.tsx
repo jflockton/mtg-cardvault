@@ -599,10 +599,12 @@ export default function App(): React.JSX.Element {
             id === a.lastAddedId &&
             (a.clearFrames < 2 || Date.now() - a.lastAddTime < 2500)
           ) {
-            // Same card shortly after its add: a couple of garbage frames
-            // while it's still being held can't fake a card swap — require
-            // clear frames AND a human-scale gap before the same printing
-            // can count again (×3 Swamps otherwise).
+            // Same card shortly after its add. Crucially: seeing it again
+            // RESETS the departure evidence — flaky cards (basic lands)
+            // scatter unreadable frames while still being held, and those
+            // must not accumulate into a fake "card swapped" signal. The
+            // card has to be CONTINUOUSLY gone to count as gone.
+            a.clearFrames = 0
             setAutoStatus(`✓ added — next card…`)
             return
           }
