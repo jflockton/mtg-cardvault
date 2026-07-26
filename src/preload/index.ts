@@ -30,6 +30,8 @@ export interface CardVaultApi {
     to: Finish,
     quantity?: number
   ) => Promise<InventoryItem | null>
+  /** Copy the collection as "1 Card Name" lines to the clipboard. */
+  exportCollection: () => Promise<{ lines: number }>
   /** OCR + resolve a corner crop; variants are the same crop in different polarities. */
   scanCorner: (imageVariants: string[]) => Promise<CornerScanResult>
 }
@@ -50,6 +52,7 @@ const api: CardVaultApi = {
   listInventory: () => ipcRenderer.invoke('inv:list'),
   moveFinish: (scryfallId, from, to, quantity) =>
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
+  exportCollection: () => ipcRenderer.invoke('inv:exportCopy'),
   scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants)
 }
 

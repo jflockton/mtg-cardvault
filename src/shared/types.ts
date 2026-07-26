@@ -64,6 +64,8 @@ export interface InventorySummary {
   /** sum of quantity over all stacks */
   totalCards: number
   distinctStacks: number
+  /** total market value (USD) of every stack at current reference prices */
+  totalValue: number
 }
 
 export interface LookupQuery {

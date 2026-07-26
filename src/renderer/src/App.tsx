@@ -827,9 +827,27 @@ export default function App(): React.JSX.Element {
           {inventory && (
             <p className="muted">
               {inventory.totalCards.toLocaleString()} cards ·{' '}
-              {inventory.distinctStacks.toLocaleString()} stacks
+              {inventory.distinctStacks.toLocaleString()} stacks ·{' '}
+              <span className="collection-value">
+                ${inventory.totalValue.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}
+              </span>
             </p>
           )}
+          <button
+            onClick={async () => {
+              const { lines } = await window.api.exportCollection()
+              setMessage(
+                lines > 0
+                  ? `📋 Copied ${lines} lines ("1 Card Name") — paste into Obsidian`
+                  : 'Nothing to export yet'
+              )
+            }}
+          >
+            📋 Copy list
+          </button>
         </div>
         {inventory && inventory.items.length > 0 ? (
           <div className="table-scroll">

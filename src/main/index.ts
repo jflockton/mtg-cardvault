@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -117,6 +117,14 @@ function registerIpc(): void {
   )
 
   ipcMain.handle('inv:list', () => store.listInventory())
+
+  // Copy the "1 Card Name" list to the clipboard from the main process —
+  // renderer clipboard permissions are locked down.
+  ipcMain.handle('inv:exportCopy', () => {
+    const text = store.exportList()
+    clipboard.writeText(text)
+    return { lines: text ? text.split('\n').length : 0 }
+  })
 
   ipcMain.handle(
     'inv:moveFinish',

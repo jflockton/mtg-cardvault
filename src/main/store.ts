@@ -513,6 +513,38 @@ export class DataStore {
     return rowToItem({ ...row, quantity: Math.max(0, newQty) })
   }
 
+  /** "1 Card Name" per line, quantities aggregated by name — the decklist
+   *  format James's Obsidian collection list uses. */
+  exportList(): string {
+    const rows = this.invDb
+      .prepare(
+        'SELECT name, SUM(quantity) AS qty FROM inventory GROUP BY name ORDER BY name COLLATE NOCASE'
+      )
+      .all() as { name: string; qty: number }[]
+    return rows.map((r) => `${r.qty} ${r.name}`).join('\n')
+  }
+
+  /** Total market value (USD) of every stack, at current reference prices. */
+  private collectionValue(): number {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return 0
+    const priceStmt = this.refDb.prepare(
+      'SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?'
+    )
+    const stacks = this.invDb
+      .prepare('SELECT scryfall_id, finish, quantity FROM inventory')
+      .all() as { scryfall_id: string; finish: Finish; quantity: number }[]
+    let total = 0
+    for (const s of stacks) {
+      const ref = priceStmt.get(s.scryfall_id) as
+        | { prices_usd: number | null; prices_usd_foil: number | null }
+        | undefined
+      const price = ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, s.finish) : null
+      if (price != null) total += price * s.quantity
+    }
+    return total
+  }
+
   listInventory(limit = 500): InventorySummary {
     const items = (
       this.invDb
@@ -531,7 +563,12 @@ export class DataStore {
     const totals = this.invDb
       .prepare('SELECT COALESCE(SUM(quantity), 0) AS total, COUNT(*) AS stacks FROM inventory')
       .get() as { total: number; stacks: number }
-    return { items, totalCards: totals.total, distinctStacks: totals.stacks }
+    return {
+      items,
+      totalCards: totals.total,
+      distinctStacks: totals.stacks,
+      totalValue: this.collectionValue()
+    }
   }
 
   close(): void {
