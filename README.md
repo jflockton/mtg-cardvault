@@ -62,6 +62,24 @@ If you see `NODE_MODULE_VERSION` mismatch errors, you're one `rebuild:*` away fr
 
 Without `MTG_CARDVAULT_DATA_DIR`, the app uses the real app-data location and (in a packaged build) seeds `reference.db` from the installer's bundled copy on first launch.
 
+## Install as a Mac app
+
+The dev loop is fine for hacking, but the app also builds as a normal macOS application (Launchpad, Spotlight, Dock — the lot), with a Chocobo-on-a-card icon ([build/icon.svg](build/icon.svg), rendered to `icon.icns`/`icon.png` for the packagers):
+
+```bash
+npm run build:refdb                       # if ./data/reference.db doesn't exist yet
+cp data/reference.db resources/reference.db
+npm run fetch:tessdata                    # if resources/tessdata is missing
+npm run dist:mac
+cp -R "dist/mac-arm64/MTG CardVault.app" /Applications/
+```
+
+Notes:
+
+- The packaged app stores its data in `~/Library/Application Support/mtg-cardvault/data/` (Electron uses the package *name*, not the display name; the repo's `./data` is dev-only). On first launch it seeds `reference.db` from the copy bundled inside the app, so it works offline immediately. To carry a dev inventory over, copy `data/inventory.db` into that folder (quit the app first).
+- The build is ad-hoc signed (no Apple Developer cert). Locally built apps run fine; if you ever distribute the `.dmg` to another Mac, the recipient right-clicks → Open the first time.
+- `dist/` also contains the `.dmg` for passing to another Mac.
+
 ## Deployment
 
 **Hard constraint:** the shop's Windows machine has *zero* dev tools — no Node, no Python, no compilers. The deliverable is a single self-contained `.exe` installer. "Runs on a clean Windows box" is the definition of done.

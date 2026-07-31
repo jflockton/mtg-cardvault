@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#232a36"/>
+      <stop offset="1" stop-color="#12151c"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f0e6"/>
+      <stop offset="1" stop-color="#ddd6c4"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7db4f7"/>
+      <stop offset="1" stop-color="#4f8ef7"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <g transform="rotate(-8 512 512)">
+    <rect x="302" y="212" width="420" height="580" rx="36" fill="#0e1116"/>
+    <rect x="320" y="230" width="384" height="544" rx="26" fill="url(#card)"/>
+    <rect x="346" y="256" width="332" height="62" rx="18" fill="#1d2026"/>
+    <rect x="346" y="340" width="332" height="300" rx="14" fill="url(#sky)"/>
+    <rect x="346" y="340" width="332" height="300" rx="14" fill="none" stroke="#0e1116" stroke-width="6"/>
+    <g>
+      <!-- chocobo: original chunky yellow bird, side profile facing left -->
+      <!-- legs -->
+      <path d="M 480 596 L 474 630 L 452 630 M 474 630 L 490 630" stroke="#d97e2a" stroke-width="13" fill="none" stroke-linecap="round"/>
+      <path d="M 548 596 L 554 630 L 532 630 M 554 630 L 570 630" stroke="#d97e2a" stroke-width="13" fill="none" stroke-linecap="round"/>
+      <!-- tail feathers -->
+      <path d="M 590 520 Q 660 490 668 452 Q 630 470 604 486 Q 640 440 646 414 Q 610 442 588 472 Z" fill="#e8b32e"/>
+      <!-- body -->
+      <ellipse cx="516" cy="524" rx="92" ry="78" fill="#f5c542"/>
+      <!-- wing -->
+      <path d="M 520 470 Q 596 490 588 552 Q 560 586 516 578 Q 556 542 520 470 Z" fill="#e8b32e"/>
+      <!-- neck + head -->
+      <path d="M 452 512 Q 428 470 438 432 L 492 448 Q 482 490 476 516 Z" fill="#f5c542"/>
+      <circle cx="452" cy="416" r="50" fill="#f5c542"/>
+      <!-- crest feathers -->
+      <path d="M 430 376 Q 408 340 418 316 Q 436 344 444 366 Z" fill="#e8b32e"/>
+      <path d="M 452 370 Q 448 330 464 306 Q 472 342 466 368 Z" fill="#e8b32e"/>
+      <path d="M 474 378 Q 488 346 508 336 Q 498 372 482 388 Z" fill="#e8b32e"/>
+      <!-- beak -->
+      <path d="M 406 410 L 356 424 L 408 440 Q 400 424 406 410 Z" fill="#d97e2a"/>
+      <!-- eye -->
+      <circle cx="444" cy="408" r="10" fill="#12151c"/>
+      <circle cx="447" cy="404" r="3.5" fill="#ffffff"/>
+    </g>
+    <rect x="346" y="666" width="190" height="34" rx="10" fill="#1d2026" opacity="0.75"/>
+    <rect x="346" y="718" width="132" height="28" rx="9" fill="#1d2026" opacity="0.45"/>
+  </g>
+  <rect x="600" y="640" width="300" height="140" rx="34" fill="#4f8ef7"/>
+  <text x="750" y="738" font-family="Menlo, monospace" font-size="86" font-weight="bold" fill="#ffffff" text-anchor="middle">CV</text>
+</svg>
