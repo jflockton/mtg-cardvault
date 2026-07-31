@@ -631,15 +631,25 @@ export class DataStore {
     return rowToItem({ ...row, quantity: Math.max(0, newQty) })
   }
 
-  /** "1 Card Name" per line, quantities aggregated by name — the decklist
-   *  format James's Obsidian collection list uses. */
+  /**
+   * CSV export: quantity,card-name,expansion,id — one row per printing,
+   * quantities summed across finishes (e.g. "1,Island,fin,297"). Names
+   * containing commas/quotes are RFC-4180 quoted.
+   */
   exportList(): string {
     const rows = this.invDb
       .prepare(
-        'SELECT name, SUM(quantity) AS qty FROM inventory GROUP BY name ORDER BY name COLLATE NOCASE'
+        `SELECT name, set_code, collector_number, SUM(quantity) AS qty
+         FROM inventory
+         GROUP BY name, set_code, collector_number
+         ORDER BY name COLLATE NOCASE, set_code, collector_number`
       )
-      .all() as { name: string; qty: number }[]
-    return rows.map((r) => `${r.qty} ${r.name}`).join('\n')
+      .all() as { name: string; set_code: string; collector_number: string; qty: number }[]
+    const esc = (s: string): string =>
+      /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    return rows
+      .map((r) => `${r.qty},${esc(r.name)},${r.set_code},${r.collector_number}`)
+      .join('\n')
   }
 
   /** Total market value (USD) of every stack, at current reference prices. */

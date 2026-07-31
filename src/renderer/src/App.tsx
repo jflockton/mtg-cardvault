@@ -1081,16 +1081,17 @@ export default function App(): React.JSX.Element {
             </p>
           )}
           <button
+            title="CSV: quantity,card-name,expansion,id"
             onClick={async () => {
               const { lines } = await window.api.exportCollection()
               setMessage(
                 lines > 0
-                  ? `📋 Copied ${lines} lines ("1 Card Name") — paste into Obsidian`
+                  ? `📋 Copied ${lines} CSV rows (qty,name,set,number)`
                   : 'Nothing to export yet'
               )
             }}
           >
-            📋 Copy list
+            📋 Copy CSV
           </button>
         </div>
         {inventory && inventory.items.length > 0 ? (

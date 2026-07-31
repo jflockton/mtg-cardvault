@@ -12,7 +12,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 4 | Fast add loop (auto-lock, audio confirm, undo, keyboard flow) | ✅ |
 | — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, collection value + list export | ✅ |
 | 5 | Remove mode | ⬜ |
-| 6 | Search / browse UI + CSV export (collection view, value & copy-list export exist; filters/CSV pending) | 🟡 |
+| 6 | Search / browse UI + CSV export (collection view, value total, and clipboard CSV export — `quantity,card-name,expansion,id` per printing — exist; filters pending) | 🟡 |
 | 7 | Packaging: NSIS installer via GitHub Actions | 🟡 config in place, unverified |
 
 ## How it works
