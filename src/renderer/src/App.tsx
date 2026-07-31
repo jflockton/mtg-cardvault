@@ -1125,14 +1125,32 @@ export default function App(): React.JSX.Element {
         </summary>
         <div className="lookup-row">
           <label>
+            Set
+            <select
+              className="set-select"
+              value={sets.find((s) => s.code === setCode.trim().toLowerCase())?.code ?? ''}
+              onChange={(e) => {
+                if (e.target.value) setSetCode(e.target.value.toUpperCase())
+              }}
+            >
+              <option value="">— select a set —</option>
+              {sets.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name} ({s.code.toUpperCase()})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             Set code
-            <SetCombo
-              sets={sets}
+            <input
+              ref={setInputRef}
+              className="code-input"
               value={setCode}
-              onChange={setSetCode}
-              onEnter={lookup}
-              placeholder="pick or type, e.g. M21"
-              inputRef={setInputRef}
+              placeholder="SPM"
+              maxLength={6}
+              onChange={(e) => setSetCode(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && lookup()}
             />
           </label>
           <label>

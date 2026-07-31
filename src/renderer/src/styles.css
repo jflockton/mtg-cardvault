@@ -352,6 +352,15 @@ button.link {
   color: var(--ok);
 }
 
+.set-select {
+  min-width: 15rem;
+  max-width: 17rem;
+}
+
+.code-input {
+  width: 5.5rem;
+}
+
 .setcombo {
   position: relative;
   display: inline-flex;
