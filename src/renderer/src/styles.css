@@ -352,6 +352,52 @@ button.link {
   color: var(--ok);
 }
 
+.setcombo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.set-hint {
+  color: var(--ok);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.setcombo-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin: 2px 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  width: 21rem;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.setcombo-list li {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.setcombo-list li b {
+  color: var(--accent);
+}
+
+.setcombo-list li.hi {
+  background: var(--border);
+}
+
 .row-remove {
   padding: 0.2rem 0.6rem;
   font-size: 0.8rem;

@@ -180,6 +180,97 @@ function CardPreview({
   )
 }
 
+/**
+ * Set-code combobox: free text + a dropdown of "CODE — Set Name" rows that
+ * filters on code or name, with a live hint naming the set the typed code
+ * belongs to. Arrows navigate, Enter picks (or submits an exact code).
+ */
+function SetCombo({
+  sets,
+  value,
+  onChange,
+  onEnter,
+  placeholder,
+  inputRef
+}: {
+  sets: SetInfo[]
+  value: string
+  onChange: (v: string) => void
+  onEnter?: () => void
+  placeholder?: string
+  inputRef?: React.RefObject<HTMLInputElement | null>
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState(0)
+  const norm = value.trim().toLowerCase()
+  const exact = sets.find((s) => s.code === norm)
+  const matches = (
+    norm.length === 0
+      ? sets
+      : sets.filter((s) => s.code.startsWith(norm) || s.name.toLowerCase().includes(norm))
+  ).slice(0, 12)
+
+  const pick = (s: SetInfo): void => {
+    onChange(s.code.toUpperCase())
+    setOpen(false)
+  }
+
+  return (
+    <span className="setcombo">
+      <input
+        ref={inputRef}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+          setHi(0)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setOpen(true)
+            setHi((h) => Math.min(h + 1, matches.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHi((h) => Math.max(h - 1, 0))
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          } else if (e.key === 'Enter') {
+            if (open && !exact && matches[hi]) {
+              e.preventDefault()
+              pick(matches[hi])
+            } else {
+              setOpen(false)
+              onEnter?.()
+            }
+          }
+        }}
+      />
+      {exact && <span className="set-hint">= {exact.name}</span>}
+      {open && matches.length > 0 && (
+        <ul className="setcombo-list">
+          {matches.map((s, i) => (
+            <li
+              key={s.code}
+              className={i === hi ? 'hi' : ''}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pick(s)
+              }}
+              onMouseEnter={() => setHi(i)}
+            >
+              <b>{s.code.toUpperCase()}</b> — {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </span>
+  )
+}
+
 function ScanReadout({
   result,
   onPick
@@ -937,14 +1028,13 @@ export default function App(): React.JSX.Element {
           {scanMode === 'name' && (
             <label className="pin-label">
               Set pin
-              <input
-                list="set-codes"
+              <SetCombo
+                sets={sets}
                 value={pinnedSet}
                 placeholder="e.g. M19 (optional)"
-                maxLength={6}
-                onChange={(e) => {
-                  setPinnedSet(e.target.value)
-                  localStorage.setItem('cardvault.pinnedSet', e.target.value)
+                onChange={(v) => {
+                  setPinnedSet(v)
+                  localStorage.setItem('cardvault.pinnedSet', v)
                 }}
               />
             </label>
@@ -1033,24 +1123,16 @@ export default function App(): React.JSX.Element {
         <summary>
           <h2>Add card manually / name search</h2>
         </summary>
-        <datalist id="set-codes">
-          {sets.map((s) => (
-            <option key={s.code} value={s.code.toUpperCase()}>
-              {s.name}
-            </option>
-          ))}
-        </datalist>
         <div className="lookup-row">
           <label>
             Set code
-            <input
-              ref={setInputRef}
-              list="set-codes"
+            <SetCombo
+              sets={sets}
               value={setCode}
+              onChange={setSetCode}
+              onEnter={lookup}
               placeholder="pick or type, e.g. M21"
-              maxLength={6}
-              onChange={(e) => setSetCode(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && lookup()}
+              inputRef={setInputRef}
             />
           </label>
           <label>
