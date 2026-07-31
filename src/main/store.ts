@@ -650,9 +650,9 @@ export class DataStore {
    * Scope 'session' aggregates the scan_log since `sinceIso` (this app run;
    * undos retract their log rows, so the session view stays honest).
    */
-  exportText(format: 'csv' | 'list', scope: 'all' | 'session', sinceIso?: string): string {
+  exportText(format: 'csv' | 'list', scope: 'all' | 'session' | 'today', sinceIso?: string): string {
     const rows = (
-      scope === 'session' && sinceIso
+      scope !== 'all' && sinceIso
         ? this.invDb
             .prepare(
               `SELECT name, set_code, collector_number, SUM(quantity) AS qty
@@ -720,10 +720,10 @@ export class DataStore {
    */
   listInventory(
     limit = 500,
-    scope: 'all' | 'session' = 'all',
+    scope: 'all' | 'session' | 'today' = 'all',
     sinceIso?: string
   ): InventorySummary {
-    if (scope === 'session' && sinceIso) {
+    if (scope !== 'all' && sinceIso) {
       const rows = this.invDb
         .prepare(
           `SELECT i.*, s.qty AS session_qty,

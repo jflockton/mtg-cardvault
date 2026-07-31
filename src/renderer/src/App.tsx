@@ -493,11 +493,16 @@ export default function App(): React.JSX.Element {
   // it away — the operator is trying to CLICK it (live-log finding).
   const candidatesHold = useRef(0)
 
-  const [exportScope, setExportScope] = useState<'all' | 'session'>('all')
+  const [exportScope, setExportScope] = useState<'all' | 'session' | 'today'>('all')
   const copyExport = useCallback(
     async (format: 'list' | 'csv') => {
       const { lines } = await window.api.exportCollection(format, exportScope)
-      const scopeText = exportScope === 'session' ? 'scanned this session' : 'all cards'
+      const scopeText =
+        exportScope === 'session'
+          ? 'scanned this session'
+          : exportScope === 'today'
+            ? 'scanned today'
+            : 'all cards'
       setMessage(
         lines > 0
           ? `📋 Copied ${lines} rows (${scopeText}, ${format === 'csv' ? 'CSV' : 'plain list'})`
@@ -531,7 +536,7 @@ export default function App(): React.JSX.Element {
   }, [])
   // Ref, not state, so every callback that refreshes the list sees the
   // CURRENT scope without re-wiring the whole callback chain.
-  const exportScopeRef = useRef<'all' | 'session'>('all')
+  const exportScopeRef = useRef<'all' | 'session' | 'today'>('all')
   const loadInventory = useCallback(() => {
     window.api.listInventory(exportScopeRef.current).then(setInventory)
   }, [])
@@ -1232,7 +1237,7 @@ export default function App(): React.JSX.Element {
             value={exportScope}
             title="what the list shows and what gets exported"
             onChange={(e) => {
-              const scope = e.target.value as 'all' | 'session'
+              const scope = e.target.value as 'all' | 'session' | 'today'
               setExportScope(scope)
               exportScopeRef.current = scope
               loadInventory()
@@ -1240,6 +1245,7 @@ export default function App(): React.JSX.Element {
           >
             <option value="all">All cards</option>
             <option value="session">Scanned this session</option>
+            <option value="today">Scanned today</option>
           </select>
           <button
             title="Plain list: 1 Island (FIN) 297"
@@ -1323,7 +1329,9 @@ export default function App(): React.JSX.Element {
           <p className="muted">
             {exportScope === 'session'
               ? 'Nothing scanned this session yet.'
-              : 'Nothing in inventory yet.'}
+              : exportScope === 'today'
+                ? 'Nothing scanned today yet.'
+                : 'Nothing in inventory yet.'}
           </p>
         )}
       </section>

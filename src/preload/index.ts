@@ -25,7 +25,7 @@ export interface CardVaultApi {
     finish: Finish,
     quantity?: number
   ) => Promise<InventoryItem | null>
-  listInventory: (scope?: 'all' | 'session') => Promise<InventorySummary>
+  listInventory: (scope?: 'all' | 'session' | 'today') => Promise<InventorySummary>
   /** All non-digital sets (code + name), newest first. */
   listSets: () => Promise<SetInfo[]>
   /** List all known preconstructed decks (MTGJSON). */
@@ -37,7 +37,7 @@ export interface CardVaultApi {
   /** Copy an export to the clipboard: plain list or CSV, all cards or this session's adds. */
   exportCollection: (
     format: 'list' | 'csv',
-    scope: 'all' | 'session'
+    scope: 'all' | 'session' | 'today'
   ) => Promise<{ lines: number }>
   /** Move copies between finish stacks of the same printing. */
   moveFinish: (

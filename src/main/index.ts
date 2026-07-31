@@ -43,6 +43,16 @@ let refreshing = false
 /** UTC start of this app run — the boundary for "scanned this session". */
 const launchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
+/** Scope boundary: session = this app run; today = local midnight (as UTC). */
+function sinceFor(scope?: 'all' | 'session' | 'today'): string {
+  if (scope === 'today') {
+    const midnight = new Date()
+    midnight.setHours(0, 0, 0, 0)
+    return midnight.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  }
+  return launchedAt
+}
+
 /**
  * One NDJSON line per scan decision → <dataDir>/scan-debug.log. Cheap,
  * append-only, and exactly what's needed to diagnose "why didn't it lock".
@@ -138,8 +148,8 @@ function registerIpc(): void {
       store.removeFromInventory(args.scryfallId, args.finish, args.quantity ?? 1)
   )
 
-  ipcMain.handle('inv:list', (_e, args?: { scope?: 'all' | 'session' }) =>
-    store.listInventory(500, args?.scope ?? 'all', launchedAt)
+  ipcMain.handle('inv:list', (_e, args?: { scope?: 'all' | 'session' | 'today' }) =>
+    store.listInventory(500, args?.scope ?? 'all', sinceFor(args?.scope))
   )
 
   // Copy the export to the clipboard from the main process — renderer
@@ -147,11 +157,11 @@ function registerIpc(): void {
   // app launch (undone adds retract from the scan log, so it stays honest).
   ipcMain.handle(
     'inv:exportCopy',
-    (_e, args?: { format?: 'csv' | 'list'; scope?: 'all' | 'session' }) => {
+    (_e, args?: { format?: 'csv' | 'list'; scope?: 'all' | 'session' | 'today' }) => {
       const text = store.exportText(
         args?.format ?? 'list',
         args?.scope ?? 'all',
-        launchedAt
+        sinceFor(args?.scope)
       )
       clipboard.writeText(text)
       return { lines: text ? text.split('\n').length : 0 }
