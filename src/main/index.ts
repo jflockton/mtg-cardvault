@@ -136,7 +136,9 @@ function registerIpc(): void {
       store.removeFromInventory(args.scryfallId, args.finish, args.quantity ?? 1)
   )
 
-  ipcMain.handle('inv:list', () => store.listInventory())
+  ipcMain.handle('inv:list', (_e, args?: { scope?: 'all' | 'session' }) =>
+    store.listInventory(500, args?.scope ?? 'all', launchedAt)
+  )
 
   // Copy the export to the clipboard from the main process — renderer
   // clipboard permissions are locked down. Scope 'session' = adds since this

@@ -693,7 +693,61 @@ export class DataStore {
     return total
   }
 
-  listInventory(limit = 500): InventorySummary {
+  /** Current market price for one stack, from the reference DB. */
+  private stackPrice(scryfallId: string, finish: Finish): number | null {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return null
+    const ref = this.refDb
+      .prepare('SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?')
+      .get(scryfallId) as { prices_usd: number | null; prices_usd_foil: number | null } | undefined
+    return ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, finish) : null
+  }
+
+  /**
+   * Scope 'session': only stacks scanned since `sinceIso`, quantities being
+   * the SESSION quantities (undos retract their log rows), newest first.
+   */
+  listInventory(
+    limit = 500,
+    scope: 'all' | 'session' = 'all',
+    sinceIso?: string
+  ): InventorySummary {
+    if (scope === 'session' && sinceIso) {
+      const rows = this.invDb
+        .prepare(
+          `SELECT i.*, s.qty AS session_qty,
+                  (SELECT sl.price_usd FROM scan_log sl
+                   WHERE sl.scryfall_id = i.scryfall_id AND sl.finish = i.finish
+                   ORDER BY sl.id DESC LIMIT 1) AS last_price,
+                  (SELECT sl.scanned_at FROM scan_log sl
+                   WHERE sl.scryfall_id = i.scryfall_id AND sl.finish = i.finish
+                   ORDER BY sl.id DESC LIMIT 1) AS last_scanned_at
+           FROM inventory i
+           JOIN (SELECT scryfall_id, finish, SUM(quantity) AS qty, MAX(scanned_at) AS last
+                 FROM scan_log WHERE scanned_at >= ?
+                 GROUP BY scryfall_id, finish) s
+             ON s.scryfall_id = i.scryfall_id AND s.finish = i.finish
+           ORDER BY s.last DESC LIMIT ?`
+        )
+        .all(sinceIso, limit) as (InvRow & { session_qty: number })[]
+      let totalCards = 0
+      let totalValue = 0
+      for (const r of rows) {
+        totalCards += r.session_qty
+        const price = this.stackPrice(r.scryfall_id, r.finish)
+        if (price != null) totalValue += price * r.session_qty
+      }
+      return {
+        items: rows.map((r) => rowToItem({ ...r, quantity: r.session_qty })),
+        totalCards,
+        distinctStacks: rows.length,
+        totalValue
+      }
+    }
+    return this.listAllInventory(limit)
+  }
+
+  private listAllInventory(limit = 500): InventorySummary {
     const items = (
       this.invDb
         .prepare(

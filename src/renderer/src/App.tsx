@@ -436,8 +436,11 @@ export default function App(): React.JSX.Element {
   const loadStatus = useCallback(() => {
     window.api.refStatus().then(setRefStatus)
   }, [])
+  // Ref, not state, so every callback that refreshes the list sees the
+  // CURRENT scope without re-wiring the whole callback chain.
+  const exportScopeRef = useRef<'all' | 'session'>('all')
   const loadInventory = useCallback(() => {
-    window.api.listInventory().then(setInventory)
+    window.api.listInventory(exportScopeRef.current).then(setInventory)
   }, [])
 
   useEffect(() => {
@@ -1083,7 +1086,7 @@ export default function App(): React.JSX.Element {
       <div className="col collection-col">
       <section className="panel collection">
         <div className="ref-row collection-head">
-          <h2>Collection</h2>
+          <h2>{exportScope === 'session' ? 'Scanned this session' : 'Collection'}</h2>
           {inventory && (
             <p className="muted">
               {inventory.totalCards.toLocaleString()} cards ·{' '}
@@ -1099,8 +1102,13 @@ export default function App(): React.JSX.Element {
           <select
             className="finish-select"
             value={exportScope}
-            title="what to export"
-            onChange={(e) => setExportScope(e.target.value as 'all' | 'session')}
+            title="what the list shows and what gets exported"
+            onChange={(e) => {
+              const scope = e.target.value as 'all' | 'session'
+              setExportScope(scope)
+              exportScopeRef.current = scope
+              loadInventory()
+            }}
           >
             <option value="all">All cards</option>
             <option value="session">Scanned this session</option>
@@ -1184,7 +1192,11 @@ export default function App(): React.JSX.Element {
           </table>
           </div>
         ) : (
-          <p className="muted">Nothing in inventory yet.</p>
+          <p className="muted">
+            {exportScope === 'session'
+              ? 'Nothing scanned this session yet.'
+              : 'Nothing in inventory yet.'}
+          </p>
         )}
       </section>
       </div>

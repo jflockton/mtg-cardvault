@@ -24,7 +24,7 @@ export interface CardVaultApi {
     finish: Finish,
     quantity?: number
   ) => Promise<InventoryItem | null>
-  listInventory: () => Promise<InventorySummary>
+  listInventory: (scope?: 'all' | 'session') => Promise<InventorySummary>
   /** List all known preconstructed decks (MTGJSON). */
   preconList: () => Promise<PreconSummary[]>
   /** Name + card count for one precon (fetches its list). */
@@ -68,7 +68,7 @@ const api: CardVaultApi = {
   addCard: (card, finish, quantity) => ipcRenderer.invoke('inv:add', { card, finish, quantity }),
   removeCard: (scryfallId, finish, quantity) =>
     ipcRenderer.invoke('inv:remove', { scryfallId, finish, quantity }),
-  listInventory: () => ipcRenderer.invoke('inv:list'),
+  listInventory: (scope) => ipcRenderer.invoke('inv:list', { scope }),
   moveFinish: (scryfallId, from, to, quantity) =>
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
   exportCollection: (format, scope) =>
