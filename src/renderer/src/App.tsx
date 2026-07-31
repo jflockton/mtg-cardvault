@@ -8,7 +8,8 @@ import type {
   InventorySummary,
   PreconSummary,
   RefProgress,
-  RefStatus
+  RefStatus,
+  SetInfo
 } from '../../shared/types'
 
 interface CapturePreview {
@@ -432,6 +433,7 @@ export default function App(): React.JSX.Element {
   }, [])
 
   const setInputRef = useRef<HTMLInputElement>(null)
+  const cnInputRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = useCallback(() => {
     window.api.refStatus().then(setRefStatus)
@@ -443,21 +445,31 @@ export default function App(): React.JSX.Element {
     window.api.listInventory(exportScopeRef.current).then(setInventory)
   }, [])
 
+  // Set list for the set-code dropdowns — loaded at start, refreshed after
+  // a card-data refresh (new sets appear).
+  const [sets, setSets] = useState<SetInfo[]>([])
+  const loadSets = useCallback(() => {
+    window.api.listSets().then(setSets)
+  }, [])
+
   useEffect(() => {
     if (!window.api) return
     loadStatus()
     loadInventory()
-  }, [loadStatus, loadInventory])
+    loadSets()
+  }, [loadStatus, loadInventory, loadSets])
 
   const resetForNext = useCallback(() => {
     setCard(null)
-    setSetCode('')
+    // The set code is STICKY — runs of same-set cards are number → Enter →
+    // number → Enter. Only the collector number clears.
     setCollectorNumber('')
     setQuantity(1)
     setSearchResults([])
     setShowSearch(false)
     setCapture(null)
     setScan({ status: 'idle' })
+    cnInputRef.current?.focus()
   }, [])
 
   const applyCard = useCallback(
@@ -856,7 +868,13 @@ export default function App(): React.JSX.Element {
     <div className={`app ${flash ? 'flash' : ''}`}>
       <header>
         <h1>🃏 MTG CardVault</h1>
-        <ReferencePanel status={refStatus} onStatusChange={loadStatus} />
+        <ReferencePanel
+          status={refStatus}
+          onStatusChange={() => {
+            loadStatus()
+            loadSets()
+          }}
+        />
       </header>
 
       <div className="columns">
@@ -920,6 +938,7 @@ export default function App(): React.JSX.Element {
             <label className="pin-label">
               Set pin
               <input
+                list="set-codes"
                 value={pinnedSet}
                 placeholder="e.g. M19 (optional)"
                 maxLength={6}
@@ -1014,13 +1033,21 @@ export default function App(): React.JSX.Element {
         <summary>
           <h2>Add card manually / name search</h2>
         </summary>
+        <datalist id="set-codes">
+          {sets.map((s) => (
+            <option key={s.code} value={s.code.toUpperCase()}>
+              {s.name}
+            </option>
+          ))}
+        </datalist>
         <div className="lookup-row">
           <label>
             Set code
             <input
               ref={setInputRef}
+              list="set-codes"
               value={setCode}
-              placeholder="e.g. M21"
+              placeholder="pick or type, e.g. M21"
               maxLength={6}
               onChange={(e) => setSetCode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && lookup()}
@@ -1029,6 +1056,7 @@ export default function App(): React.JSX.Element {
           <label>
             Collector №
             <input
+              ref={cnInputRef}
               value={collectorNumber}
               placeholder="e.g. 0123/280 or 123"
               onChange={(e) => setCollectorNumber(e.target.value)}

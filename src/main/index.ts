@@ -126,6 +126,8 @@ function registerIpc(): void {
 
   ipcMain.handle('cards:search', (_e, query: string) => store.searchByName(query))
 
+  ipcMain.handle('sets:list', () => store.listSets())
+
   ipcMain.handle('inv:add', (_e, args: { card: never; finish: Finish; quantity?: number }) =>
     store.addToInventory(args.card, args.finish, args.quantity ?? 1)
   )

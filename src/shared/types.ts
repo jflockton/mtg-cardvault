@@ -73,6 +73,11 @@ export interface LookupQuery {
   collectorNumber: string
 }
 
+export interface SetInfo {
+  code: string
+  name: string
+}
+
 export interface PreconSummary {
   name: string
   code: string

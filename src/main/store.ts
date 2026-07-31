@@ -189,6 +189,17 @@ export class DataStore {
     return Boolean(row)
   }
 
+  /** All non-digital sets, newest first — feeds the set-code dropdowns. */
+  listSets(): { code: string; name: string }[] {
+    this.openReferenceIfPresent()
+    if (!this.refDb || !this.hasSetMetadata()) return []
+    return this.refDb
+      .prepare(
+        'SELECT code, name FROM scryfall_sets WHERE digital = 0 ORDER BY released_at DESC'
+      )
+      .all() as { code: string; name: string }[]
+  }
+
   /** True if set metadata (printed_size) is loaded — needed for old frames. */
   hasSetMetadata(): boolean {
     this.openReferenceIfPresent()

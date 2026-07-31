@@ -8,6 +8,7 @@ import type {
   LookupQuery,
   PreconAddResult,
   PreconSummary,
+  SetInfo,
   RefProgress,
   RefStatus
 } from '../shared/types'
@@ -25,6 +26,8 @@ export interface CardVaultApi {
     quantity?: number
   ) => Promise<InventoryItem | null>
   listInventory: (scope?: 'all' | 'session') => Promise<InventorySummary>
+  /** All non-digital sets (code + name), newest first. */
+  listSets: () => Promise<SetInfo[]>
   /** List all known preconstructed decks (MTGJSON). */
   preconList: () => Promise<PreconSummary[]>
   /** Name + card count for one precon (fetches its list). */
@@ -73,6 +76,7 @@ const api: CardVaultApi = {
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
   exportCollection: (format, scope) =>
     ipcRenderer.invoke('inv:exportCopy', { format, scope }),
+  listSets: () => ipcRenderer.invoke('sets:list'),
   preconList: () => ipcRenderer.invoke('precon:list'),
   preconInfo: (fileName) => ipcRenderer.invoke('precon:info', fileName),
   preconAdd: (fileName) => ipcRenderer.invoke('precon:add', fileName),
