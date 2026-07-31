@@ -40,6 +40,8 @@ function seedReferenceDbFromResources(dataDir: string): void {
 
 let store: DataStore
 let refreshing = false
+/** UTC start of this app run — the boundary for "scanned this session". */
+const launchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
 /**
  * One NDJSON line per scan decision → <dataDir>/scan-debug.log. Cheap,
@@ -136,13 +138,21 @@ function registerIpc(): void {
 
   ipcMain.handle('inv:list', () => store.listInventory())
 
-  // Copy the "1 Card Name" list to the clipboard from the main process —
-  // renderer clipboard permissions are locked down.
-  ipcMain.handle('inv:exportCopy', () => {
-    const text = store.exportList()
-    clipboard.writeText(text)
-    return { lines: text ? text.split('\n').length : 0 }
-  })
+  // Copy the export to the clipboard from the main process — renderer
+  // clipboard permissions are locked down. Scope 'session' = adds since this
+  // app launch (undone adds retract from the scan log, so it stays honest).
+  ipcMain.handle(
+    'inv:exportCopy',
+    (_e, args?: { format?: 'csv' | 'list'; scope?: 'all' | 'session' }) => {
+      const text = store.exportText(
+        args?.format ?? 'list',
+        args?.scope ?? 'all',
+        launchedAt
+      )
+      clipboard.writeText(text)
+      return { lines: text ? text.split('\n').length : 0 }
+    }
+  )
 
   ipcMain.handle(
     'scan:title',

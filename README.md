@@ -12,7 +12,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 4 | Fast add loop (auto-lock, audio confirm, undo, keyboard flow) | ✅ |
 | — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, collection value + list export | ✅ |
 | 5 | Remove mode | ⬜ |
-| 6 | Search / browse UI + CSV export (collection view, value total, and clipboard CSV export — `quantity,card-name,expansion,id` per printing — exist; filters pending) | 🟡 |
+| 6 | Search / browse UI + exports (collection view, value total; clipboard exports with an **All cards / Scanned this session** scope — plain list `1 Island (FIN) 297` or CSV `quantity,card-name,expansion,id`; filters pending) | 🟡 |
 | 7 | Packaging: NSIS installer via GitHub Actions | 🟡 config in place, unverified |
 
 ## How it works
@@ -64,7 +64,7 @@ Without `MTG_CARDVAULT_DATA_DIR`, the app uses the real app-data location and (i
 
 ## Install as a Mac app
 
-The dev loop is fine for hacking, but the app also builds as a normal macOS application (Launchpad, Spotlight, Dock — the lot), with a Chocobo-on-a-card icon ([build/icon.svg](build/icon.svg), rendered to `icon.icns`/`icon.png` for the packagers):
+The dev loop is fine for hacking, but the app also builds as a normal macOS application (Launchpad, Spotlight, Dock — the lot), with a front-facing Chocobo-face icon ([build/icon.svg](build/icon.svg), rendered to `icon.icns`/`icon.png` for the packagers):
 
 ```bash
 npm run build:refdb                       # if ./data/reference.db doesn't exist yet

@@ -401,6 +401,22 @@ export default function App(): React.JSX.Element {
   // it away — the operator is trying to CLICK it (live-log finding).
   const candidatesHold = useRef(0)
 
+  const [exportScope, setExportScope] = useState<'all' | 'session'>('all')
+  const copyExport = useCallback(
+    async (format: 'list' | 'csv') => {
+      const { lines } = await window.api.exportCollection(format, exportScope)
+      const scopeText = exportScope === 'session' ? 'scanned this session' : 'all cards'
+      setMessage(
+        lines > 0
+          ? `📋 Copied ${lines} rows (${scopeText}, ${format === 'csv' ? 'CSV' : 'plain list'})`
+          : exportScope === 'session'
+            ? 'Nothing scanned this session yet'
+            : 'Nothing to export yet'
+      )
+    },
+    [exportScope]
+  )
+
   // A low-confidence lock is STAGED, not blocking: shown for a glance/foil
   // flip, committed automatically when the next card locks. State drives the
   // UI; the ref gives the frame loop a non-stale view.
@@ -1080,18 +1096,23 @@ export default function App(): React.JSX.Element {
               </span>
             </p>
           )}
-          <button
-            title="CSV: quantity,card-name,expansion,id"
-            onClick={async () => {
-              const { lines } = await window.api.exportCollection()
-              setMessage(
-                lines > 0
-                  ? `📋 Copied ${lines} CSV rows (qty,name,set,number)`
-                  : 'Nothing to export yet'
-              )
-            }}
+          <select
+            className="finish-select"
+            value={exportScope}
+            title="what to export"
+            onChange={(e) => setExportScope(e.target.value as 'all' | 'session')}
           >
-            📋 Copy CSV
+            <option value="all">All cards</option>
+            <option value="session">Scanned this session</option>
+          </select>
+          <button
+            title="Plain list: 1 Island (FIN) 297"
+            onClick={() => copyExport('list')}
+          >
+            📋 Copy list
+          </button>
+          <button title="CSV: quantity,card-name,expansion,id" onClick={() => copyExport('csv')}>
+            Copy CSV
           </button>
         </div>
         {inventory && inventory.items.length > 0 ? (

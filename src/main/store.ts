@@ -632,23 +632,43 @@ export class DataStore {
   }
 
   /**
-   * CSV export: quantity,card-name,expansion,id — one row per printing,
-   * quantities summed across finishes (e.g. "1,Island,fin,297"). Names
-   * containing commas/quotes are RFC-4180 quoted.
+   * Collection export text. One row per printing, quantities summed across
+   * finishes. Formats:
+   *   'csv'  → quantity,card-name,expansion,id  (RFC-4180 quoting, "1,Island,fin,297")
+   *   'list' → 1 Island (FIN) 297               (plain decklist-with-pins style)
+   * Scope 'session' aggregates the scan_log since `sinceIso` (this app run;
+   * undos retract their log rows, so the session view stays honest).
    */
-  exportList(): string {
-    const rows = this.invDb
-      .prepare(
-        `SELECT name, set_code, collector_number, SUM(quantity) AS qty
-         FROM inventory
-         GROUP BY name, set_code, collector_number
-         ORDER BY name COLLATE NOCASE, set_code, collector_number`
-      )
-      .all() as { name: string; set_code: string; collector_number: string; qty: number }[]
-    const esc = (s: string): string =>
-      /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  exportText(format: 'csv' | 'list', scope: 'all' | 'session', sinceIso?: string): string {
+    const rows = (
+      scope === 'session' && sinceIso
+        ? this.invDb
+            .prepare(
+              `SELECT name, set_code, collector_number, SUM(quantity) AS qty
+               FROM scan_log WHERE scanned_at >= ?
+               GROUP BY name, set_code, collector_number
+               ORDER BY name COLLATE NOCASE, set_code, collector_number`
+            )
+            .all(sinceIso)
+        : this.invDb
+            .prepare(
+              `SELECT name, set_code, collector_number, SUM(quantity) AS qty
+               FROM inventory
+               GROUP BY name, set_code, collector_number
+               ORDER BY name COLLATE NOCASE, set_code, collector_number`
+            )
+            .all()
+    ) as { name: string; set_code: string; collector_number: string; qty: number }[]
+
+    if (format === 'csv') {
+      const esc = (s: string): string =>
+        /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+      return rows
+        .map((r) => `${r.qty},${esc(r.name)},${r.set_code},${r.collector_number}`)
+        .join('\n')
+    }
     return rows
-      .map((r) => `${r.qty},${esc(r.name)},${r.set_code},${r.collector_number}`)
+      .map((r) => `${r.qty} ${r.name} (${r.set_code.toUpperCase()}) ${r.collector_number}`)
       .join('\n')
   }
 

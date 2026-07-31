@@ -31,6 +31,11 @@ export interface CardVaultApi {
   preconInfo: (fileName: string) => Promise<{ name: string; totalCards: number }>
   /** Add every card of a precon to inventory. */
   preconAdd: (fileName: string) => Promise<PreconAddResult>
+  /** Copy an export to the clipboard: plain list or CSV, all cards or this session's adds. */
+  exportCollection: (
+    format: 'list' | 'csv',
+    scope: 'all' | 'session'
+  ) => Promise<{ lines: number }>
   /** Move copies between finish stacks of the same printing. */
   moveFinish: (
     scryfallId: string,
@@ -39,7 +44,6 @@ export interface CardVaultApi {
     quantity?: number
   ) => Promise<InventoryItem | null>
   /** Copy the collection as "1 Card Name" lines to the clipboard. */
-  exportCollection: () => Promise<{ lines: number }>
   /** OCR + resolve a corner crop; variants are the same crop in different polarities. */
   scanCorner: (imageVariants: string[]) => Promise<CornerScanResult>
   /** Name mode: OCR the title crop and match against card names. */
@@ -67,7 +71,8 @@ const api: CardVaultApi = {
   listInventory: () => ipcRenderer.invoke('inv:list'),
   moveFinish: (scryfallId, from, to, quantity) =>
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
-  exportCollection: () => ipcRenderer.invoke('inv:exportCopy'),
+  exportCollection: (format, scope) =>
+    ipcRenderer.invoke('inv:exportCopy', { format, scope }),
   preconList: () => ipcRenderer.invoke('precon:list'),
   preconInfo: (fileName) => ipcRenderer.invoke('precon:info', fileName),
   preconAdd: (fileName) => ipcRenderer.invoke('precon:add', fileName),

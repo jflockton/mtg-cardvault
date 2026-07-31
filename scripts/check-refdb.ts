@@ -108,10 +108,12 @@ try {
   }
   console.log(`scan log ok: ${listed.lastScannedAt} @ ${listed.lastPrice ?? '—'} USD`)
 
-  // CSV export: qty,name,set,collector — quantities summed across finishes.
-  const csv = store.exportList()
+  // Exports: CSV (qty,name,set,collector) and plain list (1 Name (SET) 123).
+  const csv = store.exportText('csv', 'all')
   assert(csv.split('\n').includes('2,The One Ring,ltr,246'), `unexpected CSV: ${csv}`)
-  console.log(`export ok: ${csv.split('\n')[0]}`)
+  const list = store.exportText('list', 'all')
+  assert(list.split('\n').includes('2 The One Ring (LTR) 246'), `unexpected list: ${list}`)
+  console.log(`export ok: "${csv.split('\n')[0]}" / "${list.split('\n')[0]}"`)
 
   console.log('\nAll checks passed ✅')
 } finally {
