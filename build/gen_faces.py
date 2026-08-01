@@ -145,25 +145,49 @@ def venom():
 def gwen():
     a = []
     pink = '#e83a8c'
-    mask = '#221d30'
-    # masked face fills the circle
-    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{mask}"/>')
-    # white hood: full circle with the face opening cut back out
-    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{WHITE}"/>')
-    a.append(E(512, 545, 225, 285, mask, 0))
-    # pink hood lining around the opening
-    a.append(E(512, 545, 225, 285, 'none', 24, pink))
-    # hood folds
-    a.append(P('M 300 800 Q 340 840 400 862', 'none', 10))
-    a.append(P('M 724 800 Q 684 840 624 862', 'none', 10))
-    a.append(P('M 512 118 Q 500 160 512 205', 'none', 10))
-    # big rounded white eyes, ink-rimmed (house teardrop, gentler tilt)
-    for sx, x0 in ((1, 390), (-1, 634)):
-        a.append(f'<g transform="translate({x0},436) scale({sx * 1.3},1.3) rotate(-14)">')
-        a.append(P('M 0 190 C -74 165, -92 45, -84 -5 C -76 -70, 76 -70, 84 -5 '
-                   'C 92 45, 74 165, 0 190 Z', WHITE, 24))
-        a.append('</g>')
+    cyan = '#3fb9e6'
+    # white hood fills the badge (circle fill is white)
+    # pink lining: pointed arch around the face opening
+    lining = ('M 512 130 C 350 180, 232 320, 226 510 '
+              'C 222 670, 330 796, 512 826 '
+              'C 694 796, 802 670, 798 510 '
+              'C 792 320, 674 180, 512 130 Z')
+    a.append(P(lining, pink, 12))
+    # cyan scalloped webbing across the lining
+    a.append(f'<clipPath id="lin"><path d="{lining}"/></clipPath>')
+    a.append(f'<g clip-path="url(#lin)" stroke="{cyan}" stroke-width="7" fill="none">')
+    for row in range(9):
+        y = 190 + row * 70
+        off = 0 if row % 2 == 0 else 45
+        for i in range(9):
+            x = 260 + off + i * 90
+            a.append(f'<path d="M {x} {y} A 45 45 0 0 0 {x + 90} {y}"/>')
+    a.append('</g>')
+    # white mask face: smooth egg with a soft chin point
+    a.append(P('M 512 220 C 372 240, 288 360, 294 515 '
+               'C 298 650, 385 745, 512 768 '
+               'C 639 745, 726 650, 730 515 '
+               'C 736 360, 652 240, 512 220 Z', WHITE, 12))
+    # sharp upswept eyes: white glass, pink rim over an ink edge
+    left = 'M 486 590 Q 330 580 312 405 Q 466 428 486 590 Z'
+    right = 'M 538 590 Q 694 580 712 405 Q 558 428 538 590 Z'
+    for eye in (left, right):
+        a.append(P(eye, 'none', 54, INK))
+        a.append(P(eye, 'none', 36, pink))
+        a.append(P(eye, WHITE))
+    # tiny nose shadow
+    a.append(P('M 502 648 Q 512 658 522 648', 'none', 8))
+    # hood folds at the shoulders
+    a.append(P('M 300 810 Q 350 850 420 872', 'none', 10))
+    a.append(P('M 724 810 Q 674 850 604 872', 'none', 10))
     return a
+
+
+def gwen_overlay():
+    # hood peak rising past the ring, like the reference silhouette
+    return [
+        P('M 340 190 C 385 26, 639 26, 684 190 C 606 122, 418 122, 340 190 Z', WHITE, 12),
+    ]
 
 
 # ---------------------------------------------------------------- Spider-Ham
@@ -425,13 +449,13 @@ def miles():
     return a
 
 
-OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay,
+OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay, 'spider-gwen': gwen_overlay,
             'doc-ock': ock_overlay, 'noir': noir_overlay, 'goblin': goblin_overlay}
 
 CHARS = [
     ('venom',      '#6a2d9c', '#241e33', venom),
     ('doom',       '#16697a', '#0e3a2c', doom),
-    ('spider-gwen','#a1237a', '#221d30', gwen),
+    ('spider-gwen','#a1237a', WHITE, gwen),
     ('spider-ham', '#e2a41f', RED, ham),
     ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
     ('daredevil',  '#d2611f', '#3a3f4d', daredevil),
