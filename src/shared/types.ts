@@ -18,6 +18,9 @@ export interface CardRef {
   imageUri: string | null
   pricesUsd: number | null
   pricesUsdFoil: number | null
+  /** EUR prices are Cardmarket's (via Scryfall bulk data, refreshed daily). */
+  pricesEur: number | null
+  pricesEurFoil: number | null
   finishes: Finish[]
   releasedAt: string | null
   /** 'local' = offline reference DB hit, 'live' = Scryfall API fallback */

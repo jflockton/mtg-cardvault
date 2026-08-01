@@ -800,9 +800,201 @@ export class DataStore {
     }
   }
 
+  // ---------------------------------------------------------------- viewer
+
+  /**
+   * One card entry for the browser viewer. quantity is total owned copies
+   * (0 for any-card results the shop doesn't stock); EUR prices are
+   * Cardmarket's, via the Scryfall bulk data.
+   */
+  viewerInventory(): {
+    cards: ViewerCard[]
+    totalCards: number
+    totalValueEur: number
+    totalValueUsd: number
+  } {
+    this.openReferenceIfPresent()
+    const refStmt = this.refDb?.prepare(
+      `SELECT set_name, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil
+       FROM scryfall_cards WHERE scryfall_id = ?`
+    )
+    const rows = this.invDb
+      .prepare(
+        `SELECT scryfall_id, name, set_code, collector_number, rarity, type_line,
+                finish, quantity, image_uri
+         FROM inventory WHERE quantity > 0 ORDER BY name COLLATE NOCASE, finish`
+      )
+      .all() as {
+      scryfall_id: string
+      name: string
+      set_code: string
+      collector_number: string
+      rarity: string
+      type_line: string
+      finish: Finish
+      quantity: number
+      image_uri: string | null
+    }[]
+
+    const byId = new Map<string, ViewerCard>()
+    let totalCards = 0
+    let totalValueEur = 0
+    let totalValueUsd = 0
+    for (const r of rows) {
+      let card = byId.get(r.scryfall_id)
+      if (!card) {
+        const ref = refStmt?.get(r.scryfall_id) as
+          | {
+              set_name: string
+              prices_usd: number | null
+              prices_usd_foil: number | null
+              prices_eur: number | null
+              prices_eur_foil: number | null
+            }
+          | undefined
+        card = {
+          scryfallId: r.scryfall_id,
+          name: r.name,
+          setCode: r.set_code,
+          setName: ref?.set_name || this.setNameFor(r.set_code),
+          collectorNumber: r.collector_number,
+          rarity: r.rarity,
+          typeLine: r.type_line,
+          imageUri: r.image_uri,
+          quantity: 0,
+          stacks: [],
+          priceUsd: ref?.prices_usd ?? null,
+          priceUsdFoil: ref?.prices_usd_foil ?? null,
+          priceEur: ref?.prices_eur ?? null,
+          priceEurFoil: ref?.prices_eur_foil ?? null
+        }
+        byId.set(r.scryfall_id, card)
+      }
+      card.stacks.push({ finish: r.finish, quantity: r.quantity })
+      card.quantity += r.quantity
+      totalCards += r.quantity
+      const usd = priceForFinish(card.priceUsd, card.priceUsdFoil, r.finish)
+      const eur = priceForFinish(card.priceEur, card.priceEurFoil, r.finish)
+      if (usd != null) totalValueUsd += usd * r.quantity
+      if (eur != null) totalValueEur += eur * r.quantity
+    }
+    return { cards: [...byId.values()], totalCards, totalValueEur, totalValueUsd }
+  }
+
+  /** Any-card mode: search the whole reference DB by name and/or set. */
+  viewerSearch(nameQuery: string, setCode: string, limit = 200): ViewerCard[] {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return []
+    const name = nameQuery.trim()
+    const set = setCode.trim().toLowerCase()
+    if (!name && !set) return []
+
+    const where: string[] = []
+    const params: (string | number)[] = []
+    if (name) {
+      where.push('name LIKE ? COLLATE NOCASE')
+      params.push(`%${name}%`)
+    }
+    if (set) {
+      where.push('set_code = ?')
+      params.push(set)
+    }
+    // Set browse reads in collector order; name search reads newest printings first.
+    const order = set && !name
+      ? 'ORDER BY CAST(collector_number AS INTEGER), collector_number'
+      : 'ORDER BY name COLLATE NOCASE, released_at DESC'
+    const rows = this.refDb
+      .prepare(`SELECT * FROM scryfall_cards WHERE ${where.join(' AND ')} ${order} LIMIT ?`)
+      .all(...params, limit) as {
+      scryfall_id: string
+      name: string
+      set_code: string
+      set_name: string
+      collector_number: string
+      rarity: string
+      type_line: string
+      image_uri: string | null
+      prices_usd: number | null
+      prices_usd_foil: number | null
+      prices_eur: number | null
+      prices_eur_foil: number | null
+    }[]
+
+    const owned = new Map<string, number>()
+    for (const o of this.invDb
+      .prepare('SELECT scryfall_id, SUM(quantity) AS qty FROM inventory GROUP BY scryfall_id')
+      .all() as { scryfall_id: string; qty: number }[]) {
+      owned.set(o.scryfall_id, o.qty)
+    }
+
+    return rows.map((r) => ({
+      scryfallId: r.scryfall_id,
+      name: r.name,
+      setCode: r.set_code,
+      setName: r.set_name || this.setNameFor(r.set_code),
+      collectorNumber: r.collector_number,
+      rarity: r.rarity,
+      typeLine: r.type_line,
+      imageUri: r.image_uri,
+      quantity: owned.get(r.scryfall_id) ?? 0,
+      stacks: [],
+      priceUsd: r.prices_usd,
+      priceUsdFoil: r.prices_usd_foil,
+      priceEur: r.prices_eur,
+      priceEurFoil: r.prices_eur_foil
+    }))
+  }
+
+  /** Sets for the viewer dropdown: owned sets with counts, or every set. */
+  viewerSets(mode: 'inventory' | 'all'): { code: string; name: string; count: number }[] {
+    if (mode === 'all') {
+      return this.listSets().map((s) => ({ ...s, count: 0 }))
+    }
+    const rows = this.invDb
+      .prepare(
+        `SELECT set_code, SUM(quantity) AS qty FROM inventory
+         WHERE quantity > 0 GROUP BY set_code ORDER BY set_code`
+      )
+      .all() as { set_code: string; qty: number }[]
+    return rows
+      .map((r) => ({ code: r.set_code, name: this.setNameFor(r.set_code), count: r.qty }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  private setNameFor(code: string): string {
+    this.openReferenceIfPresent()
+    if (this.refDb && this.hasSetMetadata()) {
+      const row = this.refDb
+        .prepare('SELECT name FROM scryfall_sets WHERE code = ?')
+        .get(code.toLowerCase()) as { name: string } | undefined
+      if (row?.name) return row.name
+    }
+    return code.toUpperCase()
+  }
+
   close(): void {
     this.refDb?.close()
     this.refDb = null
     this.invDb.close()
   }
+}
+
+export interface ViewerCard {
+  scryfallId: string
+  name: string
+  setCode: string
+  setName: string
+  collectorNumber: string
+  rarity: string
+  typeLine: string
+  imageUri: string | null
+  /** Total owned copies across finishes (0 = not in inventory). */
+  quantity: number
+  /** Per-finish owned stacks (inventory mode only; empty in any-card mode). */
+  stacks: { finish: Finish; quantity: number }[]
+  priceUsd: number | null
+  priceUsdFoil: number | null
+  /** Cardmarket (EUR) prices from the Scryfall bulk data. */
+  priceEur: number | null
+  priceEurFoil: number | null
 }

@@ -56,6 +56,8 @@ export interface CardVaultApi {
   ) => Promise<CornerScanResult>
   /** Append a loop-decision note to the scan debug log. */
   note: (text: string) => void
+  /** Open the collection viewer page in the default browser. */
+  openViewer: () => Promise<{ url: string }>
 }
 
 const api: CardVaultApi = {
@@ -83,7 +85,8 @@ const api: CardVaultApi = {
   scanCorner: (imageVariants) => ipcRenderer.invoke('scan:corner', imageVariants),
   scanTitle: (imageVariants, pinnedSet) =>
     ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet }),
-  note: (text) => ipcRenderer.send('scan:note', text)
+  note: (text) => ipcRenderer.send('scan:note', text),
+  openViewer: () => ipcRenderer.invoke('viewer:open')
 }
 
 contextBridge.exposeInMainWorld('api', api)

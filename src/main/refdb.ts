@@ -5,6 +5,8 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import readline from 'node:readline'
+import zlib from 'node:zlib'
 import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
 
@@ -40,6 +42,8 @@ CREATE TABLE IF NOT EXISTS scryfall_cards (
   image_uri        TEXT,
   prices_usd       REAL,
   prices_usd_foil  REAL,
+  prices_eur       REAL,
+  prices_eur_foil  REAL,
   finishes         TEXT NOT NULL DEFAULT '["nonfoil"]',
   released_at      TEXT
 );
@@ -84,7 +88,12 @@ interface ScryfallCardJson {
     colors?: string[]
     image_uris?: { normal?: string }
   }[]
-  prices?: { usd?: string | null; usd_foil?: string | null }
+  prices?: {
+    usd?: string | null
+    usd_foil?: string | null
+    eur?: string | null
+    eur_foil?: string | null
+  }
   finishes?: string[]
   games?: string[]
   released_at?: string
@@ -103,6 +112,8 @@ interface RefRow {
   image_uri: string | null
   prices_usd: number | null
   prices_usd_foil: number | null
+  prices_eur: number | null
+  prices_eur_foil: number | null
   finishes: string
   released_at: string | null
 }
@@ -138,6 +149,9 @@ export function mapCard(c: ScryfallCardJson): RefRow | null {
     image_uri: imageUri,
     prices_usd: toNum(c.prices?.usd),
     prices_usd_foil: toNum(c.prices?.usd_foil),
+    // Scryfall's EUR prices are sourced from Cardmarket (refreshed daily).
+    prices_eur: toNum(c.prices?.eur),
+    prices_eur_foil: toNum(c.prices?.eur_foil),
     finishes: JSON.stringify(c.finishes ?? ['nonfoil']),
     released_at: c.released_at ?? null
   }
@@ -157,6 +171,8 @@ export function rowToCardRef(row: RefRow, source: 'local' | 'live'): CardRef {
     imageUri: row.image_uri,
     pricesUsd: row.prices_usd,
     pricesUsdFoil: row.prices_usd_foil,
+    pricesEur: row.prices_eur,
+    pricesEurFoil: row.prices_eur_foil,
     finishes: JSON.parse(row.finishes) as Finish[],
     releasedAt: row.released_at,
     source
@@ -213,7 +229,12 @@ export async function fetchSetsList(): Promise<ScryfallSetRow[]> {
   return rows
 }
 
-/** Fetch the bulk-data listing and return the default_cards download URI + size. */
+/**
+ * Fetch the bulk-data listing and return the default_cards download URI + size.
+ * The listing is now just pointers — download details live behind each entry's
+ * own uri, and the payload moved from a giant JSON array to gzipped JSONL
+ * (jsonl_download_uri). Older download_uri fields are still honoured if present.
+ */
 export async function getDefaultCardsBulkInfo(): Promise<{
   downloadUri: string
   size: number
@@ -225,11 +246,35 @@ export async function getDefaultCardsBulkInfo(): Promise<{
   })
   if (!res.ok) throw new Error(`Scryfall bulk-data listing failed: HTTP ${res.status}`)
   const listing = (await res.json()) as {
-    data: { type: string; download_uri: string; size: number; updated_at: string }[]
+    data: {
+      type: string
+      uri?: string
+      download_uri?: string
+      jsonl_download_uri?: string
+      size?: number
+      compressed_size?: number
+      updated_at: string
+    }[]
   }
-  const entry = listing.data.find((d) => d.type === 'default_cards')
+  let entry = listing.data.find((d) => d.type === 'default_cards')
   if (!entry) throw new Error('default_cards entry not found in Scryfall bulk-data listing')
-  return { downloadUri: entry.download_uri, size: entry.size, updatedAt: entry.updated_at }
+
+  if (!entry.jsonl_download_uri && !entry.download_uri && entry.uri) {
+    const detailRes = await fetch(entry.uri, {
+      headers: SCRYFALL_HEADERS,
+      signal: AbortSignal.timeout(30000)
+    })
+    if (!detailRes.ok) throw new Error(`Scryfall bulk-data entry failed: HTTP ${detailRes.status}`)
+    entry = (await detailRes.json()) as typeof entry
+  }
+
+  const downloadUri = entry.jsonl_download_uri ?? entry.download_uri
+  if (!downloadUri) throw new Error('no download URI in Scryfall default_cards bulk entry')
+  return {
+    downloadUri,
+    size: entry.compressed_size ?? entry.size ?? 0,
+    updatedAt: entry.updated_at
+  }
 }
 
 /** Stream a URL to a file on disk without holding it in memory. */
@@ -264,7 +309,11 @@ export async function downloadToFile(
   onProgress?.(received, total)
 }
 
-/** Stream-parse the bulk JSON array file into a fresh SQLite DB at dbPath. */
+/**
+ * Stream-parse a bulk file into a fresh SQLite DB at dbPath. Handles both the
+ * current format (gzipped JSONL, one card per line) and the legacy giant JSON
+ * array, chosen by file extension.
+ */
 export async function importBulkFile(
   bulkJsonPath: string,
   dbPath: string,
@@ -281,10 +330,12 @@ export async function importBulkFile(
   const insert = db.prepare(`
     INSERT OR REPLACE INTO scryfall_cards
       (scryfall_id, name, set_code, set_name, collector_number, rarity, type_line,
-       mana_cost, colors, image_uri, prices_usd, prices_usd_foil, finishes, released_at)
+       mana_cost, colors, image_uri, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil,
+       finishes, released_at)
     VALUES
       (@scryfall_id, @name, @set_code, @set_name, @collector_number, @rarity, @type_line,
-       @mana_cost, @colors, @image_uri, @prices_usd, @prices_usd_foil, @finishes, @released_at)
+       @mana_cost, @colors, @image_uri, @prices_usd, @prices_usd_foil, @prices_eur, @prices_eur_foil,
+       @finishes, @released_at)
   `)
   const insertBatch = db.transaction((rows: RefRow[]) => {
     for (const row of rows) insert.run(row)
@@ -294,27 +345,44 @@ export async function importBulkFile(
   let batch: RefRow[] = []
   const BATCH_SIZE = 2000
 
-  try {
-    const jsonStream = streamArray.withParserAsStream()
-    const source = fs.createReadStream(bulkJsonPath)
-    source.pipe(jsonStream)
+  const takeCard = (value: ScryfallCardJson): void => {
+    const row = mapCard(value)
+    if (!row) return
+    batch.push(row)
+    if (batch.length >= BATCH_SIZE) {
+      insertBatch(batch)
+      imported += batch.length
+      batch = []
+      onProgress?.(imported)
+    }
+  }
 
-    await new Promise<void>((resolve, reject) => {
-      source.on('error', reject)
-      jsonStream.on('data', ({ value }: { value: ScryfallCardJson }) => {
-        const row = mapCard(value)
-        if (!row) return
-        batch.push(row)
-        if (batch.length >= BATCH_SIZE) {
-          insertBatch(batch)
-          imported += batch.length
-          batch = []
-          onProgress?.(imported)
+  try {
+    if (/\.jsonl(\.gz)?$/.test(bulkJsonPath)) {
+      let source: NodeJS.ReadableStream = fs.createReadStream(bulkJsonPath)
+      if (bulkJsonPath.endsWith('.gz')) {
+        const gunzip = zlib.createGunzip()
+        source = source.pipe(gunzip)
+      }
+      const lines = readline.createInterface({ input: source, crlfDelay: Infinity })
+      for await (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('{')) {
+          takeCard(JSON.parse(trimmed.replace(/,$/, '')) as ScryfallCardJson)
         }
+      }
+    } else {
+      const jsonStream = streamArray.withParserAsStream()
+      const source = fs.createReadStream(bulkJsonPath)
+      source.pipe(jsonStream)
+
+      await new Promise<void>((resolve, reject) => {
+        source.on('error', reject)
+        jsonStream.on('data', ({ value }: { value: ScryfallCardJson }) => takeCard(value))
+        jsonStream.on('end', () => resolve())
+        jsonStream.on('error', reject)
       })
-      jsonStream.on('end', () => resolve())
-      jsonStream.on('error', reject)
-    })
+    }
 
     if (batch.length > 0) {
       insertBatch(batch)
@@ -348,7 +416,12 @@ export async function buildReferenceDb(
   onProgress?.({ phase: 'listing' })
   const info = await getDefaultCardsBulkInfo()
 
-  const bulkPath = path.join(workDir, 'default_cards.json')
+  const ext = /\.jsonl\.gz(\?|$)/.test(info.downloadUri)
+    ? '.jsonl.gz'
+    : /\.jsonl(\?|$)/.test(info.downloadUri)
+      ? '.jsonl'
+      : '.json'
+  const bulkPath = path.join(workDir, `default_cards${ext}`)
   onProgress?.({ phase: 'download', receivedBytes: 0, totalBytes: info.size })
   await downloadToFile(info.downloadUri, bulkPath, info.size, (received, total) =>
     onProgress?.({ phase: 'download', receivedBytes: received, totalBytes: total })

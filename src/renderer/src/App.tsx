@@ -1256,6 +1256,12 @@ export default function App(): React.JSX.Element {
           <button title="CSV: quantity,card-name,expansion,id" onClick={() => copyExport('csv')}>
             Copy CSV
           </button>
+          <button
+            title="Browse the collection in your web browser — images, Cardmarket prices, any-card search"
+            onClick={() => void window.api.openViewer()}
+          >
+            🖼 Show Inventory
+          </button>
         </div>
         {inventory && inventory.items.length > 0 ? (
           <div className="table-scroll">

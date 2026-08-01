@@ -1,11 +1,13 @@
 import { app, BrowserWindow, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import Database from 'better-sqlite3'
 
 import { DataStore } from './store'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
+import { openInventoryViewer, closeInventoryViewer } from './viewer'
 import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
 
 /** Tesseract traineddata: repo-local in dev, resources/tessdata when packaged. */
@@ -30,12 +32,22 @@ function resolveDataDir(): string {
  */
 function seedReferenceDbFromResources(dataDir: string): void {
   const target = path.join(dataDir, 'reference.db')
-  if (fs.existsSync(target)) return
   const bundled = path.join(process.resourcesPath, 'reference.db')
-  if (app.isPackaged && fs.existsSync(bundled)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.copyFileSync(bundled, target)
+  if (!app.isPackaged || !fs.existsSync(bundled)) return
+  if (fs.existsSync(target)) {
+    // Keep the existing copy unless its schema predates this app version
+    // (e.g. missing the Cardmarket EUR price columns) — then re-seed.
+    try {
+      const db = new Database(target, { readonly: true })
+      const cols = db.prepare('PRAGMA table_info(scryfall_cards)').all() as { name: string }[]
+      db.close()
+      if (cols.some((c) => c.name === 'prices_eur')) return
+    } catch {
+      // unreadable/corrupt → fall through and re-seed
+    }
   }
+  fs.mkdirSync(dataDir, { recursive: true })
+  fs.copyFileSync(bundled, target)
 }
 
 let store: DataStore
@@ -167,6 +179,13 @@ function registerIpc(): void {
       return { lines: text ? text.split('\n').length : 0 }
     }
   )
+
+  // "Show Inventory": loopback-only web viewer opened in the default browser.
+  ipcMain.handle('viewer:open', async () => {
+    const url = await openInventoryViewer(store)
+    await shell.openExternal(url)
+    return { url }
+  })
 
   ipcMain.handle(
     'scan:title',
@@ -341,5 +360,6 @@ app.on('window-all-closed', () => {
 
 app.on('quit', () => {
   void terminateOcr()
+  closeInventoryViewer()
   store?.close()
 })

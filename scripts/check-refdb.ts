@@ -8,6 +8,7 @@ import assert from 'node:assert'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DataStore } from '../src/main/store'
+import { openInventoryViewer, closeInventoryViewer } from '../src/main/viewer'
 
 const dataArgIdx = process.argv.indexOf('--data')
 const dataDir = path.resolve(dataArgIdx !== -1 ? process.argv[dataArgIdx + 1] : 'data')
@@ -117,6 +118,48 @@ try {
   const list = store.exportText('list', 'all')
   assert(list.split('\n').includes('2 The One Ring (LTR) 246'), `unexpected list: ${list}`)
   console.log(`export ok: "${csv.split('\n')[0]}" / "${list.split('\n')[0]}"`)
+
+  // Cardmarket (EUR) prices must have been imported from the bulk data.
+  const eurCard = store.lookup('ltr', '246')!
+  assert(eurCard.pricesEur != null && eurCard.pricesEur > 0, 'The One Ring has no EUR price')
+  console.log(`cardmarket ok: The One Ring → €${eurCard.pricesEur}`)
+
+  // Viewer server: boot on loopback, hit every endpoint, assert shapes.
+  const viewerUrl = await openInventoryViewer(store)
+  try {
+    const inv = (await (await fetch(`${viewerUrl}api/inventory`)).json()) as {
+      cards: { name: string; quantity: number; priceEur: number | null }[]
+      totalCards: number
+      totalValueEur: number
+    }
+    assert.equal(inv.totalCards, 2, `viewer inventory totalCards: ${inv.totalCards}`)
+    const ring = inv.cards.find((c) => c.name === 'The One Ring')
+    assert(ring && ring.quantity === 2, 'viewer inventory missing The One Ring ×2')
+    assert(ring!.priceEur != null, 'viewer inventory row has no EUR price')
+    assert(inv.totalValueEur > 0, 'viewer totalValueEur should be > 0')
+
+    const sets = (await (await fetch(`${viewerUrl}api/sets?mode=inventory`)).json()) as {
+      code: string
+      count: number
+    }[]
+    assert(sets.some((s) => s.code === 'ltr' && s.count === 2), 'viewer sets missing ltr ×2')
+
+    const anyCards = (await (
+      await fetch(`${viewerUrl}api/cards?name=lightning%20bolt`)
+    ).json()) as { name: string; priceEur: number | null; quantity: number }[]
+    assert(anyCards.length > 0, 'any-card search returned nothing')
+    assert(anyCards.every((c) => c.name.toLowerCase().includes('lightning')), 'bad search hit')
+    assert(anyCards.some((c) => c.priceEur != null), 'no EUR prices in any-card results')
+
+    const page = await (await fetch(viewerUrl)).text()
+    assert(page.includes('MTG CardVault'), 'viewer page did not render')
+    console.log(
+      `viewer ok: ${inv.totalCards} cards €${inv.totalValueEur.toFixed(2)} · ` +
+        `${sets.length} set(s) · "lightning bolt" → ${anyCards.length} printings`
+    )
+  } finally {
+    closeInventoryViewer()
+  }
 
   console.log('\nAll checks passed ✅')
 } finally {
