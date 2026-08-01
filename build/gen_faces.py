@@ -151,43 +151,41 @@ def gwen_overlay():
     pink = '#e83a8c'
     cyan = '#3fb9e6'
     a = []
-    # hood outer silhouette
-    a.append(P('M 470 30 '
-               'C 434 58, 342 128, 264 236 '
-               'C 172 372, 112 540, 98 700 '
-               'C 90 820, 100 940, 122 1040 '
-               'L 936 1040 '
-               'C 962 920, 972 800, 956 660 '
-               'C 934 470, 848 244, 700 122 '
-               'C 628 62, 528 32, 470 30 Z', WHITE, 26))
-    # hood opening arch, filled by the pink interior lining
-    lining = ('M 512 216 '
-              'C 428 250, 344 340, 300 470 '
-              'C 272 580, 268 700, 288 830 '
-              'C 306 908, 336 962, 372 1002 '
-              'L 652 1002 '
-              'C 688 962, 718 908, 736 830 '
-              'C 756 700, 752 580, 724 470 '
-              'C 680 340, 596 250, 512 216 Z')
-    a.append(P(lining, pink, 14))
-    a.append(f'<clipPath id="lin"><path d="{lining}"/></clipPath>')
+    hood = ('M 470 30 '
+            'C 434 58, 342 128, 264 236 '
+            'C 172 372, 112 540, 98 700 '
+            'C 90 820, 100 940, 122 1040 '
+            'L 936 1040 '
+            'C 962 920, 972 800, 956 660 '
+            'C 934 470, 848 244, 700 122 '
+            'C 628 62, 528 32, 470 30 Z')
+    a.append(P(hood, WHITE, 26))
+    # opening: top edge crosses the forehead (hood covers the crown);
+    # pink lining shows beside the face only
+    edge_top = ('M 302 430 C 350 350, 430 315, 512 310 C 594 315, 674 350, 722 430')
+    opening = (edge_top +
+               ' C 740 560, 738 700, 724 830 '
+               'C 708 908, 680 962, 646 1002 '
+               'L 378 1002 '
+               'C 344 962, 316 908, 300 830 '
+               'C 286 700, 284 560, 302 430 Z')
+    a.append(P(opening, pink, 14))
+    a.append(f'<clipPath id="lin"><path d="{opening}"/></clipPath>')
     a.append(f'<g clip-path="url(#lin)" stroke="{cyan}" stroke-width="7" fill="none">')
-    for row in range(13):
-        y = 230 + row * 66
+    for row in range(12):
+        y = 330 + row * 64
         off = 0 if row % 2 == 0 else 44
         for i in range(10):
-            x = 240 + off + i * 88
+            x = 250 + off + i * 88
             a.append(f'<path d="M {x} {y} A 44 44 0 0 0 {x + 88} {y}"/>')
     a.append('</g>')
-    # chest and shoulders cutting across the bottom
+    # chest and neck
     a.append(P('M 150 1040 C 250 924, 400 884, 512 884 '
                'C 624 884, 774 924, 874 1040 Z', WHITE, 12))
-    # neck between chin and chest
     a.append(P('M 464 806 C 460 870, 452 924, 440 976 '
                'C 486 996, 540 996, 586 976 '
                'C 574 924, 566 870, 562 806 Z', WHITE, 12))
-    # human head at reference proportions: wide cranium, temples,
-    # cheeks tapering to a soft chin — nearly half the frame wide
+    # human head (crown tucks under the hood edge)
     a.append(P('M 512 276 '
                'C 400 278, 310 350, 292 470 '
                'C 276 580, 300 680, 356 760 '
@@ -195,15 +193,22 @@ def gwen_overlay():
                'C 564 838, 624 818, 668 760 '
                'C 724 680, 748 580, 732 470 '
                'C 714 350, 624 278, 512 276 Z', WHITE, 12))
-    # eyes spanning the face, rims overlapping onto the lining
-    left = 'M 478 566 Q 318 574 240 410 Q 420 446 478 566 Z'
-    right = 'M 546 566 Q 706 574 784 410 Q 604 446 546 566 Z'
+    # upswept eyes, fully inside the face
+    left = 'M 478 575 Q 344 582 330 445 Q 432 464 478 575 Z'
+    right = 'M 546 575 Q 680 582 694 445 Q 592 464 546 575 Z'
     for eye in (left, right):
-        a.append(P(eye, 'none', 46, INK))
-        a.append(P(eye, 'none', 32, pink))
+        a.append(P(eye, 'none', 44, INK))
+        a.append(P(eye, 'none', 30, pink))
         a.append(P(eye, WHITE))
     # pale nose shadow
-    a.append(P('M 493 655 Q 512 678 531 655 Q 512 665 493 655 Z', '#c8dcec'))
+    a.append(P('M 493 660 Q 512 682 531 660 Q 512 670 493 660 Z', '#c8dcec'))
+    # hood front covers everything above the opening edge
+    a.append(f'<clipPath id="hoodclip"><path d="{hood}"/></clipPath>')
+    a.append(f'<g clip-path="url(#hoodclip)">')
+    a.append(P(edge_top + ' L 980 430 L 980 10 L 44 10 L 44 430 Z', WHITE))
+    a.append('</g>')
+    a.append(P(edge_top, 'none', 14))
+    a.append(P(hood, 'none', 26))
     return a
 
 
