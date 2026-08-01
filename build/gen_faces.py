@@ -132,42 +132,48 @@ def doom():
 # ---------------------------------------------------------------- Venom
 def venom():
     a = []
-    maw = '#42101b'
-    # symbiote head fills the circle
-    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="#2b2438"/>')
-    # big angular eyes with the notched inner edge
-    a.append(P('M 464 268 C 372 240, 264 262, 196 340 '
-               'C 216 428, 272 496, 352 528 '
-               'C 376 492, 404 476, 428 482 '
-               'L 400 428 L 452 416 '
-               'C 436 366, 442 314, 464 268 Z', WHITE, 14))
-    a.append(P('M 560 268 C 652 240, 760 262, 828 340 '
-               'C 808 428, 752 496, 672 528 '
-               'C 648 492, 620 476, 596 482 '
-               'L 624 428 L 572 416 '
-               'C 588 366, 582 314, 560 268 Z', WHITE, 14))
-    # huge grinning maw
-    a.append(P('M 210 618 C 330 556, 694 556, 814 618 '
-               'C 772 792, 652 884, 512 884 C 372 884, 252 792, 210 618 Z', maw, 14))
-    # big triangular teeth: top row hanging, bottom row rising
-    for i in range(7):
-        x0 = 246 + i * 76
-        a.append(P(f'M {x0} {600 + (i%2)*6} L {x0+38} {712 + (i%2)*8} L {x0+76} {598 + (i%2)*6} Z',
+    maw = '#3a0d16'
+    # round grey symbiote head fills the circle
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="#5c5c64"/>')
+    # big check-mark eyes, notched, nearly meeting at the top
+    a.append(P('M 496 252 '
+               'C 424 226, 336 252, 274 330 '
+               'C 242 386, 234 452, 252 506 '
+               'C 300 548, 352 566, 396 564 '
+               'L 432 430 L 476 530 '
+               'C 496 432, 492 326, 496 252 Z', WHITE, 13))
+    a.append(P('M 528 252 '
+               'C 600 226, 688 252, 750 330 '
+               'C 782 386, 790 452, 772 506 '
+               'C 724 548, 672 566, 628 564 '
+               'L 592 430 L 548 530 '
+               'C 528 432, 532 326, 528 252 Z', WHITE, 13))
+    # huge maw spanning the head, slight dip at the centre of the lip
+    a.append(P('M 218 618 C 340 585, 450 602, 512 612 '
+               'C 574 602, 684 585, 806 618 '
+               'C 768 798, 650 888, 512 888 C 374 888, 256 798, 218 618 Z', maw, 14))
+    # top row of big fangs
+    for i in range(8):
+        x0 = 240 + i * 68
+        a.append(P(f'M {x0} {608 + (i%2)*6} L {x0+34} {718 + (i%2)*10} L {x0+68} {606 + (i%2)*6} Z',
                    WHITE, 8))
-    for i in range(5):
-        x0 = 322 + i * 76
-        a.append(P(f'M {x0} {868 - (i%2)*4} L {x0+38} {780 - (i%2)*8} L {x0+76} {870 - (i%2)*4} Z',
+    # bottom row rising from the jaw
+    for i in range(6):
+        x0 = 326 + i * 62
+        a.append(P(f'M {x0} {872 - (i%2)*4} L {x0+31} {788 - (i%2)*8} L {x0+62} {874 - (i%2)*4} Z',
                    WHITE, 8))
     return a
 
 
 def venom_overlay():
-    # tongue lolling out of the maw, hanging past the badge ring
+    # fat tongue lolling out and curling past the badge ring
     return [
-        P('M 428 802 C 414 900, 462 994, 560 1022 '
-          'C 644 1042, 696 992, 678 928 '
-          'C 664 876, 634 840, 592 820 Z', '#d3557a', 12),
-        P('M 520 856 C 560 906, 596 952, 646 972', 'none', 9),
+        P('M 420 812 '
+          'C 398 902, 438 1002, 540 1032 '
+          'C 622 1054, 684 1012, 670 950 '
+          'C 702 968, 724 936, 708 902 '
+          'C 680 848, 618 820, 568 814 Z', '#d3557a', 12),
+        P('M 498 862 C 548 922, 600 972, 658 988', 'none', 9),
     ]
 
 
