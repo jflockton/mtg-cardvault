@@ -81,65 +81,65 @@
 <clipPath id="face"><circle cx="512" cy="512" r="400"/></clipPath>
 <circle cx="512" cy="512" r="400" fill="#221d30"/>
 <g clip-path="url(#face)" stroke-linejoin="round" stroke-linecap="round">
-<circle cx="512" cy="512" r="400" fill="#221d30"/>
-<g stroke="#e01f2f" fill="none">
-<line x1="512" y1="512" x2="912" y2="512" stroke-width="9"/>
-<line x1="512" y1="512" x2="858" y2="712" stroke-width="9"/>
-<line x1="512" y1="512" x2="712" y2="858" stroke-width="9"/>
-<line x1="512" y1="512" x2="512" y2="912" stroke-width="9"/>
-<line x1="512" y1="512" x2="312" y2="858" stroke-width="9"/>
-<line x1="512" y1="512" x2="166" y2="712" stroke-width="9"/>
-<line x1="512" y1="512" x2="112" y2="512" stroke-width="9"/>
-<line x1="512" y1="512" x2="166" y2="312" stroke-width="9"/>
-<line x1="512" y1="512" x2="312" y2="166" stroke-width="9"/>
-<line x1="512" y1="512" x2="512" y2="112" stroke-width="9"/>
-<line x1="512" y1="512" x2="712" y2="166" stroke-width="9"/>
-<line x1="512" y1="512" x2="858" y2="312" stroke-width="9"/>
-<line x1="512" y1="512" x2="912" y2="512" stroke-width="9"/>
-<path d="M 632 512 Q 616 540 616 572" stroke-width="8"/>
-<path d="M 616 572 Q 588 588 572 616" stroke-width="8"/>
-<path d="M 572 616 Q 540 616 512 632" stroke-width="8"/>
-<path d="M 512 632 Q 484 616 452 616" stroke-width="8"/>
-<path d="M 452 616 Q 436 588 408 572" stroke-width="8"/>
-<path d="M 408 572 Q 408 540 392 512" stroke-width="8"/>
-<path d="M 392 512 Q 408 484 408 452" stroke-width="8"/>
-<path d="M 408 452 Q 436 436 452 408" stroke-width="8"/>
-<path d="M 452 408 Q 484 408 512 392" stroke-width="8"/>
-<path d="M 512 392 Q 540 408 572 408" stroke-width="8"/>
-<path d="M 572 408 Q 588 436 616 452" stroke-width="8"/>
-<path d="M 616 452 Q 616 484 632 512" stroke-width="8"/>
-<path d="M 752 512 Q 721 568 720 632" stroke-width="8"/>
-<path d="M 720 632 Q 665 665 632 720" stroke-width="8"/>
-<path d="M 632 720 Q 568 721 512 752" stroke-width="8"/>
-<path d="M 512 752 Q 456 721 392 720" stroke-width="8"/>
-<path d="M 392 720 Q 359 665 304 632" stroke-width="8"/>
-<path d="M 304 632 Q 303 568 272 512" stroke-width="8"/>
-<path d="M 272 512 Q 303 456 304 392" stroke-width="8"/>
-<path d="M 304 392 Q 359 359 392 304" stroke-width="8"/>
-<path d="M 392 304 Q 456 303 512 272" stroke-width="8"/>
-<path d="M 512 272 Q 568 303 632 304" stroke-width="8"/>
-<path d="M 632 304 Q 665 359 720 392" stroke-width="8"/>
-<path d="M 720 392 Q 721 456 752 512" stroke-width="8"/>
-<path d="M 872 512 Q 825 596 824 692" stroke-width="8"/>
-<path d="M 824 692 Q 741 741 692 824" stroke-width="8"/>
-<path d="M 692 824 Q 596 825 512 872" stroke-width="8"/>
-<path d="M 512 872 Q 428 825 332 824" stroke-width="8"/>
-<path d="M 332 824 Q 283 741 200 692" stroke-width="8"/>
-<path d="M 200 692 Q 199 596 152 512" stroke-width="8"/>
-<path d="M 152 512 Q 199 428 200 332" stroke-width="8"/>
-<path d="M 200 332 Q 283 283 332 200" stroke-width="8"/>
-<path d="M 332 200 Q 428 199 512 152" stroke-width="8"/>
-<path d="M 512 152 Q 596 199 692 200" stroke-width="8"/>
-<path d="M 692 200 Q 741 283 824 332" stroke-width="8"/>
-<path d="M 824 332 Q 825 428 872 512" stroke-width="8"/>
+<circle cx="512" cy="512" r="400" fill="#1e1a29"/>
+<g stroke="#c01a28" fill="none">
+<line x1="512" y1="512" x2="912" y2="512" stroke-width="6"/>
+<line x1="512" y1="512" x2="858" y2="712" stroke-width="6"/>
+<line x1="512" y1="512" x2="712" y2="858" stroke-width="6"/>
+<line x1="512" y1="512" x2="512" y2="912" stroke-width="6"/>
+<line x1="512" y1="512" x2="312" y2="858" stroke-width="6"/>
+<line x1="512" y1="512" x2="166" y2="712" stroke-width="6"/>
+<line x1="512" y1="512" x2="112" y2="512" stroke-width="6"/>
+<line x1="512" y1="512" x2="166" y2="312" stroke-width="6"/>
+<line x1="512" y1="512" x2="312" y2="166" stroke-width="6"/>
+<line x1="512" y1="512" x2="512" y2="112" stroke-width="6"/>
+<line x1="512" y1="512" x2="712" y2="166" stroke-width="6"/>
+<line x1="512" y1="512" x2="858" y2="312" stroke-width="6"/>
+<line x1="512" y1="512" x2="912" y2="512" stroke-width="6"/>
+<path d="M 642 512 Q 625 542 625 577" stroke-width="5"/>
+<path d="M 625 577 Q 595 595 577 625" stroke-width="5"/>
+<path d="M 577 625 Q 542 625 512 642" stroke-width="5"/>
+<path d="M 512 642 Q 482 625 447 625" stroke-width="5"/>
+<path d="M 447 625 Q 429 595 399 577" stroke-width="5"/>
+<path d="M 399 577 Q 399 542 382 512" stroke-width="5"/>
+<path d="M 382 512 Q 399 482 399 447" stroke-width="5"/>
+<path d="M 399 447 Q 429 429 447 399" stroke-width="5"/>
+<path d="M 447 399 Q 482 399 512 382" stroke-width="5"/>
+<path d="M 512 382 Q 542 399 577 399" stroke-width="5"/>
+<path d="M 577 399 Q 595 429 625 447" stroke-width="5"/>
+<path d="M 625 447 Q 625 482 642 512" stroke-width="5"/>
+<path d="M 772 512 Q 738 573 737 642" stroke-width="5"/>
+<path d="M 737 642 Q 677 677 642 737" stroke-width="5"/>
+<path d="M 642 737 Q 573 738 512 772" stroke-width="5"/>
+<path d="M 512 772 Q 451 738 382 737" stroke-width="5"/>
+<path d="M 382 737 Q 347 677 287 642" stroke-width="5"/>
+<path d="M 287 642 Q 286 573 252 512" stroke-width="5"/>
+<path d="M 252 512 Q 286 451 287 382" stroke-width="5"/>
+<path d="M 287 382 Q 347 347 382 287" stroke-width="5"/>
+<path d="M 382 287 Q 451 286 512 252" stroke-width="5"/>
+<path d="M 512 252 Q 573 286 642 287" stroke-width="5"/>
+<path d="M 642 287 Q 677 347 737 382" stroke-width="5"/>
+<path d="M 737 382 Q 738 451 772 512" stroke-width="5"/>
+<path d="M 897 512 Q 847 602 845 704" stroke-width="5"/>
+<path d="M 845 704 Q 757 757 704 845" stroke-width="5"/>
+<path d="M 704 845 Q 602 847 512 897" stroke-width="5"/>
+<path d="M 512 897 Q 422 847 320 845" stroke-width="5"/>
+<path d="M 320 845 Q 267 757 179 704" stroke-width="5"/>
+<path d="M 179 704 Q 177 602 127 512" stroke-width="5"/>
+<path d="M 127 512 Q 177 422 179 319" stroke-width="5"/>
+<path d="M 179 319 Q 267 267 319 179" stroke-width="5"/>
+<path d="M 319 179 Q 422 177 512 127" stroke-width="5"/>
+<path d="M 512 127 Q 602 177 704 179" stroke-width="5"/>
+<path d="M 704 179 Q 757 267 845 319" stroke-width="5"/>
+<path d="M 845 319 Q 847 422 897 512" stroke-width="5"/>
 </g>
-<g transform="translate(396,420) scale(1,1) rotate(-18)">
-<path d="M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 C 94 52, 76 178, 0 205 Z" fill="none" stroke="#e01f2f" stroke-width="68"/>
-<path d="M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 C 94 52, 76 178, 0 205 Z" fill="#f4f4f8" stroke="#17141f" stroke-width="26"/>
+<g transform="translate(348,430) scale(0.98,0.98) rotate(-10)">
+<path d="M 0 200 C -78 172, -96 50, -88 -2 C -80 -72, 80 -72, 88 -2 C 96 50, 78 172, 0 200 Z" fill="none" stroke="#c01a28" stroke-width="74"/>
+<path d="M 0 200 C -78 172, -96 50, -88 -2 C -80 -72, 80 -72, 88 -2 C 96 50, 78 172, 0 200 Z" fill="#f4f4f8" stroke="#17141f" stroke-width="30"/>
 </g>
-<g transform="translate(628,420) scale(-1,1) rotate(-18)">
-<path d="M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 C 94 52, 76 178, 0 205 Z" fill="none" stroke="#e01f2f" stroke-width="68"/>
-<path d="M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 C 94 52, 76 178, 0 205 Z" fill="#f4f4f8" stroke="#17141f" stroke-width="26"/>
+<g transform="translate(676,430) scale(-0.98,0.98) rotate(-10)">
+<path d="M 0 200 C -78 172, -96 50, -88 -2 C -80 -72, 80 -72, 88 -2 C 96 50, 78 172, 0 200 Z" fill="none" stroke="#c01a28" stroke-width="74"/>
+<path d="M 0 200 C -78 172, -96 50, -88 -2 C -80 -72, 80 -72, 88 -2 C 96 50, 78 172, 0 200 Z" fill="#f4f4f8" stroke="#17141f" stroke-width="30"/>
 </g>
 </g>
 <circle cx="512" cy="512" r="400" fill="none" stroke="#17141f" stroke-width="30"/>
