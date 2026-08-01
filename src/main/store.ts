@@ -655,7 +655,8 @@ export class DataStore {
       scope !== 'all' && sinceIso
         ? this.invDb
             .prepare(
-              `SELECT name, set_code, collector_number, SUM(quantity) AS qty
+              `SELECT name, set_code, collector_number, SUM(quantity) AS qty,
+                      MAX(scanned_at) AS imported_at
                FROM scan_log WHERE scanned_at >= ?
                GROUP BY name, set_code, collector_number
                ORDER BY name COLLATE NOCASE, set_code, collector_number`
@@ -663,19 +664,34 @@ export class DataStore {
             .all(sinceIso)
         : this.invDb
             .prepare(
-              `SELECT name, set_code, collector_number, SUM(quantity) AS qty
-               FROM inventory
-               GROUP BY name, set_code, collector_number
-               ORDER BY name COLLATE NOCASE, set_code, collector_number`
+              `SELECT i.name, i.set_code, i.collector_number, SUM(i.quantity) AS qty,
+                      COALESCE(
+                        (SELECT MAX(sl.scanned_at) FROM scan_log sl
+                         WHERE sl.name = i.name AND sl.set_code = i.set_code
+                           AND sl.collector_number = i.collector_number),
+                        MAX(i.updated_at)
+                      ) AS imported_at
+               FROM inventory i
+               GROUP BY i.name, i.set_code, i.collector_number
+               ORDER BY i.name COLLATE NOCASE, i.set_code, i.collector_number`
             )
             .all()
-    ) as { name: string; set_code: string; collector_number: string; qty: number }[]
+    ) as {
+      name: string
+      set_code: string
+      collector_number: string
+      qty: number
+      imported_at: string | null
+    }[]
 
     if (format === 'csv') {
       const esc = (s: string): string =>
         /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
       return rows
-        .map((r) => `${r.qty},${esc(r.name)},${r.set_code},${r.collector_number}`)
+        .map(
+          (r) =>
+            `${r.qty},${esc(r.name)},${r.set_code},${r.collector_number},${(r.imported_at ?? '').slice(0, 10)}`
+        )
         .join('\n')
     }
     return rows

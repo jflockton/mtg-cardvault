@@ -110,7 +110,10 @@ try {
 
   // Exports: CSV (qty,name,set,collector) and plain list (1 Name (SET) 123).
   const csv = store.exportText('csv', 'all')
-  assert(csv.split('\n').includes('2,The One Ring,ltr,246'), `unexpected CSV: ${csv}`)
+  assert(
+    csv.split('\n').some((l) => /^2,The One Ring,ltr,246,\d{4}-\d{2}-\d{2}$/.test(l)),
+    `unexpected CSV: ${csv}`
+  )
   const list = store.exportText('list', 'all')
   assert(list.split('\n').includes('2 The One Ring (LTR) 246'), `unexpected list: ${list}`)
   console.log(`export ok: "${csv.split('\n')[0]}" / "${list.split('\n')[0]}"`)
