@@ -182,22 +182,27 @@ def gwen_overlay():
             x = 230 + off + i * 90
             a.append(f'<path d="M {x} {y} A 45 45 0 0 0 {x + 90} {y}"/>')
     a.append('</g>')
+    # neck emerging from the suit below the chin
+    a.append(P('M 462 880 C 460 960, 456 1005, 448 1040 L 576 1040 '
+               'C 568 1005, 564 960, 562 880 Z', WHITE, 12))
     # white mask face: egg with a soft pointed chin
-    a.append(P('M 502 262 '
-               'C 382 292, 302 412, 294 552 '
-               'C 288 692, 352 852, 470 954 '
-               'Q 502 982, 534 954 '
-               'C 652 852, 716 692, 710 552 '
-               'C 702 412, 622 292, 502 262 Z', WHITE, 12))
+    a.append(P('M 512 264 '
+               'C 402 272, 328 362, 322 496 '
+               'C 318 606, 364 756, 468 878 '
+               'Q 512 912, 556 878 '
+               'C 660 756, 706 606, 702 496 '
+               'C 696 362, 622 272, 512 264 Z', WHITE, 12))
     # upswept eyes: pink-dominant rims over a thin ink edge
-    left = 'M 458 592 Q 322 596 290 424 Q 430 458 458 592 Z'
-    right = 'M 546 592 Q 682 596 714 424 Q 574 458 546 592 Z'
+    left = 'M 468 612 Q 348 614 330 440 Q 448 470 468 612 Z'
+    right = 'M 556 612 Q 676 614 694 440 Q 576 470 556 612 Z'
     for eye in (left, right):
         a.append(P(eye, 'none', 50, INK))
         a.append(P(eye, 'none', 34, pink))
         a.append(P(eye, WHITE))
+    # chin line where the jaw meets the neck
+    a.append(P('M 478 884 Q 512 906 546 884', 'none', 9))
     # pale nose shadow
-    a.append(P('M 492 688 Q 512 712 532 688 Q 512 700 492 688 Z', '#c8dcec'))
+    a.append(P('M 492 700 Q 512 724 532 700 Q 512 712 492 700 Z', '#c8dcec'))
     return a
 
 
