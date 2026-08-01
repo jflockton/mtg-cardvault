@@ -23,10 +23,10 @@ def pt(cx, cy, r, deg):
     return cx + r * math.cos(a), cy + r * math.sin(a)
 
 
-def web(cx, cy, angles, spoke_len, ring_radii, width, opacity=None):
+def web(cx, cy, angles, spoke_len, ring_radii, width, opacity=None, color=INK):
     parts = []
     op = f' opacity="{opacity}"' if opacity is not None else ''
-    parts.append(f'<g stroke="{INK}" fill="none"{op}>')
+    parts.append(f'<g stroke="{color}" fill="none"{op}>')
     for deg in angles:
         x, y = pt(cx, cy, spoke_len, deg)
         parts.append(f'<line x1="{cx:.0f}" y1="{cy:.0f}" x2="{x:.0f}" y2="{y:.0f}" stroke-width="{width}"/>')
@@ -255,7 +255,181 @@ def dd_overlay():
     ]
 
 
-OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay}
+
+# ---------------------------------------------------------------- Doc Ock
+def ock():
+    a = []
+    hair = '#4a3320'
+    # green jumpsuit shoulders
+    a.append(P('M 150 920 C 230 770, 350 710, 512 710 C 674 710, 794 770, 874 920 Z',
+               '#3e8f3a', 12))
+    # round face
+    a.append(E(512, 520, 235, 265, SKIN, 12))
+    # bowl cut
+    a.append(P('M 277 520 C 270 330, 380 240, 512 240 C 644 240, 754 330, 747 520 '
+               'C 740 430, 700 392, 660 392 L 364 392 C 324 392, 284 430, 277 520 Z', hair))
+    # goggles: joined round frames, amber lenses
+    a.append(P('M 462 470 L 562 470', 'none', 16))
+    a.append(E(408, 480, 78, 78, '#8d97a8', 12))
+    a.append(E(616, 480, 78, 78, '#8d97a8', 12))
+    a.append(E(408, 480, 52, 52, '#d9822b', 10))
+    a.append(E(616, 480, 52, 52, '#d9822b', 10))
+    # smug mouth + jaw
+    a.append(P('M 430 660 Q 512 640 594 660', 'none', 11))
+    a.append(P('M 452 720 Q 512 742 572 720', 'none', 8))
+    return a
+
+
+def ock_overlay():
+    steel = '#8d97a8'
+    parts = []
+    for sx in (1, -1):
+        m = (lambda x: x) if sx == 1 else (lambda x: 1024 - x)
+        parts.append(P(f'M {m(196)} 780 C {m(60)} 640, {m(52)} 420, {m(150)} 250 '
+                       f'C {m(162)} 226, {m(196)} 232, {m(196)} 262 '
+                       f'C {m(120)} 420, {m(128)} 610, {m(252)} 736 Z', steel, 11))
+        parts.append(E(m(172), 240, 40, 40, steel, 11))
+        parts.append(E(m(172), 240, 15, 15, '#d9822b', 8))
+    return parts
+
+
+# ---------------------------------------------------------------- Spider-Man Noir
+def noir():
+    a = []
+    coat = '#343845'
+    maskc = '#4a5162'
+    # trench collar
+    a.append(P('M 170 920 C 250 780, 360 730, 512 730 C 664 730, 774 780, 854 920 Z', coat, 12))
+    a.append(P('M 330 780 L 440 900 L 300 900 Z', '#20232b', 8))
+    a.append(P('M 694 780 L 584 900 L 724 900 Z', '#20232b', 8))
+    # mask head
+    a.append(f'<circle cx="512" cy="470" r="270" fill="{maskc}" stroke="{INK}" stroke-width="12"/>')
+    # stitched seam
+    a.append(P('M 512 210 L 512 330', 'none', 8))
+    # round goggles: pale rims, dark glass, white shine
+    a.append(E(410, 500, 84, 88, '#171a21', 16, '#7d8596'))
+    a.append(E(614, 500, 84, 88, '#171a21', 16, '#7d8596'))
+    a.append(P('M 366 468 Q 398 442 436 456', 'none', 11, WHITE))
+    a.append(P('M 570 468 Q 602 442 640 456', 'none', 11, WHITE))
+    return a
+
+
+def noir_overlay():
+    hat = '#20232b'
+    band = '#3a3f4a'
+    return [
+        # fedora: brim sweeping past the ring + dented crown
+        P('M 118 330 C 210 290, 814 290, 906 330 C 830 372, 194 372, 118 330 Z', hat, 12),
+        P('M 300 322 C 296 210, 360 130, 470 118 C 450 160, 460 200, 452 240 '
+          'C 500 150, 600 130, 700 160 C 736 200, 742 270, 730 322 Z', hat, 12),
+        P('M 306 300 C 450 268, 590 268, 724 300 L 724 322 L 306 322 Z', band, 8),
+    ]
+
+
+# ---------------------------------------------------------------- J. Jonah Jameson
+def jjj():
+    a = []
+    hair = '#26222e'
+    grey = '#b9bec9'
+    # shirt + tie
+    a.append(P('M 160 920 C 240 780, 360 724, 512 724 C 664 724, 784 780, 864 920 Z', WHITE, 12))
+    a.append(P('M 472 724 L 552 724 L 534 790 L 512 900 L 490 790 Z', '#8f1d2c', 9))
+    # boxy face
+    a.append(P('M 512 230 C 370 230, 300 330, 306 480 C 310 640, 380 730, 512 730 '
+               'C 644 730, 714 640, 718 480 C 724 330, 654 230, 512 230 Z', SKIN, 12))
+    # flat-top hair with grey temples
+    a.append(P('M 296 400 L 296 302 C 300 262, 340 240, 400 238 L 624 238 '
+               'C 684 240, 724 262, 728 302 L 728 400 C 700 330, 660 306, 620 306 '
+               'L 404 306 C 364 306, 324 330, 296 400 Z', hair))
+    a.append(P('M 296 400 L 296 330 C 316 322, 336 330, 344 356 C 330 372, 312 386, 296 400 Z', grey))
+    a.append(P('M 728 400 L 728 330 C 708 322, 688 330, 680 356 C 694 372, 712 386, 728 400 Z', grey))
+    # stern brows + narrow eyes
+    a.append(P('M 366 440 L 476 452 L 472 482 L 370 470 Z', INK))
+    a.append(P('M 658 440 L 548 452 L 552 482 L 654 470 Z', INK))
+    a.append(E(424, 500, 24, 13, WHITE, 8))
+    a.append(E(600, 500, 24, 13, WHITE, 8))
+    a.append(E(424, 500, 7, 7, INK))
+    a.append(E(600, 500, 7, 7, INK))
+    # nose + toothbrush moustache
+    a.append(P('M 512 490 Q 502 550 490 570 Q 512 582 536 570', 'none', 9))
+    a.append(f'<rect x="452" y="592" width="120" height="30" rx="10" fill="{hair}"/>')
+    # shouting mouth: open with a strip of teeth
+    a.append(P('M 430 650 C 470 636, 554 636, 594 650 C 586 706, 540 730, 512 730 '
+               'C 484 730, 438 706, 430 650 Z', '#42101b', 10))
+    a.append(P('M 442 652 C 480 644, 544 644, 582 652 L 578 672 C 540 664, 484 664, 446 672 Z',
+               WHITE, 6))
+    # cigar jutting from the corner
+    a.append(f'<rect x="580" y="676" width="150" height="40" rx="18" fill="#5c3a1e" stroke="{INK}" stroke-width="9" transform="rotate(-12 580 696)"/>')
+    a.append(E(736, 652, 12, 12, '#d9822b', 7))
+    return a
+
+
+# ---------------------------------------------------------------- Green Goblin
+def goblin():
+    a = []
+    gskin = '#46b25c'
+    purple = '#5b2d8c'
+    # green mask fills the circle
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{gskin}"/>')
+    # purple hood cap with zigzag edge
+    a.append(P('M 512 112 C 330 112, 230 240, 226 400 '
+               'L 306 356 L 366 420 L 442 352 L 512 424 L 582 352 L 658 420 L 718 356 L 798 400 '
+               'C 794 240, 694 112, 512 112 Z', purple, 12))
+    # crazed yellow eyes, slanted
+    a.append(P('M 320 500 C 360 440, 440 430, 480 470 C 486 510, 460 540, 410 546 '
+               'C 370 542, 336 526, 320 500 Z', '#f2d33c', 11))
+    a.append(P('M 704 500 C 664 440, 584 430, 544 470 C 538 510, 564 540, 614 546 '
+               'C 654 542, 688 526, 704 500 Z', '#f2d33c', 11))
+    a.append(E(444, 500, 12, 12, INK))
+    a.append(E(580, 500, 12, 12, INK))
+    # angry brow slashes over the eyes
+    a.append(P('M 316 452 L 478 492 L 470 524 L 320 478 Z', INK))
+    a.append(P('M 708 452 L 546 492 L 554 524 L 704 478 Z', INK))
+    # pointed nose
+    a.append(P('M 512 520 L 486 618 Q 512 636 538 618 Z', 'none', 9))
+    # sinister grin: corners hooked up, jagged teeth
+    a.append(P('M 316 654 C 350 700, 430 738, 512 738 C 594 738, 674 700, 708 654 '
+               'C 700 724, 640 790, 512 790 C 384 790, 324 724, 316 654 Z', '#1d4e2a', 11))
+    a.append(P('M 334 668 L 380 700 L 408 676 L 448 712 L 484 684 L 512 716 L 540 684 '
+               'L 576 712 L 616 676 L 644 700 L 690 668 L 686 690 C 630 744, 394 744, 338 690 Z',
+               WHITE, 6))
+    return a
+
+
+def goblin_overlay():
+    gskin = '#46b25c'
+    purple = '#5b2d8c'
+    return [
+        # pointed ears
+        P('M 210 430 C 130 380, 86 300, 92 210 C 170 250, 224 330, 244 414 Z', gskin, 12),
+        P('M 814 430 C 894 380, 938 300, 932 210 C 854 250, 800 330, 780 414 Z', gskin, 12),
+        # nightcap tail flopping off the hood
+        P('M 700 160 C 800 96, 900 100, 950 170 C 960 196, 940 216, 912 206 '
+          'C 860 180, 800 190, 742 232 Z', purple, 12),
+        f'<circle cx="936" cy="188" r="26" fill="{purple}" stroke="{INK}" stroke-width="10"/>',
+    ]
+
+
+# ---------------------------------------------------------------- Miles Morales
+def miles():
+    a = []
+    suit = '#221d30'
+    # black suit mask with red webbing
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{suit}"/>')
+    a += web(512, 512, list(range(0, 361, 30)), R, [120, 240, 360], 9, color=RED)
+    # house teardrop eyes with a red accent rim
+    for sx, x0 in ((1, 396), (-1, 628)):
+        a.append(f'<g transform="translate({x0},420) scale({sx},1) rotate(-18)">')
+        a.append(P('M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 '
+                   'C 94 52, 76 178, 0 205 Z', 'none', 68, RED))
+        a.append(P('M 0 205 C -76 178, -94 52, -86 0 C -78 -70, 78 -70, 86 0 '
+                   'C 94 52, 76 178, 0 205 Z', WHITE, 26))
+        a.append('</g>')
+    return a
+
+
+OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay,
+            'doc-ock': ock_overlay, 'noir': noir_overlay, 'goblin': goblin_overlay}
 
 CHARS = [
     ('venom',      '#6a2d9c', '#241e33', venom),
@@ -264,6 +438,11 @@ CHARS = [
     ('spider-ham', '#e2a41f', RED, ham),
     ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
     ('daredevil',  '#d2611f', '#3a3f4d', daredevil),
+    ('doc-ock',    '#5a9e21', SKIN, ock),
+    ('noir',       '#565d6d', '#2c2f38', noir),
+    ('jjj',        '#7a4a26', SKIN, jjj),
+    ('goblin',     '#2e9bc0', '#46b25c', goblin),
+    ('miles',      '#d8437a', '#221d30', miles),
 ]
 
 os.makedirs('faces', exist_ok=True)
