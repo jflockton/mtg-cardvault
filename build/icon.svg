@@ -1,84 +1,84 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-<defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186" ry="186"/></clipPath></defs>
+<defs><clipPath id="tile"><rect x="0" y="0" width="1024" height="1024"/></clipPath></defs>
 <g clip-path="url(#tile)">
-<g fill="#2b3ca8"><rect x="100" y="100" width="824" height="824" rx="186" ry="186"/></g>
+<g fill="#2b3ca8"><rect x="0" y="0" width="1024" height="1024"/></g>
 <g stroke="#17141f" fill="none" opacity="0.55">
-<line x1="86" y1="86" x2="986" y2="86" stroke-width="9"/>
-<line x1="86" y1="86" x2="955" y2="319" stroke-width="9"/>
-<line x1="86" y1="86" x2="865" y2="536" stroke-width="9"/>
-<line x1="86" y1="86" x2="722" y2="722" stroke-width="9"/>
-<line x1="86" y1="86" x2="536" y2="865" stroke-width="9"/>
-<line x1="86" y1="86" x2="319" y2="955" stroke-width="9"/>
-<line x1="86" y1="86" x2="86" y2="986" stroke-width="9"/>
-<path d="M 216 86 Q 202 101 212 120" stroke-width="8"/>
-<path d="M 212 120 Q 194 131 199 151" stroke-width="8"/>
-<path d="M 199 151 Q 179 157 178 178" stroke-width="8"/>
-<path d="M 178 178 Q 157 179 151 199" stroke-width="8"/>
-<path d="M 151 199 Q 131 194 120 212" stroke-width="8"/>
-<path d="M 120 212 Q 101 202 86 216" stroke-width="8"/>
-<path d="M 346 86 Q 318 117 337 153" stroke-width="8"/>
-<path d="M 337 153 Q 302 176 311 216" stroke-width="8"/>
-<path d="M 311 216 Q 272 228 270 270" stroke-width="8"/>
-<path d="M 270 270 Q 228 272 216 311" stroke-width="8"/>
-<path d="M 216 311 Q 176 302 153 337" stroke-width="8"/>
-<path d="M 153 337 Q 117 318 86 346" stroke-width="8"/>
-<path d="M 476 86 Q 434 132 463 187" stroke-width="8"/>
-<path d="M 463 187 Q 410 220 424 281" stroke-width="8"/>
-<path d="M 424 281 Q 364 300 362 362" stroke-width="8"/>
-<path d="M 362 362 Q 300 364 281 424" stroke-width="8"/>
-<path d="M 281 424 Q 220 410 187 463" stroke-width="8"/>
-<path d="M 187 463 Q 132 434 86 476" stroke-width="8"/>
-<path d="M 606 86 Q 550 147 588 221" stroke-width="8"/>
-<path d="M 588 221 Q 518 265 536 346" stroke-width="8"/>
-<path d="M 536 346 Q 457 371 454 454" stroke-width="8"/>
-<path d="M 454 454 Q 371 457 346 536" stroke-width="8"/>
-<path d="M 346 536 Q 265 518 221 588" stroke-width="8"/>
-<path d="M 221 588 Q 147 550 86 606" stroke-width="8"/>
-<path d="M 736 86 Q 666 162 714 254" stroke-width="8"/>
-<path d="M 714 254 Q 626 310 649 411" stroke-width="8"/>
-<path d="M 649 411 Q 550 442 546 546" stroke-width="8"/>
-<path d="M 546 546 Q 442 550 411 649" stroke-width="8"/>
-<path d="M 411 649 Q 310 626 254 714" stroke-width="8"/>
-<path d="M 254 714 Q 162 666 86 736" stroke-width="8"/>
+<line x1="-14" y1="-14" x2="886" y2="-14" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="855" y2="219" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="765" y2="436" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="622" y2="622" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="436" y2="765" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="219" y2="855" stroke-width="9"/>
+<line x1="-14" y1="-14" x2="-14" y2="886" stroke-width="9"/>
+<path d="M 116 -14 Q 102 1 112 20" stroke-width="8"/>
+<path d="M 112 20 Q 94 31 99 51" stroke-width="8"/>
+<path d="M 99 51 Q 79 57 78 78" stroke-width="8"/>
+<path d="M 78 78 Q 57 79 51 99" stroke-width="8"/>
+<path d="M 51 99 Q 31 94 20 112" stroke-width="8"/>
+<path d="M 20 112 Q 1 102 -14 116" stroke-width="8"/>
+<path d="M 246 -14 Q 218 17 237 53" stroke-width="8"/>
+<path d="M 237 53 Q 202 76 211 116" stroke-width="8"/>
+<path d="M 211 116 Q 172 128 170 170" stroke-width="8"/>
+<path d="M 170 170 Q 128 172 116 211" stroke-width="8"/>
+<path d="M 116 211 Q 76 202 53 237" stroke-width="8"/>
+<path d="M 53 237 Q 17 218 -14 246" stroke-width="8"/>
+<path d="M 376 -14 Q 334 32 363 87" stroke-width="8"/>
+<path d="M 363 87 Q 310 120 324 181" stroke-width="8"/>
+<path d="M 324 181 Q 264 200 262 262" stroke-width="8"/>
+<path d="M 262 262 Q 200 264 181 324" stroke-width="8"/>
+<path d="M 181 324 Q 120 310 87 363" stroke-width="8"/>
+<path d="M 87 363 Q 32 334 -14 376" stroke-width="8"/>
+<path d="M 506 -14 Q 450 47 488 121" stroke-width="8"/>
+<path d="M 488 121 Q 418 165 436 246" stroke-width="8"/>
+<path d="M 436 246 Q 357 271 354 354" stroke-width="8"/>
+<path d="M 354 354 Q 271 357 246 436" stroke-width="8"/>
+<path d="M 246 436 Q 165 418 121 488" stroke-width="8"/>
+<path d="M 121 488 Q 47 450 -14 506" stroke-width="8"/>
+<path d="M 636 -14 Q 566 62 614 154" stroke-width="8"/>
+<path d="M 614 154 Q 526 210 549 311" stroke-width="8"/>
+<path d="M 549 311 Q 450 342 446 446" stroke-width="8"/>
+<path d="M 446 446 Q 342 450 311 549" stroke-width="8"/>
+<path d="M 311 549 Q 210 526 154 614" stroke-width="8"/>
+<path d="M 154 614 Q 62 566 -14 636" stroke-width="8"/>
 </g>
 <g stroke="#17141f" fill="none" opacity="0.55">
-<line x1="938" y1="938" x2="38" y2="938" stroke-width="9"/>
-<line x1="938" y1="938" x2="69" y2="705" stroke-width="9"/>
-<line x1="938" y1="938" x2="159" y2="488" stroke-width="9"/>
-<line x1="938" y1="938" x2="302" y2="302" stroke-width="9"/>
-<line x1="938" y1="938" x2="488" y2="159" stroke-width="9"/>
-<line x1="938" y1="938" x2="705" y2="69" stroke-width="9"/>
-<line x1="938" y1="938" x2="938" y2="38" stroke-width="9"/>
-<path d="M 808 938 Q 822 923 812 904" stroke-width="8"/>
-<path d="M 812 904 Q 830 893 825 873" stroke-width="8"/>
-<path d="M 825 873 Q 845 867 846 846" stroke-width="8"/>
-<path d="M 846 846 Q 867 845 873 825" stroke-width="8"/>
-<path d="M 873 825 Q 893 830 904 812" stroke-width="8"/>
-<path d="M 904 812 Q 923 822 938 808" stroke-width="8"/>
-<path d="M 678 938 Q 706 907 687 871" stroke-width="8"/>
-<path d="M 687 871 Q 722 848 713 808" stroke-width="8"/>
-<path d="M 713 808 Q 752 796 754 754" stroke-width="8"/>
-<path d="M 754 754 Q 796 752 808 713" stroke-width="8"/>
-<path d="M 808 713 Q 848 722 871 687" stroke-width="8"/>
-<path d="M 871 687 Q 907 706 938 678" stroke-width="8"/>
-<path d="M 548 938 Q 590 892 561 837" stroke-width="8"/>
-<path d="M 561 837 Q 614 804 600 743" stroke-width="8"/>
-<path d="M 600 743 Q 660 724 662 662" stroke-width="8"/>
-<path d="M 662 662 Q 724 660 743 600" stroke-width="8"/>
-<path d="M 743 600 Q 804 614 837 561" stroke-width="8"/>
-<path d="M 837 561 Q 892 590 938 548" stroke-width="8"/>
-<path d="M 418 938 Q 474 877 436 803" stroke-width="8"/>
-<path d="M 436 803 Q 506 759 488 678" stroke-width="8"/>
-<path d="M 488 678 Q 567 653 570 570" stroke-width="8"/>
-<path d="M 570 570 Q 653 567 678 488" stroke-width="8"/>
-<path d="M 678 488 Q 759 506 803 436" stroke-width="8"/>
-<path d="M 803 436 Q 877 474 938 418" stroke-width="8"/>
-<path d="M 288 938 Q 358 862 310 770" stroke-width="8"/>
-<path d="M 310 770 Q 398 714 375 613" stroke-width="8"/>
-<path d="M 375 613 Q 474 582 478 478" stroke-width="8"/>
-<path d="M 478 478 Q 582 474 613 375" stroke-width="8"/>
-<path d="M 613 375 Q 714 398 770 310" stroke-width="8"/>
-<path d="M 770 310 Q 862 358 938 288" stroke-width="8"/>
+<line x1="1038" y1="1038" x2="138" y2="1038" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="169" y2="805" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="259" y2="588" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="402" y2="402" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="588" y2="259" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="805" y2="169" stroke-width="9"/>
+<line x1="1038" y1="1038" x2="1038" y2="138" stroke-width="9"/>
+<path d="M 908 1038 Q 922 1023 912 1004" stroke-width="8"/>
+<path d="M 912 1004 Q 930 993 925 973" stroke-width="8"/>
+<path d="M 925 973 Q 945 967 946 946" stroke-width="8"/>
+<path d="M 946 946 Q 967 945 973 925" stroke-width="8"/>
+<path d="M 973 925 Q 993 930 1004 912" stroke-width="8"/>
+<path d="M 1004 912 Q 1023 922 1038 908" stroke-width="8"/>
+<path d="M 778 1038 Q 806 1007 787 971" stroke-width="8"/>
+<path d="M 787 971 Q 822 948 813 908" stroke-width="8"/>
+<path d="M 813 908 Q 852 896 854 854" stroke-width="8"/>
+<path d="M 854 854 Q 896 852 908 813" stroke-width="8"/>
+<path d="M 908 813 Q 948 822 971 787" stroke-width="8"/>
+<path d="M 971 787 Q 1007 806 1038 778" stroke-width="8"/>
+<path d="M 648 1038 Q 690 992 661 937" stroke-width="8"/>
+<path d="M 661 937 Q 714 904 700 843" stroke-width="8"/>
+<path d="M 700 843 Q 760 824 762 762" stroke-width="8"/>
+<path d="M 762 762 Q 824 760 843 700" stroke-width="8"/>
+<path d="M 843 700 Q 904 714 937 661" stroke-width="8"/>
+<path d="M 937 661 Q 992 690 1038 648" stroke-width="8"/>
+<path d="M 518 1038 Q 574 977 536 903" stroke-width="8"/>
+<path d="M 536 903 Q 606 859 588 778" stroke-width="8"/>
+<path d="M 588 778 Q 667 753 670 670" stroke-width="8"/>
+<path d="M 670 670 Q 753 667 778 588" stroke-width="8"/>
+<path d="M 778 588 Q 859 606 903 536" stroke-width="8"/>
+<path d="M 903 536 Q 977 574 1038 518" stroke-width="8"/>
+<path d="M 388 1038 Q 458 962 410 870" stroke-width="8"/>
+<path d="M 410 870 Q 498 814 475 713" stroke-width="8"/>
+<path d="M 475 713 Q 574 682 578 578" stroke-width="8"/>
+<path d="M 578 578 Q 682 574 713 475" stroke-width="8"/>
+<path d="M 713 475 Q 814 498 870 410" stroke-width="8"/>
+<path d="M 870 410 Q 962 458 1038 388" stroke-width="8"/>
 </g>
 <circle cx="512" cy="520" r="330" fill="#e01f2f" stroke="#17141f" stroke-width="26"/>
 <clipPath id="face"><circle cx="512" cy="520" r="320"/></clipPath>
