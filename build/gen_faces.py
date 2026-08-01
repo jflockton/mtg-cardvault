@@ -261,31 +261,27 @@ def ock():
     a = []
     hair = '#3a2a18'
     steel = '#8d97a8'
-    # green jumpsuit with collar
-    a.append(P('M 150 920 C 230 770, 350 710, 512 710 C 674 710, 794 770, 874 920 Z',
-               '#3e8f3a', 12))
-    a.append(P('M 420 716 L 512 800 L 604 716', 'none', 10))
-    # round face
-    a.append(E(512, 520, 240, 270, SKIN, 12))
-    # full mushroom bowl cut, covering the ears
-    a.append(P('M 262 560 C 244 330, 368 226, 512 226 C 656 226, 780 330, 762 560 '
-               'C 742 470, 716 428, 700 420 C 706 470, 700 520, 688 552 '
-               'C 676 470, 656 420, 640 404 L 384 404 C 368 420, 348 470, 336 552 '
-               'C 324 520, 318 470, 324 420 C 308 428, 282 470, 262 560 Z', hair))
-    # fused goggle visor: bridge + arms
-    a.append(f'<rect x="472" y="470" width="80" height="26" rx="12" fill="{steel}" stroke="{INK}" stroke-width="8"/>')
-    a.append(P('M 306 478 L 262 456', 'none', 12))
-    a.append(P('M 718 478 L 762 456', 'none', 12))
+    # face fills the whole badge (circle fill is skin)
+    # big mushroom bowl cut spanning ring to ring
+    a.append(P('M 112 560 C 100 280, 280 96, 512 96 C 744 96, 924 280, 912 560 '
+               'C 884 440, 844 386, 812 370 C 822 440, 814 500, 798 545 '
+               'C 782 440, 754 380, 730 360 L 294 360 C 270 380, 242 440, 226 545 '
+               'C 210 500, 202 440, 212 370 C 180 386, 140 440, 112 560 Z', hair))
+    # fused goggle visor: bridge + arms into the hair
+    a.append(f'<rect x="464" y="524" width="96" height="30" rx="14" fill="{steel}" stroke="{INK}" stroke-width="9"/>')
+    a.append(P('M 254 540 L 176 500', 'none', 13))
+    a.append(P('M 770 540 L 848 500', 'none', 13))
     # big round lenses
-    a.append(E(404, 490, 96, 96, steel, 13))
-    a.append(E(620, 490, 96, 96, steel, 13))
-    a.append(E(404, 490, 64, 64, '#d9822b', 10))
-    a.append(E(620, 490, 64, 64, '#d9822b', 10))
-    a.append(P('M 368 452 Q 396 434 424 444', 'none', 9, WHITE))
-    a.append(P('M 584 452 Q 612 434 640 444', 'none', 9, WHITE))
-    # smug sneer
-    a.append(P('M 438 664 C 470 686, 560 684, 596 652', 'none', 11))
-    a.append(P('M 596 652 Q 612 660 610 676', 'none', 9))
+    a.append(E(376, 548, 118, 118, steel, 14))
+    a.append(E(648, 548, 118, 118, steel, 14))
+    a.append(E(376, 548, 80, 80, '#d9822b', 11))
+    a.append(E(648, 548, 80, 80, '#d9822b', 11))
+    a.append(P('M 330 500 Q 366 478 402 490', 'none', 10, WHITE))
+    a.append(P('M 602 500 Q 638 478 674 490', 'none', 10, WHITE))
+    # nose hint + smug sneer
+    a.append(P('M 512 660 Q 504 704 494 720', 'none', 9))
+    a.append(P('M 402 792 C 444 820, 556 818, 600 778', 'none', 12))
+    a.append(P('M 600 778 Q 620 788 618 808', 'none', 10))
     return a
 
 
