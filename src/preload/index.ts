@@ -3,6 +3,7 @@ import type {
   CardRef,
   CornerScanResult,
   Finish,
+  FxRate,
   InventoryItem,
   InventorySummary,
   LookupQuery,
@@ -58,6 +59,8 @@ export interface CardVaultApi {
   note: (text: string) => void
   /** Open the collection viewer page in the default browser. */
   openViewer: () => Promise<{ url: string }>
+  /** EUR→GBP at the ECB daily rate (null offline) — Cardmarket £ display. */
+  fxRate: () => Promise<FxRate>
 }
 
 const api: CardVaultApi = {
@@ -86,7 +89,8 @@ const api: CardVaultApi = {
   scanTitle: (imageVariants, pinnedSet) =>
     ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet }),
   note: (text) => ipcRenderer.send('scan:note', text),
-  openViewer: () => ipcRenderer.invoke('viewer:open')
+  openViewer: () => ipcRenderer.invoke('viewer:open'),
+  fxRate: () => ipcRenderer.invoke('fx:rate')
 }
 
 contextBridge.exposeInMainWorld('api', api)

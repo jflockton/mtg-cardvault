@@ -48,6 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_inv_name ON inventory (name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_inv_set ON inventory (set_code);
 
 -- One row per scan/add event: what came in, at what market price, when (UTC).
+-- price_eur is Cardmarket's price at scan time (via Scryfall bulk data).
 CREATE TABLE IF NOT EXISTS scan_log (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   scryfall_id      TEXT NOT NULL,
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS scan_log (
   finish           TEXT NOT NULL,
   quantity         INTEGER NOT NULL DEFAULT 1,
   price_usd        REAL,
+  price_eur        REAL,
   scanned_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_scanlog_stack ON scan_log (scryfall_id, finish, id);
@@ -83,6 +85,7 @@ interface InvRow {
   added_at: string
   updated_at: string
   last_price: number | null
+  last_price_eur: number | null
   last_scanned_at: string | null
 }
 
@@ -108,6 +111,7 @@ function editDistance(a: string, b: string, limit: number): number {
 function rowToItem(r: InvRow): InventoryItem {
   return {
     lastPrice: r.last_price ?? null,
+    lastPriceEur: r.last_price_eur ?? null,
     lastScannedAt: r.last_scanned_at ?? null,
     id: r.id,
     scryfallId: r.scryfall_id,
@@ -143,8 +147,29 @@ export class DataStore {
     this.invDb = new Database(this.inventoryDbPath)
     this.invDb.pragma('journal_mode = WAL')
     this.invDb.exec(INV_SCHEMA)
+    // Migration for inventories created before Cardmarket price capture.
+    const logCols = this.invDb.prepare('PRAGMA table_info(scan_log)').all() as { name: string }[]
+    const migratedEur = !logCols.some((c) => c.name === 'price_eur')
+    if (migratedEur) {
+      this.invDb.exec('ALTER TABLE scan_log ADD COLUMN price_eur REAL')
+    }
 
     this.openReferenceIfPresent()
+
+    // One-time backfill: stamp pre-migration scan events with today's
+    // Cardmarket price (approximate — the true scan-time price wasn't recorded).
+    if (migratedEur && this.refDb) {
+      const stale = this.invDb
+        .prepare('SELECT DISTINCT scryfall_id, finish FROM scan_log WHERE price_eur IS NULL')
+        .all() as { scryfall_id: string; finish: Finish }[]
+      const upd = this.invDb.prepare(
+        'UPDATE scan_log SET price_eur = ? WHERE scryfall_id = ? AND finish = ? AND price_eur IS NULL'
+      )
+      for (const r of stale) {
+        const p = this.stackPrice(r.scryfall_id, r.finish)
+        if (p.eur != null) upd.run(p.eur, r.scryfall_id, r.finish)
+      }
+    }
   }
 
   private openReferenceIfPresent(): void {
@@ -481,8 +506,8 @@ export class DataStore {
       this.invDb
         .prepare(
           `INSERT INTO scan_log
-             (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+             (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd, price_eur)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           card.scryfallId,
@@ -491,7 +516,8 @@ export class DataStore {
           card.collectorNumber,
           finish,
           quantity,
-          priceForFinish(card.pricesUsd, card.pricesUsdFoil, finish)
+          priceForFinish(card.pricesUsd, card.pricesUsdFoil, finish),
+          priceForFinish(card.pricesEur, card.pricesEurFoil, finish)
         )
     })
     doAdd()
@@ -555,8 +581,20 @@ export class DataStore {
     // newest matching log rows and re-price them for the new finish.
     this.openReferenceIfPresent()
     const ref = this.refDb
-      ?.prepare('SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?')
-      .get(scryfallId) as { prices_usd: number | null; prices_usd_foil: number | null } | undefined
+      ?.prepare(
+        `SELECT prices_usd, prices_usd_foil, prices_eur, prices_eur_foil
+         FROM scryfall_cards WHERE scryfall_id = ?`
+      )
+      .get(scryfallId) as
+      | {
+          prices_usd: number | null
+          prices_usd_foil: number | null
+          prices_eur: number | null
+          prices_eur_foil: number | null
+        }
+      | undefined
+    const usdFor = ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, to) : null
+    const eurFor = ref ? priceForFinish(ref.prices_eur, ref.prices_eur_foil, to) : null
     let remaining = moved
     while (remaining > 0) {
       const last = this.invDb
@@ -569,8 +607,8 @@ export class DataStore {
       const take = Math.min(last.quantity, remaining)
       if (take === last.quantity) {
         this.invDb
-          .prepare('UPDATE scan_log SET finish = ?, price_usd = ? WHERE id = ?')
-          .run(to, ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, to) : null, last.id)
+          .prepare('UPDATE scan_log SET finish = ?, price_usd = ?, price_eur = ? WHERE id = ?')
+          .run(to, usdFor, eurFor, last.id)
       } else {
         this.invDb
           .prepare('UPDATE scan_log SET quantity = quantity - ? WHERE id = ?')
@@ -578,11 +616,11 @@ export class DataStore {
         this.invDb
           .prepare(
             `INSERT INTO scan_log
-               (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd, scanned_at)
-             SELECT scryfall_id, name, set_code, collector_number, ?, ?, ?, scanned_at
+               (scryfall_id, name, set_code, collector_number, finish, quantity, price_usd, price_eur, scanned_at)
+             SELECT scryfall_id, name, set_code, collector_number, ?, ?, ?, ?, scanned_at
              FROM scan_log WHERE id = ?`
           )
-          .run(to, take, ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, to) : null, last.id)
+          .run(to, take, usdFor, eurFor, last.id)
       }
       remaining -= take
     }
@@ -699,35 +737,45 @@ export class DataStore {
       .join('\n')
   }
 
-  /** Total market value (USD) of every stack, at current reference prices. */
-  private collectionValue(): number {
+  /** Total market value (USD + Cardmarket EUR) at current reference prices. */
+  private collectionValue(): { usd: number; eur: number } {
     this.openReferenceIfPresent()
-    if (!this.refDb) return 0
-    const priceStmt = this.refDb.prepare(
-      'SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?'
-    )
+    if (!this.refDb) return { usd: 0, eur: 0 }
     const stacks = this.invDb
       .prepare('SELECT scryfall_id, finish, quantity FROM inventory')
       .all() as { scryfall_id: string; finish: Finish; quantity: number }[]
-    let total = 0
+    let usd = 0
+    let eur = 0
     for (const s of stacks) {
-      const ref = priceStmt.get(s.scryfall_id) as
-        | { prices_usd: number | null; prices_usd_foil: number | null }
-        | undefined
-      const price = ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, s.finish) : null
-      if (price != null) total += price * s.quantity
+      const p = this.stackPrice(s.scryfall_id, s.finish)
+      if (p.usd != null) usd += p.usd * s.quantity
+      if (p.eur != null) eur += p.eur * s.quantity
     }
-    return total
+    return { usd, eur }
   }
 
-  /** Current market price for one stack, from the reference DB. */
-  private stackPrice(scryfallId: string, finish: Finish): number | null {
+  /** Current market prices for one stack, from the reference DB. */
+  private stackPrice(scryfallId: string, finish: Finish): { usd: number | null; eur: number | null } {
     this.openReferenceIfPresent()
-    if (!this.refDb) return null
+    if (!this.refDb) return { usd: null, eur: null }
     const ref = this.refDb
-      .prepare('SELECT prices_usd, prices_usd_foil FROM scryfall_cards WHERE scryfall_id = ?')
-      .get(scryfallId) as { prices_usd: number | null; prices_usd_foil: number | null } | undefined
-    return ref ? priceForFinish(ref.prices_usd, ref.prices_usd_foil, finish) : null
+      .prepare(
+        `SELECT prices_usd, prices_usd_foil, prices_eur, prices_eur_foil
+         FROM scryfall_cards WHERE scryfall_id = ?`
+      )
+      .get(scryfallId) as
+      | {
+          prices_usd: number | null
+          prices_usd_foil: number | null
+          prices_eur: number | null
+          prices_eur_foil: number | null
+        }
+      | undefined
+    if (!ref) return { usd: null, eur: null }
+    return {
+      usd: priceForFinish(ref.prices_usd, ref.prices_usd_foil, finish),
+      eur: priceForFinish(ref.prices_eur, ref.prices_eur_foil, finish)
+    }
   }
 
   /**
@@ -746,6 +794,9 @@ export class DataStore {
                   (SELECT sl.price_usd FROM scan_log sl
                    WHERE sl.scryfall_id = i.scryfall_id AND sl.finish = i.finish
                    ORDER BY sl.id DESC LIMIT 1) AS last_price,
+                  (SELECT sl.price_eur FROM scan_log sl
+                   WHERE sl.scryfall_id = i.scryfall_id AND sl.finish = i.finish
+                   ORDER BY sl.id DESC LIMIT 1) AS last_price_eur,
                   (SELECT sl.scanned_at FROM scan_log sl
                    WHERE sl.scryfall_id = i.scryfall_id AND sl.finish = i.finish
                    ORDER BY sl.id DESC LIMIT 1) AS last_scanned_at
@@ -759,16 +810,19 @@ export class DataStore {
         .all(sinceIso, limit) as (InvRow & { session_qty: number })[]
       let totalCards = 0
       let totalValue = 0
+      let totalValueEur = 0
       for (const r of rows) {
         totalCards += r.session_qty
         const price = this.stackPrice(r.scryfall_id, r.finish)
-        if (price != null) totalValue += price * r.session_qty
+        if (price.usd != null) totalValue += price.usd * r.session_qty
+        if (price.eur != null) totalValueEur += price.eur * r.session_qty
       }
       return {
         items: rows.map((r) => rowToItem({ ...r, quantity: r.session_qty })),
         totalCards,
         distinctStacks: rows.length,
-        totalValue
+        totalValue,
+        totalValueEur
       }
     }
     return this.listAllInventory(limit)
@@ -782,6 +836,9 @@ export class DataStore {
                   (SELECT s.price_usd FROM scan_log s
                    WHERE s.scryfall_id = i.scryfall_id AND s.finish = i.finish
                    ORDER BY s.id DESC LIMIT 1) AS last_price,
+                  (SELECT s.price_eur FROM scan_log s
+                   WHERE s.scryfall_id = i.scryfall_id AND s.finish = i.finish
+                   ORDER BY s.id DESC LIMIT 1) AS last_price_eur,
                   (SELECT s.scanned_at FROM scan_log s
                    WHERE s.scryfall_id = i.scryfall_id AND s.finish = i.finish
                    ORDER BY s.id DESC LIMIT 1) AS last_scanned_at
@@ -792,11 +849,13 @@ export class DataStore {
     const totals = this.invDb
       .prepare('SELECT COALESCE(SUM(quantity), 0) AS total, COUNT(*) AS stacks FROM inventory')
       .get() as { total: number; stacks: number }
+    const value = this.collectionValue()
     return {
       items,
       totalCards: totals.total,
       distinctStacks: totals.stacks,
-      totalValue: this.collectionValue()
+      totalValue: value.usd,
+      totalValueEur: value.eur
     }
   }
 

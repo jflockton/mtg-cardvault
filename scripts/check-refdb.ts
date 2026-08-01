@@ -107,7 +107,16 @@ try {
   if (card.pricesUsd != null) {
     assert.equal(listed.lastPrice, card.pricesUsd, 'lastPrice should match scan-time price')
   }
-  console.log(`scan log ok: ${listed.lastScannedAt} @ ${listed.lastPrice ?? '—'} USD`)
+  if (card.pricesEur != null) {
+    assert.equal(
+      listed.lastPriceEur,
+      card.pricesEur,
+      'lastPriceEur should match scan-time Cardmarket price'
+    )
+  }
+  console.log(
+    `scan log ok: ${listed.lastScannedAt} @ ${listed.lastPrice ?? '—'} USD / €${listed.lastPriceEur ?? '—'} Cardmarket`
+  )
 
   // Exports: CSV (qty,name,set,collector) and plain list (1 Name (SET) 123).
   const csv = store.exportText('csv', 'all')

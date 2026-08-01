@@ -58,6 +58,8 @@ export interface InventoryItem {
   updatedAt: string
   /** Market price (USD) recorded by the most recent scan of this stack. */
   lastPrice: number | null
+  /** Cardmarket price (EUR) recorded by the most recent scan of this stack. */
+  lastPriceEur: number | null
   /** UTC timestamp of the most recent scan of this stack. */
   lastScannedAt: string | null
 }
@@ -69,6 +71,14 @@ export interface InventorySummary {
   distinctStacks: number
   /** total market value (USD) of every stack at current reference prices */
   totalValue: number
+  /** total Cardmarket value (EUR) of every stack at current reference prices */
+  totalValueEur: number
+}
+
+/** EUR→GBP conversion (ECB daily rate); null when offline with no cache. */
+export interface FxRate {
+  gbpPerEur: number | null
+  asOf: string | null
 }
 
 export interface LookupQuery {

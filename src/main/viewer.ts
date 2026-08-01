@@ -14,7 +14,7 @@ let baseUrl: string | null = null
 // and the page falls back to showing €.
 let fx: { rate: number; asOf: string; fetchedAt: number } | null = null
 
-async function gbpRate(): Promise<{ gbpPerEur: number | null; asOf: string | null }> {
+export async function gbpRate(): Promise<{ gbpPerEur: number | null; asOf: string | null }> {
   if (fx && Date.now() - fx.fetchedAt < 12 * 60 * 60 * 1000) {
     return { gbpPerEur: fx.rate, asOf: fx.asOf }
   }

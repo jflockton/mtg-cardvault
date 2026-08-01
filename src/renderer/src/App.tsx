@@ -24,6 +24,21 @@ type ScanState =
   | { status: 'done'; result: CornerScanResult }
   | { status: 'error'; message: string }
 
+// EUR→GBP (ECB daily) fetched once at startup; null → prices display as €.
+// Module-level so every component reads it without prop-drilling; the App
+// component re-renders everything once the rate arrives.
+let fxGbpPerEur: number | null = null
+
+/** Cardmarket price for display: £ at the ECB rate, € when offline. */
+function cardmarket(eur: number | null | undefined): string | null {
+  if (eur == null) return null
+  const [symbol, value] = fxGbpPerEur != null ? ['£', eur * fxGbpPerEur] : ['€', eur]
+  return `${symbol}${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`
+}
+
 function formatBytes(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`
@@ -131,7 +146,9 @@ function CardPreview({
   onAdd: () => void
   onCancel: () => void
 }): React.JSX.Element {
-  const price = finish === 'nonfoil' ? card.pricesUsd : card.pricesUsdFoil
+  const eur = finish === 'nonfoil' ? card.pricesEur : (card.pricesEurFoil ?? card.pricesEur)
+  const usd = finish === 'nonfoil' ? card.pricesUsd : (card.pricesUsdFoil ?? card.pricesUsd)
+  const price = cardmarket(eur)
   return (
     <div className="preview">
       {card.imageUri ? (
@@ -167,7 +184,12 @@ function CardPreview({
             />
           </label>
         </div>
-        {price != null && <p className="price">${price.toFixed(2)}</p>}
+        {(price != null || usd != null) && (
+          <p className="price">
+            {price ?? ''}
+            {usd != null && <span className="muted small"> {price ? '· ' : ''}${usd.toFixed(2)}</span>}
+          </p>
+        )}
         <div className="action-row">
           <button className="primary" onClick={onAdd}>
             Add to inventory (Enter)
@@ -553,6 +575,13 @@ export default function App(): React.JSX.Element {
     loadStatus()
     loadInventory()
     loadSets()
+    // Cardmarket £ display: grab the ECB rate, then re-render prices.
+    window.api.fxRate().then((r) => {
+      if (r.gbpPerEur != null) {
+        fxGbpPerEur = r.gbpPerEur
+        loadInventory()
+      }
+    })
   }, [loadStatus, loadInventory, loadSets])
 
   const resetForNext = useCallback(() => {
@@ -1224,12 +1253,13 @@ export default function App(): React.JSX.Element {
             <p className="muted">
               {inventory.totalCards.toLocaleString()} cards ·{' '}
               {inventory.distinctStacks.toLocaleString()} stacks ·{' '}
-              <span className="collection-value">
-                ${inventory.totalValue.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
-              </span>
+              <span className="collection-value" title="Cardmarket value (ECB rate) · USD value">
+                {cardmarket(inventory.totalValueEur) ?? '—'}
+              </span>{' '}
+              · ${inventory.totalValue.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}
             </p>
           )}
           <select
@@ -1306,7 +1336,10 @@ export default function App(): React.JSX.Element {
                     </select>
                   </td>
                   <td>{item.rarity}</td>
-                  <td>{item.lastPrice != null ? `$${item.lastPrice.toFixed(2)}` : '—'}</td>
+                  <td>
+                    {cardmarket(item.lastPriceEur) ??
+                      (item.lastPrice != null ? `$${item.lastPrice.toFixed(2)}` : '—')}
+                  </td>
                   <td className="muted small">
                     {item.lastScannedAt
                       ? item.lastScannedAt.replace('T', ' ').replace('Z', '')

@@ -7,7 +7,7 @@ import { DataStore } from './store'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
-import { openInventoryViewer, closeInventoryViewer } from './viewer'
+import { openInventoryViewer, closeInventoryViewer, gbpRate } from './viewer'
 import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
 
 /** Tesseract traineddata: repo-local in dev, resources/tessdata when packaged. */
@@ -179,6 +179,9 @@ function registerIpc(): void {
       return { lines: text ? text.split('\n').length : 0 }
     }
   )
+
+  // EUR→GBP at the ECB daily rate, for showing Cardmarket prices in pounds.
+  ipcMain.handle('fx:rate', () => gbpRate())
 
   // "Show Inventory": loopback-only web viewer opened in the default browser.
   ipcMain.handle('viewer:open', async () => {
