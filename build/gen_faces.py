@@ -151,8 +151,7 @@ def gwen_overlay():
     pink = '#e83a8c'
     cyan = '#3fb9e6'
     a = []
-    # hood: apex left of centre, right side bulging wider, running off the
-    # bottom of the frame — the reference silhouette
+    # hood outer silhouette
     a.append(P('M 470 30 '
                'C 434 58, 342 128, 264 236 '
                'C 172 372, 112 540, 98 700 '
@@ -161,48 +160,50 @@ def gwen_overlay():
                'C 962 920, 972 800, 956 660 '
                'C 934 470, 848 244, 700 122 '
                'C 628 62, 528 32, 470 30 Z', WHITE, 26))
-    # shoulder seams: subtle single arcs at the bottom
-    a.append(P('M 70 1012 Q 230 930 400 964', 'none', 12))
-    a.append(P('M 954 1012 Q 794 934 630 966', 'none', 12))
-    # hood opening: pointed arch, pink lining with cyan scallops
-    lining = ('M 490 208 C 410 268, 328 392, 296 532 '
-              'C 276 624, 274 734, 292 844 '
-              'C 328 966, 408 1026, 512 1034 '
-              'C 616 1026, 696 966, 732 844 '
-              'C 750 734, 748 624, 728 532 '
-              'C 696 392, 614 268, 534 208 '
-              'C 518 198, 504 198, 490 208 Z')
+    # hood opening arch, filled by the pink interior lining
+    lining = ('M 512 216 '
+              'C 428 250, 344 340, 300 470 '
+              'C 272 580, 268 700, 288 830 '
+              'C 306 908, 336 962, 372 1002 '
+              'L 652 1002 '
+              'C 688 962, 718 908, 736 830 '
+              'C 756 700, 752 580, 724 470 '
+              'C 680 340, 596 250, 512 216 Z')
     a.append(P(lining, pink, 14))
     a.append(f'<clipPath id="lin"><path d="{lining}"/></clipPath>')
     a.append(f'<g clip-path="url(#lin)" stroke="{cyan}" stroke-width="7" fill="none">')
     for row in range(13):
-        y = 220 + row * 68
-        off = 0 if row % 2 == 0 else 45
-        for i in range(9):
-            x = 230 + off + i * 90
-            a.append(f'<path d="M {x} {y} A 45 45 0 0 0 {x + 90} {y}"/>')
+        y = 230 + row * 66
+        off = 0 if row % 2 == 0 else 44
+        for i in range(10):
+            x = 240 + off + i * 88
+            a.append(f'<path d="M {x} {y} A 44 44 0 0 0 {x + 88} {y}"/>')
     a.append('</g>')
-    # neck emerging from the suit below the chin
-    a.append(P('M 462 880 C 460 960, 456 1005, 448 1040 L 576 1040 '
-               'C 568 1005, 564 960, 562 880 Z', WHITE, 12))
-    # white mask face: egg with a soft pointed chin
-    a.append(P('M 512 264 '
-               'C 402 272, 328 362, 322 496 '
-               'C 318 606, 364 756, 468 878 '
-               'Q 512 912, 556 878 '
-               'C 660 756, 706 606, 702 496 '
-               'C 696 362, 622 272, 512 264 Z', WHITE, 12))
-    # upswept eyes: pink-dominant rims over a thin ink edge
-    left = 'M 468 612 Q 348 614 330 440 Q 448 470 468 612 Z'
-    right = 'M 556 612 Q 676 614 694 440 Q 576 470 556 612 Z'
+    # chest and shoulders cutting across the bottom
+    a.append(P('M 150 1040 C 250 924, 400 884, 512 884 '
+               'C 624 884, 774 924, 874 1040 Z', WHITE, 12))
+    # neck between chin and chest
+    a.append(P('M 464 806 C 460 870, 452 924, 440 976 '
+               'C 486 996, 540 996, 586 976 '
+               'C 574 924, 566 870, 562 806 Z', WHITE, 12))
+    # human head at reference proportions: wide cranium, temples,
+    # cheeks tapering to a soft chin — nearly half the frame wide
+    a.append(P('M 512 276 '
+               'C 400 278, 310 350, 292 470 '
+               'C 276 580, 300 680, 356 760 '
+               'C 400 818, 460 838, 512 840 '
+               'C 564 838, 624 818, 668 760 '
+               'C 724 680, 748 580, 732 470 '
+               'C 714 350, 624 278, 512 276 Z', WHITE, 12))
+    # eyes spanning the face, rims overlapping onto the lining
+    left = 'M 478 566 Q 318 574 240 410 Q 420 446 478 566 Z'
+    right = 'M 546 566 Q 706 574 784 410 Q 604 446 546 566 Z'
     for eye in (left, right):
-        a.append(P(eye, 'none', 50, INK))
-        a.append(P(eye, 'none', 34, pink))
+        a.append(P(eye, 'none', 46, INK))
+        a.append(P(eye, 'none', 32, pink))
         a.append(P(eye, WHITE))
-    # chin line where the jaw meets the neck
-    a.append(P('M 478 884 Q 512 906 546 884', 'none', 9))
     # pale nose shadow
-    a.append(P('M 492 700 Q 512 724 532 700 Q 512 712 492 700 Z', '#c8dcec'))
+    a.append(P('M 493 655 Q 512 678 531 655 Q 512 665 493 655 Z', '#c8dcec'))
     return a
 
 
