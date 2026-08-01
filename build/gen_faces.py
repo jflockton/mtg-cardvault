@@ -151,14 +151,14 @@ def gwen_overlay():
     pink = '#e83a8c'
     cyan = '#3fb9e6'
     a = []
-    hood = ('M 470 30 '
-            'C 434 58, 342 128, 264 236 '
-            'C 172 372, 112 540, 98 700 '
-            'C 90 820, 100 940, 122 1040 '
+    hood = ('M 470 148 '
+            'C 430 168, 340 224, 262 312 '
+            'C 172 422, 112 560, 98 706 '
+            'C 90 822, 100 940, 122 1040 '
             'L 936 1040 '
-            'C 962 920, 972 800, 956 660 '
-            'C 934 470, 848 244, 700 122 '
-            'C 628 62, 528 32, 470 30 Z')
+            'C 962 920, 972 800, 956 664 '
+            'C 934 480, 848 302, 700 212 '
+            'C 628 158, 528 150, 470 148 Z')
     a.append(P(hood, WHITE, 26))
     # opening: top edge crosses the forehead (hood covers the crown);
     # pink lining shows beside the face only
@@ -179,12 +179,13 @@ def gwen_overlay():
             x = 250 + off + i * 88
             a.append(f'<path d="M {x} {y} A 44 44 0 0 0 {x + 88} {y}"/>')
     a.append('</g>')
-    # chest and neck
-    a.append(P('M 150 1040 C 250 924, 400 884, 512 884 '
-               'C 624 884, 774 924, 874 1040 Z', WHITE, 12))
-    a.append(P('M 464 806 C 460 870, 452 924, 440 976 '
-               'C 486 996, 540 996, 586 976 '
-               'C 574 924, 566 870, 562 806 Z', WHITE, 12))
+    # neck flowing into the shoulders as one shape
+    a.append(P('M 150 1040 '
+               'C 250 924, 380 894, 446 886 '
+               'C 458 862, 462 830, 464 800 '
+               'L 562 800 '
+               'C 564 830, 568 862, 580 886 '
+               'C 646 894, 774 924, 874 1040 Z', WHITE, 12))
     # human head (crown tucks under the hood edge)
     a.append(P('M 512 276 '
                'C 400 278, 310 350, 292 470 '
