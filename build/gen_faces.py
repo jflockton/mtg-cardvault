@@ -133,55 +133,58 @@ def doom():
 def venom():
     a = []
     maw = '#42101b'
-    tongue = '#c2264a'
     # symbiote head fills the circle
-    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="#241e33"/>')
-    # huge slanted eyes: rounded at the outer edge, sharp point at the nose
-    a.append(P('M 456 528 C 340 560, 218 528, 176 450 '
-               'C 148 376, 190 296, 284 276 '
-               'C 386 258, 452 338, 456 528 Z', WHITE, 15))
-    a.append(P('M 568 528 C 684 560, 806 528, 848 450 '
-               'C 876 376, 834 296, 740 276 '
-               'C 638 258, 572 338, 568 528 Z', WHITE, 15))
-    # grinning maw
-    a.append(P('M 232 640 C 340 596, 684 596, 792 640 C 750 780, 640 856, 512 856 '
-               'C 384 856, 274 780, 232 640 Z', maw, 14))
-    # tongue lolling along the lower jaw
-    a.append(P('M 400 820 C 450 780, 574 780, 624 820 C 590 852, 434 852, 400 820 Z',
-               tongue, 9))
-    # top row of fangs hanging from the upper lip
-    for i in range(9):
-        x0 = 268 + i * 56
-        a.append(P(f'M {x0} {622 + (i%2)*4} L {x0+28} {706 + (i%2)*10} L {x0+56} {620 + (i%2)*4} Z',
-                   WHITE, 7))
-    # bottom row of fangs rising from the jaw
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="#2b2438"/>')
+    # big angular eyes with the notched inner edge
+    a.append(P('M 464 268 C 372 240, 264 262, 196 340 '
+               'C 216 428, 272 496, 352 528 '
+               'C 376 492, 404 476, 428 482 '
+               'L 400 428 L 452 416 '
+               'C 436 366, 442 314, 464 268 Z', WHITE, 14))
+    a.append(P('M 560 268 C 652 240, 760 262, 828 340 '
+               'C 808 428, 752 496, 672 528 '
+               'C 648 492, 620 476, 596 482 '
+               'L 624 428 L 572 416 '
+               'C 588 366, 582 314, 560 268 Z', WHITE, 14))
+    # huge grinning maw
+    a.append(P('M 210 618 C 330 556, 694 556, 814 618 '
+               'C 772 792, 652 884, 512 884 C 372 884, 252 792, 210 618 Z', maw, 14))
+    # big triangular teeth: top row hanging, bottom row rising
     for i in range(7):
-        x0 = 330 + i * 52
-        a.append(P(f'M {x0} {836 - (i%2)*4} L {x0+26} {762 - (i%2)*8} L {x0+52} {838 - (i%2)*4} Z',
-                   WHITE, 7))
+        x0 = 246 + i * 76
+        a.append(P(f'M {x0} {600 + (i%2)*6} L {x0+38} {712 + (i%2)*8} L {x0+76} {598 + (i%2)*6} Z',
+                   WHITE, 8))
+    for i in range(5):
+        x0 = 322 + i * 76
+        a.append(P(f'M {x0} {868 - (i%2)*4} L {x0+38} {780 - (i%2)*8} L {x0+76} {870 - (i%2)*4} Z',
+                   WHITE, 8))
     return a
+
+
+def venom_overlay():
+    # tongue lolling out of the maw, hanging past the badge ring
+    return [
+        P('M 428 802 C 414 900, 462 994, 560 1022 '
+          'C 644 1042, 696 992, 678 928 '
+          'C 664 876, 634 840, 592 820 Z', '#d3557a', 12),
+        P('M 520 856 C 560 906, 596 952, 646 972', 'none', 9),
+    ]
 
 
 # ---------------------------------------------------------------- Spider-Gwen
 def gwen():
-    return []
-
-
-def gwen_overlay():
     pink = '#e83a8c'
     cyan = '#3fb9e6'
-    a = []
+    a = ['<g transform="translate(66.6,56.3) scale(0.87)">']
     hood = ('M 470 148 '
             'C 430 168, 340 224, 262 312 '
             'C 172 422, 112 560, 98 706 '
-            'C 90 822, 100 940, 122 1040 '
-            'L 936 1040 '
+            'C 90 822, 100 940, 122 1060 '
+            'L 936 1060 '
             'C 962 920, 972 800, 956 664 '
             'C 934 480, 848 302, 700 212 '
             'C 628 158, 528 150, 470 148 Z')
     a.append(P(hood, WHITE, 26))
-    # opening: top edge crosses the forehead (hood covers the crown);
-    # pink lining shows beside the face only
     edge_top = ('M 302 430 C 350 350, 430 315, 512 310 C 594 315, 674 350, 722 430')
     opening = (edge_top +
                ' C 740 560, 738 700, 724 830 '
@@ -199,14 +202,12 @@ def gwen_overlay():
             x = 250 + off + i * 88
             a.append(f'<path d="M {x} {y} A 44 44 0 0 0 {x + 88} {y}"/>')
     a.append('</g>')
-    # neck flowing into the shoulders as one shape
-    a.append(P('M 150 1040 '
+    a.append(P('M 150 1060 '
                'C 250 924, 380 894, 446 886 '
                'C 458 862, 462 830, 464 800 '
                'L 562 800 '
                'C 564 830, 568 862, 580 886 '
-               'C 646 894, 774 924, 874 1040 Z', WHITE, 12))
-    # human head (crown tucks under the hood edge)
+               'C 646 894, 774 924, 874 1060 Z', WHITE, 12))
     a.append(P('M 512 276 '
                'C 400 278, 310 350, 292 470 '
                'C 276 580, 300 680, 356 760 '
@@ -214,22 +215,20 @@ def gwen_overlay():
                'C 564 838, 624 818, 668 760 '
                'C 724 680, 748 580, 732 470 '
                'C 714 350, 624 278, 512 276 Z', WHITE, 12))
-    # upswept eyes, fully inside the face
     left = 'M 478 575 Q 344 582 330 445 Q 432 464 478 575 Z'
     right = 'M 546 575 Q 680 582 694 445 Q 592 464 546 575 Z'
     for eye in (left, right):
         a.append(P(eye, 'none', 44, INK))
         a.append(P(eye, 'none', 30, pink))
         a.append(P(eye, WHITE))
-    # pale nose shadow
     a.append(P('M 493 660 Q 512 682 531 660 Q 512 670 493 660 Z', '#c8dcec'))
-    # hood front covers everything above the opening edge
     a.append(f'<clipPath id="hoodclip"><path d="{hood}"/></clipPath>')
     a.append(f'<g clip-path="url(#hoodclip)">')
     a.append(P(edge_top + ' L 980 430 L 980 10 L 44 10 L 44 430 Z', WHITE))
     a.append('</g>')
     a.append(P(edge_top, 'none', 14))
     a.append(P(hood, 'none', 26))
+    a.append('</g>')
     return a
 
 
@@ -261,32 +260,34 @@ def fisk():
     a = []
     suit = '#f4f4f8'
     cravat = '#7a4ea8'
-    # white suit shoulders
-    a.append(P('M 150 920 C 220 760, 340 700, 512 700 C 684 700, 804 760, 874 920 Z', suit, 12))
-    # cravat
-    a.append(P('M 430 700 C 460 760, 564 760, 594 700 L 594 860 C 540 900, 484 900, 430 860 Z',
-               cravat, 10))
-    a.append(E(512, 790, 14, 14, GOLD, 6))
-    # massive bald head
-    a.append(P('M 512 190 C 350 190, 290 320, 300 480 C 306 620, 360 730, 512 730 '
-               'C 664 730, 718 620, 724 480 C 734 320, 674 190, 512 190 Z', SKIN, 12))
-    # tiny ears
-    a.append(E(296, 500, 26, 42, SKIN, 10))
-    a.append(E(728, 500, 26, 42, SKIN, 10))
+    # massive bald head fills the badge
+    a.append(P('M 512 128 C 330 128, 218 262, 224 452 '
+               'C 228 624, 300 764, 512 786 '
+               'C 724 764, 796 624, 800 452 '
+               'C 806 262, 694 128, 512 128 Z', SKIN, 12))
+    # ears at the ring edges
+    a.append(E(196, 480, 34, 58, SKIN, 10))
+    a.append(E(828, 480, 34, 58, SKIN, 10))
     # heavy scowl brows
-    a.append(P('M 360 452 L 480 470 L 476 500 L 364 484 Z', INK))
-    a.append(P('M 664 452 L 544 470 L 548 500 L 660 484 Z', INK))
+    a.append(P('M 296 420 L 470 448 L 464 494 L 302 470 Z', INK))
+    a.append(P('M 728 420 L 554 448 L 560 494 L 722 470 Z', INK))
     # small hard eyes
-    a.append(E(430, 512, 26, 15, WHITE, 8))
-    a.append(E(594, 512, 26, 15, WHITE, 8))
-    a.append(E(430, 512, 8, 8, INK))
-    a.append(E(594, 512, 8, 8, INK))
+    a.append(E(392, 528, 38, 21, WHITE, 9))
+    a.append(E(632, 528, 38, 21, WHITE, 9))
+    a.append(E(392, 528, 11, 11, INK))
+    a.append(E(632, 528, 11, 11, INK))
     # broad nose + deep frown
-    a.append(P('M 512 500 Q 500 570 482 592 Q 512 606 542 592', 'none', 9))
-    a.append(P('M 430 668 Q 512 630 594 668', 'none', 12))
-    # jaw crease
-    a.append(P('M 372 600 Q 380 660 420 700', 'none', 7))
-    a.append(P('M 652 600 Q 644 660 604 700', 'none', 7))
+    a.append(P('M 512 510 Q 494 606 468 642 Q 512 664 560 642', 'none', 11))
+    a.append(P('M 398 726 Q 512 672 626 726', 'none', 14))
+    # jaw creases
+    a.append(P('M 318 606 Q 330 690 386 742', 'none', 8))
+    a.append(P('M 706 606 Q 694 690 638 742', 'none', 8))
+    # white suit shoulders + cravat with pin
+    a.append(P('M 160 1000 C 268 828, 386 782, 512 782 '
+               'C 638 782, 756 828, 864 1000 Z', suit, 12))
+    a.append(P('M 436 790 C 464 848, 560 848, 588 790 L 588 940 '
+               'C 536 976, 488 976, 436 940 Z', cravat, 10))
+    a.append(E(512, 884, 15, 15, GOLD, 6))
     return a
 
 
@@ -363,35 +364,6 @@ def ock():
                '#3e8f3a', 12))
     a.append(P('M 452 848 L 512 908 L 572 848', 'none', 10))
     return a
-
-
-def ock_overlay():
-    steel = '#8d97a8'
-    parts = []
-    def claw(cx, cy, ang):
-        import math as m
-        out = [f'<circle cx="{cx}" cy="{cy}" r="34" fill="{steel}" stroke="{INK}" stroke-width="10"/>']
-        for d in (-52, 0, 52):
-            t = m.radians(ang + d)
-            x2, y2 = cx + 58 * m.cos(t), cy + 58 * m.sin(t)
-            x1, y1 = cx + 20 * m.cos(m.radians(ang + d - 26)), cy + 20 * m.sin(m.radians(ang + d - 26))
-            x3, y3 = cx + 20 * m.cos(m.radians(ang + d + 26)), cy + 20 * m.sin(m.radians(ang + d + 26))
-            out.append(P(f'M {x1:.0f} {y1:.0f} L {x2:.0f} {y2:.0f} L {x3:.0f} {y3:.0f} Z', steel, 9))
-        out.append(f'<circle cx="{cx}" cy="{cy}" r="12" fill="#d9822b" stroke="{INK}" stroke-width="7"/>')
-        return out
-    for sx in (1, -1):
-        m_ = (lambda x: x) if sx == 1 else (lambda x: 1024 - x)
-        # tall tentacle arcing over the shoulder to the upper corner
-        parts.append(P(f'M {m_(230)} 840 C {m_(70)} 700, {m_(60)} 430, {m_(140)} 230 '
-                       f'C {m_(150)} 206, {m_(184)} 210, {m_(186)} 240 '
-                       f'C {m_(122)} 430, {m_(140)} 640, {m_(282)} 780 Z', '#8d97a8', 11))
-        # lower tentacle: rooted behind the shoulder, reaching down and out
-        parts.append(P(f'M {m_(258)} 806 C {m_(180)} 828, {m_(118)} 866, {m_(86)} 918 '
-                       f'C {m_(72)} 944, {m_(98)} 968, {m_(122)} 950 '
-                       f'C {m_(154)} 912, {m_(210)} 878, {m_(272)} 860 Z', '#8d97a8', 11))
-        parts += claw(m_(162), 210, -95 if sx == 1 else -85)
-        parts += claw(m_(98), 936, 142 if sx == 1 else 38)
-    return parts
 
 
 # ---------------------------------------------------------------- Spider-Man Noir
@@ -492,13 +464,13 @@ def miles():
     return a
 
 
-OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay, 'spider-gwen': gwen_overlay,
-            'doc-ock': ock_overlay, 'noir': noir_overlay, 'goblin': goblin_overlay}
+OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay, 'venom': venom_overlay, 
+            'noir': noir_overlay, 'goblin': goblin_overlay}
 
 CHARS = [
     ('venom',      '#6a2d9c', '#241e33', venom),
     ('doom',       '#16697a', '#4fae4a', doom),
-    ('spider-gwen','#a1237a', WHITE, gwen),
+    ('spider-gwen','#a1237a', '#701850', gwen),
     ('spider-ham', '#e2a41f', RED, ham),
     ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
     ('daredevil',  '#d2611f', '#3a3f4d', daredevil),
@@ -511,7 +483,7 @@ CHARS = [
 os.makedirs('faces', exist_ok=True)
 for name, bg, fill, fn in CHARS:
     ov = OVERLAYS.get(name)
-    svg = scaffold(bg, fill, fn(), ov() if ov else None, badge=(name != 'spider-gwen'))
+    svg = scaffold(bg, fill, fn(), ov() if ov else None, badge=True)
     with open(f'faces/{name}.svg', 'w') as f:
         f.write(svg + '\n')
     print('wrote', name)
