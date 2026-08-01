@@ -230,13 +230,22 @@ def daredevil():
     dd_dark = '#8f1220'
     # red cowl fills the circle
     a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{dd}"/>')
-    # eye lenses: blank angular dark red
-    a.append(P('M 330 470 Q 400 420 480 462 Q 478 530 400 534 Q 344 528 330 470 Z', dd_dark, 12))
-    a.append(P('M 694 470 Q 624 420 544 462 Q 546 530 624 534 Q 680 528 694 470 Z', dd_dark, 12))
+    # angry mask brows angling down toward the nose
+    a.append(P('M 308 424 L 488 466', 'none', 18, dd_dark))
+    a.append(P('M 716 424 L 536 466', 'none', 18, dd_dark))
+    # sharp angry eyes: ink almonds with white pupil glints
+    a.append(P('M 326 464 C 356 440, 420 438, 474 474 '
+               'C 482 508, 458 534, 412 536 C 368 532, 336 502, 326 464 Z', INK))
+    a.append(P('M 698 464 C 668 440, 604 438, 550 474 '
+               'C 542 508, 566 534, 612 536 C 656 532, 688 502, 698 464 Z', INK))
+    a.append(E(438, 498, 13, 13, WHITE))
+    a.append(E(586, 498, 13, 13, WHITE))
     # exposed jaw: wide skin band across the bottom of the circle
     a.append(P('M 340 700 C 400 660, 624 660, 684 700 L 684 940 L 340 940 Z', SKIN, 12))
-    # grim mouth + chin crease
-    a.append(P('M 440 790 Q 512 812 584 790', 'none', 11))
+    # gritted teeth + chin crease
+    a.append(f'<rect x="436" y="762" width="152" height="48" rx="16" fill="{WHITE}" stroke="{INK}" stroke-width="10"/>')
+    for x in (478, 512, 546):
+        a.append(f'<line x1="{x}" y1="770" x2="{x}" y2="802" stroke="{INK}" stroke-width="7"/>')
     a.append(P('M 480 862 Q 512 876 544 862', 'none', 8))
     return a
 
