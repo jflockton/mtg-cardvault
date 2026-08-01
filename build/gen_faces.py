@@ -280,8 +280,12 @@ def ock():
     a.append(P('M 602 500 Q 638 478 674 490', 'none', 10, WHITE))
     # nose hint + smug sneer
     a.append(P('M 512 660 Q 504 704 494 720', 'none', 9))
-    a.append(P('M 402 792 C 444 820, 556 818, 600 778', 'none', 12))
-    a.append(P('M 600 778 Q 620 788 618 808', 'none', 10))
+    a.append(P('M 402 780 C 444 808, 556 806, 600 766', 'none', 12))
+    a.append(P('M 600 766 Q 620 776 618 796', 'none', 10))
+    # green jumpsuit shoulders across the bottom of the badge
+    a.append(P('M 232 1010 C 300 878, 400 838, 512 838 C 624 838, 724 878, 792 1010 Z',
+               '#3e8f3a', 12))
+    a.append(P('M 452 848 L 512 908 L 572 848', 'none', 10))
     return a
 
 
@@ -305,12 +309,12 @@ def ock_overlay():
         parts.append(P(f'M {m_(230)} 840 C {m_(70)} 700, {m_(60)} 430, {m_(140)} 230 '
                        f'C {m_(150)} 206, {m_(184)} 210, {m_(186)} 240 '
                        f'C {m_(122)} 430, {m_(140)} 640, {m_(282)} 780 Z', '#8d97a8', 11))
-        # lower tentacle reaching down and out toward the corner
-        parts.append(P(f'M {m_(400)} 968 C {m_(280)} 952, {m_(170)} 918, {m_(96)} 848 '
-                       f'C {m_(78)} 826, {m_(104)} 800, {m_(128)} 820 '
-                       f'C {m_(196)} 882, {m_(300)} 918, {m_(420)} 934 Z', '#8d97a8', 11))
+        # lower tentacle: rooted behind the shoulder, reaching down and out
+        parts.append(P(f'M {m_(258)} 806 C {m_(180)} 828, {m_(118)} 866, {m_(86)} 918 '
+                       f'C {m_(72)} 944, {m_(98)} 968, {m_(122)} 950 '
+                       f'C {m_(154)} 912, {m_(210)} 878, {m_(272)} 860 Z', '#8d97a8', 11))
         parts += claw(m_(162), 210, -95 if sx == 1 else -85)
-        parts += claw(m_(96), 826, 155 if sx == 1 else 25)
+        parts += claw(m_(98), 936, 142 if sx == 1 else 38)
     return parts
 
 
