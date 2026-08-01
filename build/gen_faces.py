@@ -72,36 +72,6 @@ def P(d, fill='none', sw=0, stroke=INK):
     return f'<path d="{d}" fill="{fill}"{s}/>'
 
 
-# ---------------------------------------------------------------- Loki
-def loki():
-    a = []
-    # swept-back black hair filling the upper circle and down the sides
-    a.append(P('M 512 132 C 310 132, 210 300, 218 560 C 228 700, 262 800, 310 860 '
-               'C 292 700, 296 590, 314 500 C 330 380, 400 320, 512 320 '
-               'C 624 320, 694 380, 710 500 C 728 590, 732 700, 714 860 '
-               'C 762 800, 796 700, 806 560 C 814 300, 714 132, 512 132 Z', INK))
-    # face
-    a.append(E(512, 560, 240, 290, SKIN_PALE, 12))
-    # hairline fringe
-    a.append(P('M 292 470 C 330 350, 420 300, 512 300 C 604 300, 694 350, 732 470 '
-               'C 700 400, 620 368, 512 368 C 404 368, 324 400, 292 470 Z', INK))
-    # gold horned helmet band
-    a.append(P('M 300 372 C 370 320, 654 320, 724 372 L 724 320 C 654 268, 370 268, 300 320 Z',
-               GOLD, 10))
-    # sly eyes: narrow almonds + green iris
-    for sx in (1, -1):
-        x = 512 + sx * 105
-        a.append(P(f'M {x-70} 520 Q {x} 480 {x+70} 520 Q {x} 545 {x-70} 520 Z', WHITE, 9))
-        a.append(E(x, 516, 17, 17, '#2f9e4f', 6))
-        a.append(P(f'M {x-75} 488 Q {x} 452 {x+75} 488', 'none', 11))
-    # nose + smirk
-    a.append(P('M 512 540 Q 500 610 486 632 Q 512 648 538 632', 'none', 9))
-    a.append(P('M 420 706 Q 512 760 620 690 Q 560 742 470 730 Z', INK))
-    # chin shadow
-    a.append(P('M 452 800 Q 512 826 572 800', 'none', 8))
-    return a
-
-
 # ---------------------------------------------------------------- Dr Doom
 def doom():
     a = []
@@ -136,33 +106,63 @@ def doom():
     return a
 
 
-# ---------------------------------------------------------------- Lady Loki
-def lady_loki():
+
+# ---------------------------------------------------------------- Venom
+def venom():
     a = []
-    # long black hair: full backdrop down both sides
-    a.append(P('M 512 128 C 290 128, 200 320, 205 570 C 200 720, 240 850, 300 920 '
-               'C 280 760, 285 640, 300 560 C 300 380, 380 330, 512 330 '
-               'C 644 330, 724 380, 724 560 C 739 640, 744 760, 724 920 '
-               'C 784 850, 824 720, 819 570 C 824 320, 734 128, 512 128 Z', INK))
-    # face
-    a.append(E(512, 560, 220, 280, SKIN_PALE, 12))
-    # fringe parted
-    a.append(P('M 305 500 C 320 360, 400 310, 512 310 C 624 310, 704 360, 719 500 '
-               'C 680 420, 600 385, 512 385 C 424 385, 344 420, 305 500 Z', INK))
-    # gold tiara band + slim upswept horns
-    a.append(P('M 330 392 C 400 348, 624 348, 694 392 L 694 350 C 624 306, 400 306, 330 350 Z',
-               GOLD, 9))
-    # eyes: larger almonds, green iris, lashes
-    for sx in (1, -1):
-        x = 512 + sx * 95
-        a.append(P(f'M {x-62} 520 Q {x} 470 {x+62} 520 Q {x} 552 {x-62} 520 Z', WHITE, 9))
-        a.append(E(x, 512, 19, 19, '#2f9e4f', 6))
-        a.append(P(f'M {x-66} 500 Q {x} 458 {x+66} 500', 'none', 12))
-        lash = 8 if sx == 1 else -8
-        a.append(P(f'M {x+sx*62} 508 L {x+sx*82} 496', 'none', 10))
-    # nose + smiling lips
-    a.append(P('M 512 545 Q 504 600 494 618 Q 512 630 530 618', 'none', 8))
-    a.append(P('M 438 690 Q 512 742 586 690 Q 512 718 438 690 Z', '#a8253f', 9))
+    maw = '#42101b'
+    tongue = '#c2264a'
+    # symbiote head fills the circle
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="#241e33"/>')
+    # huge slanted eyes: rounded at the outer edge, sharp point at the nose
+    a.append(P('M 456 528 C 340 560, 218 528, 176 450 '
+               'C 148 376, 190 296, 284 276 '
+               'C 386 258, 452 338, 456 528 Z', WHITE, 15))
+    a.append(P('M 568 528 C 684 560, 806 528, 848 450 '
+               'C 876 376, 834 296, 740 276 '
+               'C 638 258, 572 338, 568 528 Z', WHITE, 15))
+    # grinning maw
+    a.append(P('M 232 640 C 340 596, 684 596, 792 640 C 750 780, 640 856, 512 856 '
+               'C 384 856, 274 780, 232 640 Z', maw, 14))
+    # tongue lolling along the lower jaw
+    a.append(P('M 400 820 C 450 780, 574 780, 624 820 C 590 852, 434 852, 400 820 Z',
+               tongue, 9))
+    # top row of fangs hanging from the upper lip
+    import math as _m
+    for i in range(9):
+        x0 = 268 + i * 56
+        a.append(P(f'M {x0} {622 + (i%2)*4} L {x0+28} {706 + (i%2)*10} L {x0+56} {620 + (i%2)*4} Z',
+                   WHITE, 7))
+    # bottom row of fangs rising from the jaw
+    for i in range(7):
+        x0 = 330 + i * 52
+        a.append(P(f'M {x0} {836 - (i%2)*4} L {x0+26} {762 - (i%2)*8} L {x0+52} {838 - (i%2)*4} Z',
+                   WHITE, 7))
+    return a
+
+
+# ---------------------------------------------------------------- Spider-Gwen
+def gwen():
+    a = []
+    pink = '#e83a8c'
+    mask = '#221d30'
+    # masked face fills the circle
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{mask}"/>')
+    # white hood: full circle with the face opening cut back out
+    a.append(f'<circle cx="512" cy="512" r="{R:.0f}" fill="{WHITE}"/>')
+    a.append(E(512, 545, 225, 285, mask, 0))
+    # pink hood lining around the opening
+    a.append(E(512, 545, 225, 285, 'none', 24, pink))
+    # hood folds
+    a.append(P('M 300 800 Q 340 840 400 862', 'none', 10))
+    a.append(P('M 724 800 Q 684 840 624 862', 'none', 10))
+    a.append(P('M 512 118 Q 500 160 512 205', 'none', 10))
+    # big rounded white eyes, ink-rimmed (house teardrop, gentler tilt)
+    for sx, x0 in ((1, 390), (-1, 634)):
+        a.append(f'<g transform="translate({x0},436) scale({sx * 1.3},1.3) rotate(-14)">')
+        a.append(P('M 0 190 C -74 165, -92 45, -84 -5 C -76 -70, 76 -70, 84 -5 '
+                   'C 92 45, 74 165, 0 190 Z', WHITE, 24))
+        a.append('</g>')
     return a
 
 
@@ -241,28 +241,6 @@ def daredevil():
     return a
 
 
-def loki_overlay():
-    # crescent horns sweeping outward from the helmet band
-    left = ('M 408 332 C 310 306, 244 240, 230 124 '
-            'C 227 104, 238 94, 252 106 '
-            'C 306 202, 366 266, 442 318 Z')
-    right = ('M 616 332 C 714 306, 780 240, 794 124 '
-             'C 797 104, 786 94, 772 106 '
-             'C 718 202, 658 266, 582 318 Z')
-    return [P(left, GOLD, 13), P(right, GOLD, 13)]
-
-
-def lady_loki_overlay():
-    # slimmer crescents, same outward sweep
-    left = ('M 418 344 C 340 316, 292 250, 284 140 '
-            'C 282 122, 292 114, 304 126 '
-            'C 348 216, 396 278, 452 330 Z')
-    right = ('M 606 344 C 684 316, 732 250, 740 140 '
-             'C 742 122, 732 114, 720 126 '
-             'C 676 216, 628 278, 572 330 Z')
-    return [P(left, GOLD, 11), P(right, GOLD, 11)]
-
-
 def ham_overlay():
     return [
         P('M 330 250 C 296 164, 318 106, 372 80 C 424 118, 436 186, 424 262 Z', '#f2a7bb', 13),
@@ -277,13 +255,12 @@ def dd_overlay():
     ]
 
 
-OVERLAYS = {'loki': loki_overlay, 'lady-loki': lady_loki_overlay,
-            'spider-ham': ham_overlay, 'daredevil': dd_overlay}
+OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay}
 
 CHARS = [
-    ('loki',       '#6a2d9c', SKIN_PALE, loki),
+    ('venom',      '#6a2d9c', '#241e33', venom),
     ('doom',       '#16697a', '#0e3a2c', doom),
-    ('lady-loki',  '#a1237a', SKIN_PALE, lady_loki),
+    ('spider-gwen','#a1237a', '#221d30', gwen),
     ('spider-ham', '#e2a41f', RED, ham),
     ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
     ('daredevil',  '#d2611f', '#3a3f4d', daredevil),
