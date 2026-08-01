@@ -75,37 +75,49 @@ def P(d, fill='none', sw=0, stroke=INK):
 
 # ---------------------------------------------------------------- Dr Doom
 def doom():
+    green = '#4fae4a'
+    gdark = '#37903c'
+    steel = '#e2e7ef'
+    sdark = '#9aa6b8'
     a = []
-    hood = '#2c6b3f'
-    steel = '#b9c2cf'
-    steel_dark = '#8d97a8'
-    # green hood framing everything
-    a.append(P('M 512 118 C 300 118, 210 300, 210 560 L 180 906 L 844 906 L 814 560 '
-               'C 814 300, 724 118, 512 118 Z', hood, 14))
-    # hood opening (shadow)
-    a.append(E(512, 540, 235, 300, INK))
-    # silver mask
-    a.append(P('M 512 262 C 380 262, 320 350, 320 470 C 320 640, 380 790, 512 790 '
-               'C 644 790, 704 640, 704 470 C 704 350, 644 262, 512 262 Z', steel, 12))
-    # brow plate
-    a.append(P('M 330 452 C 380 400, 644 400, 694 452 L 694 480 C 640 440, 384 440, 330 480 Z',
-               steel_dark, 8))
-    # eye slits: dark rounded rects
-    a.append(f'<rect x="372" y="470" width="110" height="44" rx="22" fill="{INK}"/>')
-    a.append(f'<rect x="542" y="470" width="110" height="44" rx="22" fill="{INK}"/>')
-    # nose ridge
-    a.append(P('M 512 470 L 512 610', 'none', 9, steel_dark))
-    a.append(P('M 484 612 Q 512 630 540 612', 'none', 9, steel_dark))
-    # mouth grille
-    a.append(f'<rect x="422" y="662" width="180" height="64" rx="18" fill="{steel_dark}" stroke="{INK}" stroke-width="9"/>')
-    for i in range(4):
-        x = 452 + i * 40
-        a.append(f'<line x1="{x}" y1="674" x2="{x}" y2="714" stroke="{INK}" stroke-width="9"/>')
+    # hood fills the badge (circle fill is green); peak fold at the top
+    a.append(P('M 512 112 C 470 200, 464 280, 488 350 L 536 350 '
+               'C 560 280, 554 200, 512 112 Z', gdark, 10))
+    # drape folds
+    a.append(P('M 232 380 C 262 500, 268 650, 324 800', 'none', 10))
+    a.append(P('M 792 380 C 762 500, 756 650, 700 800', 'none', 10))
+    a.append(P('M 310 866 C 400 824, 460 816, 512 818', 'none', 9))
+    a.append(P('M 714 866 C 624 824, 564 816, 512 818', 'none', 9))
+    # black shadow of the hood opening
+    a.append(P('M 512 226 C 400 246, 310 336, 302 486 '
+               'C 294 632, 350 780, 458 852 C 490 874, 534 874, 566 852 '
+               'C 674 780, 730 632, 722 486 C 714 336, 624 246, 512 226 Z', INK))
+    # steel mask base: narrower forehead so the shadow shows at the corners
+    a.append(P('M 512 288 C 436 292, 396 330, 384 420 '
+               'C 370 540, 380 670, 444 780 C 480 826, 544 826, 580 780 '
+               'C 644 670, 654 540, 640 420 C 628 330, 588 292, 512 288 Z', steel, 10))
+    # bold bright brow plates, wider than the mask, dipping to the nose
+    a.append(P('M 350 552 L 350 478 L 496 442 L 506 516 L 426 536 Z', '#f4f7fa', 10))
+    a.append(P('M 674 552 L 674 478 L 528 442 L 518 516 L 598 536 Z', '#f4f7fa', 10))
+    # dark angular eyes under the brows
+    a.append(P('M 396 564 L 468 548 L 462 608 L 406 610 Z', INK))
+    a.append(P('M 628 564 L 556 548 L 562 608 L 618 610 Z', INK))
+    # nose ridge widening downward
+    a.append(P('M 496 470 L 528 470 L 544 660 L 480 660 Z', steel, 9))
+    a.append(P('M 512 480 L 512 650', 'none', 6, sdark))
+    # mouth: lip plate, dark grille with steel slot
+    a.append(f'<rect x="428" y="666" width="168" height="30" rx="9" fill="{steel}" stroke="{INK}" stroke-width="9"/>')
+    a.append(f'<rect x="430" y="694" width="164" height="62" rx="15" fill="{INK}"/>')
+    a.append(f'<rect x="470" y="710" width="84" height="28" rx="7" fill="{sdark}" stroke="{INK}" stroke-width="6"/>')
+    # chin plate with dark base
+    a.append(P('M 432 756 C 432 806, 466 830, 512 834 C 558 830, 592 806, 592 756 Z', steel, 9))
+    a.append(E(512, 822, 28, 15, INK))
     # rivets
-    for rx, ry in [(360, 330), (664, 330), (338, 560), (686, 560), (398, 748), (626, 748)]:
-        a.append(E(rx, ry, 9, 9, steel_dark, 5))
+    for x, y in [(376, 512), (416, 500), (456, 488), (648, 512), (608, 500), (568, 488),
+                 (462, 784), (512, 796), (562, 784), (420, 330), (604, 330), (512, 312),
+                 (384, 456), (640, 456)]:
+        a.append(E(x, y, 8, 8, '#f7f9fc', 5))
     return a
-
 
 
 # ---------------------------------------------------------------- Venom
@@ -129,7 +141,6 @@ def venom():
     a.append(P('M 400 820 C 450 780, 574 780, 624 820 C 590 852, 434 852, 400 820 Z',
                tongue, 9))
     # top row of fangs hanging from the upper lip
-    import math as _m
     for i in range(9):
         x0 = 268 + i * 56
         a.append(P(f'M {x0} {622 + (i%2)*4} L {x0+28} {706 + (i%2)*10} L {x0+56} {620 + (i%2)*4} Z',
@@ -477,7 +488,7 @@ OVERLAYS = {'spider-ham': ham_overlay, 'daredevil': dd_overlay, 'spider-gwen': g
 
 CHARS = [
     ('venom',      '#6a2d9c', '#241e33', venom),
-    ('doom',       '#16697a', '#0e3a2c', doom),
+    ('doom',       '#16697a', '#4fae4a', doom),
     ('spider-gwen','#a1237a', WHITE, gwen),
     ('spider-ham', '#e2a41f', RED, ham),
     ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
