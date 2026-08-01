@@ -305,12 +305,12 @@ def ock_overlay():
         parts.append(P(f'M {m_(230)} 840 C {m_(70)} 700, {m_(60)} 430, {m_(140)} 230 '
                        f'C {m_(150)} 206, {m_(184)} 210, {m_(186)} 240 '
                        f'C {m_(122)} 430, {m_(140)} 640, {m_(282)} 780 Z', '#8d97a8', 11))
-        # shorter tentacle poking out mid-side
-        parts.append(P(f'M {m_(240)} 900 C {m_(140)} 860, {m_(80)} 780, {m_(64)} 660 '
-                       f'C {m_(62)} 632, {m_(96)} 622, {m_(108)} 648 '
-                       f'C {m_(134)} 740, {m_(196)} 810, {m_(300)} 852 Z', '#8d97a8', 11))
+        # lower tentacle reaching down and out toward the corner
+        parts.append(P(f'M {m_(400)} 968 C {m_(280)} 952, {m_(170)} 918, {m_(96)} 848 '
+                       f'C {m_(78)} 826, {m_(104)} 800, {m_(128)} 820 '
+                       f'C {m_(196)} 882, {m_(300)} 918, {m_(420)} 934 Z', '#8d97a8', 11))
         parts += claw(m_(162), 210, -95 if sx == 1 else -85)
-        parts += claw(m_(84), 626, -140 if sx == 1 else -40)
+        parts += claw(m_(96), 826, 155 if sx == 1 else 25)
     return parts
 
 
