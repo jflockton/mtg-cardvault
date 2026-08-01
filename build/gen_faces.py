@@ -41,19 +41,20 @@ def web(cx, cy, angles, spoke_len, ring_radii, width, opacity=None, color=INK):
     return parts
 
 
-def scaffold(bg, face_fill, inner, overlay=None):
+def scaffold(bg, face_fill, inner, overlay=None, badge=True):
     """Background + corner webs + ringed circle containing `inner` art.
     `overlay` parts render after the ring and may overflow the circle."""
     svg = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">']
     svg.append(f'<rect x="0" y="0" width="1024" height="1024" fill="{bg}"/>')
     svg += web(-14, -14, list(range(0, 91, 15)), 900, [130, 260, 390, 520, 650], 9, 0.55)
     svg += web(1038, 1038, list(range(180, 271, 15)), 900, [130, 260, 390, 520, 650], 9, 0.55)
-    svg.append(f'<clipPath id="face"><circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}"/></clipPath>')
-    svg.append(f'<circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}" fill="{face_fill}"/>')
-    svg.append(f'<g clip-path="url(#face)" stroke-linejoin="round" stroke-linecap="round">')
-    svg += inner
-    svg.append('</g>')
-    svg.append(f'<circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}" fill="none" stroke="{INK}" stroke-width="30"/>')
+    if badge:
+        svg.append(f'<clipPath id="face"><circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}"/></clipPath>')
+        svg.append(f'<circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}" fill="{face_fill}"/>')
+        svg.append(f'<g clip-path="url(#face)" stroke-linejoin="round" stroke-linecap="round">')
+        svg += inner
+        svg.append('</g>')
+        svg.append(f'<circle cx="{CX:.0f}" cy="{CY:.0f}" r="{R:.0f}" fill="none" stroke="{INK}" stroke-width="30"/>')
     if overlay:
         svg.append('<g stroke-linejoin="round" stroke-linecap="round">')
         svg += overlay
@@ -143,8 +144,6 @@ def venom():
 
 # ---------------------------------------------------------------- Spider-Gwen
 def gwen():
-    # everything lives in the overlay: the pointed hood IS her silhouette,
-    # drawn over the badge ring like the other characters' overflow parts
     return []
 
 
@@ -152,45 +151,53 @@ def gwen_overlay():
     pink = '#e83a8c'
     cyan = '#3fb9e6'
     a = []
-    # pointed hood: peak past the ring, wide cheeks, draped bottom
-    a.append(P('M 512 42 '
-               'C 430 92, 258 300, 172 560 '
-               'C 142 700, 192 848, 262 928 '
-               'Q 512 998, 762 928 '
-               'C 832 848, 882 700, 852 560 '
-               'C 766 300, 594 92, 512 42 Z', WHITE, 30))
-    # pink lining arch with cyan scalloped webbing
-    lining = ('M 512 150 C 386 195, 296 330, 290 505 '
-              'C 286 655, 376 776, 512 806 '
-              'C 648 776, 738 655, 734 505 '
-              'C 728 330, 638 195, 512 150 Z')
-    a.append(P(lining, pink, 12))
+    # hood: apex left of centre, right side bulging wider, running off the
+    # bottom of the frame — the reference silhouette
+    a.append(P('M 470 30 '
+               'C 434 58, 342 128, 264 236 '
+               'C 172 372, 112 540, 98 700 '
+               'C 90 820, 100 940, 122 1040 '
+               'L 936 1040 '
+               'C 962 920, 972 800, 956 660 '
+               'C 934 470, 848 244, 700 122 '
+               'C 628 62, 528 32, 470 30 Z', WHITE, 26))
+    # shoulder seams: subtle single arcs at the bottom
+    a.append(P('M 70 1012 Q 230 930 400 964', 'none', 12))
+    a.append(P('M 954 1012 Q 794 934 630 966', 'none', 12))
+    # hood opening: pointed arch, pink lining with cyan scallops
+    lining = ('M 490 208 C 410 268, 328 392, 296 532 '
+              'C 276 624, 274 734, 292 844 '
+              'C 328 966, 408 1026, 512 1034 '
+              'C 616 1026, 696 966, 732 844 '
+              'C 750 734, 748 624, 728 532 '
+              'C 696 392, 614 268, 534 208 '
+              'C 518 198, 504 198, 490 208 Z')
+    a.append(P(lining, pink, 14))
     a.append(f'<clipPath id="lin"><path d="{lining}"/></clipPath>')
     a.append(f'<g clip-path="url(#lin)" stroke="{cyan}" stroke-width="7" fill="none">')
-    for row in range(10):
-        y = 170 + row * 68
+    for row in range(13):
+        y = 220 + row * 68
         off = 0 if row % 2 == 0 else 45
         for i in range(9):
-            x = 260 + off + i * 90
+            x = 230 + off + i * 90
             a.append(f'<path d="M {x} {y} A 45 45 0 0 0 {x + 90} {y}"/>')
     a.append('</g>')
-    # white mask face
-    a.append(P('M 512 230 C 380 250, 300 365, 306 515 '
-               'C 310 645, 392 738, 512 760 '
-               'C 632 738, 714 645, 718 515 '
-               'C 724 365, 644 250, 512 230 Z', WHITE, 12))
-    # sharp upswept eyes: pink-dominant rim over a thin ink edge
-    left = 'M 486 590 Q 330 580 312 405 Q 466 428 486 590 Z'
-    right = 'M 538 590 Q 694 580 712 405 Q 558 428 538 590 Z'
+    # white mask face: egg with a soft pointed chin
+    a.append(P('M 502 262 '
+               'C 382 292, 302 412, 294 552 '
+               'C 288 692, 352 852, 470 954 '
+               'Q 502 982, 534 954 '
+               'C 652 852, 716 692, 710 552 '
+               'C 702 412, 622 292, 502 262 Z', WHITE, 12))
+    # upswept eyes: pink-dominant rims over a thin ink edge
+    left = 'M 458 592 Q 322 596 290 424 Q 430 458 458 592 Z'
+    right = 'M 546 592 Q 682 596 714 424 Q 574 458 546 592 Z'
     for eye in (left, right):
-        a.append(P(eye, 'none', 54, INK))
-        a.append(P(eye, 'none', 36, pink))
+        a.append(P(eye, 'none', 50, INK))
+        a.append(P(eye, 'none', 34, pink))
         a.append(P(eye, WHITE))
-    # tiny nose shadow
-    a.append(P('M 502 655 Q 512 665 522 655', 'none', 8))
-    # hood drape folds
-    a.append(P('M 300 880 Q 400 930 512 938', 'none', 10))
-    a.append(P('M 724 880 Q 624 930 512 938', 'none', 10))
+    # pale nose shadow
+    a.append(P('M 492 688 Q 512 712 532 688 Q 512 700 492 688 Z', '#c8dcec'))
     return a
 
 
@@ -472,7 +479,7 @@ CHARS = [
 os.makedirs('faces', exist_ok=True)
 for name, bg, fill, fn in CHARS:
     ov = OVERLAYS.get(name)
-    svg = scaffold(bg, fill, fn(), ov() if ov else None)
+    svg = scaffold(bg, fill, fn(), ov() if ov else None, badge=(name != 'spider-gwen'))
     with open(f'faces/{name}.svg', 'w') as f:
         f.write(svg + '\n')
     print('wrote', name)
