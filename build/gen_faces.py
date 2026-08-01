@@ -75,48 +75,57 @@ def P(d, fill='none', sw=0, stroke=INK):
 
 # ---------------------------------------------------------------- Dr Doom
 def doom():
-    green = '#4fae4a'
     gdark = '#37903c'
     steel = '#e2e7ef'
     sdark = '#9aa6b8'
+    bright = '#f4f7fa'
     a = []
-    # hood fills the badge (circle fill is green); peak fold at the top
-    a.append(P('M 512 112 C 470 200, 464 280, 488 350 L 536 350 '
-               'C 560 280, 554 200, 512 112 Z', gdark, 10))
-    # drape folds
-    a.append(P('M 232 380 C 262 500, 268 650, 324 800', 'none', 10))
-    a.append(P('M 792 380 C 762 500, 756 650, 700 800', 'none', 10))
-    a.append(P('M 310 866 C 400 824, 460 816, 512 818', 'none', 9))
-    a.append(P('M 714 866 C 624 824, 564 816, 512 818', 'none', 9))
-    # black shadow of the hood opening
-    a.append(P('M 512 226 C 400 246, 310 336, 302 486 '
-               'C 294 632, 350 780, 458 852 C 490 874, 534 874, 566 852 '
-               'C 674 780, 730 632, 722 486 C 714 336, 624 246, 512 226 Z', INK))
-    # steel mask base: narrower forehead so the shadow shows at the corners
-    a.append(P('M 512 288 C 436 292, 396 330, 384 420 '
-               'C 370 540, 380 670, 444 780 C 480 826, 544 826, 580 780 '
-               'C 644 670, 654 540, 640 420 C 628 330, 588 292, 512 288 Z', steel, 10))
-    # bold bright brow plates, wider than the mask, dipping to the nose
-    a.append(P('M 350 552 L 350 478 L 496 442 L 506 516 L 426 536 Z', '#f4f7fa', 10))
-    a.append(P('M 674 552 L 674 478 L 528 442 L 518 516 L 598 536 Z', '#f4f7fa', 10))
-    # dark angular eyes under the brows
-    a.append(P('M 396 564 L 468 548 L 462 608 L 406 610 Z', INK))
-    a.append(P('M 628 564 L 556 548 L 562 608 L 618 610 Z', INK))
+    # (circle fill is the green hood back)
+    # black hood-opening shadow behind the face
+    a.append(P('M 512 190 C 400 210, 318 300, 300 450 '
+               'C 285 590, 320 740, 420 850 C 470 900, 554 900, 604 850 '
+               'C 704 740, 739 590, 724 450 C 706 300, 624 210, 512 190 Z', INK))
+    # the mask, drawn big in the middle
+    a.append(P('M 512 255 C 420 260, 348 320, 338 440 '
+               'C 328 570, 360 700, 436 800 C 472 844, 552 844, 588 800 '
+               'C 664 700, 696 570, 686 440 C 676 320, 604 260, 512 255 Z', steel, 11))
+    # forehead rivets
+    for x, y in [(436, 330), (512, 308), (588, 330)]:
+        a.append(E(x, y, 8, 8, bright, 5))
+    # bright angled brow plates dipping to the nose
+    a.append(P('M 336 560 L 336 480 L 492 445 L 502 525 L 420 545 Z', bright, 10))
+    a.append(P('M 688 560 L 688 480 L 532 445 L 522 525 L 604 545 Z', bright, 10))
+    for x, y in [(372, 522), (412, 508), (452, 494), (652, 522), (612, 508), (572, 494)]:
+        a.append(E(x, y, 7, 7, bright, 5))
+    # dark angular eyes
+    a.append(P('M 386 578 L 468 560 L 462 624 L 398 627 Z', INK))
+    a.append(P('M 638 578 L 556 560 L 562 624 L 626 627 Z', INK))
     # nose ridge widening downward
-    a.append(P('M 496 470 L 528 470 L 544 660 L 480 660 Z', steel, 9))
-    a.append(P('M 512 480 L 512 650', 'none', 6, sdark))
-    # mouth: lip plate, dark grille with steel slot
-    a.append(f'<rect x="428" y="666" width="168" height="30" rx="9" fill="{steel}" stroke="{INK}" stroke-width="9"/>')
-    a.append(f'<rect x="430" y="694" width="164" height="62" rx="15" fill="{INK}"/>')
-    a.append(f'<rect x="470" y="710" width="84" height="28" rx="7" fill="{sdark}" stroke="{INK}" stroke-width="6"/>')
-    # chin plate with dark base
-    a.append(P('M 432 756 C 432 806, 466 830, 512 834 C 558 830, 592 806, 592 756 Z', steel, 9))
-    a.append(E(512, 822, 28, 15, INK))
-    # rivets
-    for x, y in [(376, 512), (416, 500), (456, 488), (648, 512), (608, 500), (568, 488),
-                 (462, 784), (512, 796), (562, 784), (420, 330), (604, 330), (512, 312),
-                 (384, 456), (640, 456)]:
-        a.append(E(x, y, 8, 8, '#f7f9fc', 5))
+    a.append(P('M 494 472 L 530 472 L 548 675 L 476 675 Z', steel, 9))
+    a.append(P('M 512 488 L 512 662', 'none', 6, sdark))
+    # mouth: lip plate, grille, chin plate
+    a.append(f'<rect x="424" y="680" width="176" height="32" rx="9" fill="{steel}" stroke="{INK}" stroke-width="9"/>')
+    a.append(f'<rect x="420" y="710" width="184" height="64" rx="15" fill="{INK}"/>')
+    a.append(f'<rect x="468" y="726" width="88" height="30" rx="7" fill="{sdark}" stroke="{INK}" stroke-width="6"/>')
+    a.append(P('M 428 772 C 428 830, 464 856, 512 860 C 560 856, 596 830, 596 772 Z', steel, 9))
+    for x, y in [(464, 804), (512, 818), (560, 804)]:
+        a.append(E(x, y, 7, 7, bright, 5))
+    a.append(E(512, 848, 24, 12, INK))
+    # hood drawn OVER the face in parts: left and right front flaps
+    # crossing the mask's upper corners, leaving black at the peak
+    a.append(P('M 486 205 C 420 250, 360 340, 332 450 '
+               'C 316 520, 306 580, 302 645 '
+               'C 250 610, 205 560, 165 495 '
+               'C 180 340, 260 215, 380 148 C 428 128, 464 158, 486 205 Z', '#4fae4a', 12))
+    a.append(P('M 538 205 C 604 250, 664 340, 692 450 '
+               'C 708 520, 718 580, 722 645 '
+               'C 774 610, 819 560, 859 495 '
+               'C 844 340, 764 215, 644 148 C 596 128, 560 158, 538 205 Z', '#4fae4a', 12))
+    # bottom drape wrapping under the chin
+    a.append(P('M 160 930 C 330 842, 694 842, 864 930 L 920 1040 L 110 1040 Z', '#4fae4a', 12))
+    # fold creases in the fabric
+    a.append(P('M 250 700 C 270 760, 300 820, 345 870', 'none', 9))
+    a.append(P('M 774 700 C 754 760, 724 820, 679 870', 'none', 9))
     return a
 
 
