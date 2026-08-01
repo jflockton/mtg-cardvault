@@ -9,6 +9,32 @@ import type { DataStore } from './store'
 let server: http.Server | null = null
 let baseUrl: string | null = null
 
+// EUR→GBP at the ECB daily rate — Cardmarket prices are euro-native; their
+// site's GBP display is a conversion too. Cached half a day; offline → null
+// and the page falls back to showing €.
+let fx: { rate: number; asOf: string; fetchedAt: number } | null = null
+
+async function gbpRate(): Promise<{ gbpPerEur: number | null; asOf: string | null }> {
+  if (fx && Date.now() - fx.fetchedAt < 12 * 60 * 60 * 1000) {
+    return { gbpPerEur: fx.rate, asOf: fx.asOf }
+  }
+  try {
+    const res = await fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=GBP', {
+      signal: AbortSignal.timeout(4000)
+    })
+    if (res.ok) {
+      const data = (await res.json()) as { date: string; rates: { GBP?: number } }
+      if (data.rates?.GBP) {
+        fx = { rate: data.rates.GBP, asOf: data.date, fetchedAt: Date.now() }
+        return { gbpPerEur: fx.rate, asOf: fx.asOf }
+      }
+    }
+  } catch {
+    // offline / timeout — fall through
+  }
+  return fx ? { gbpPerEur: fx.rate, asOf: fx.asOf } : { gbpPerEur: null, asOf: null }
+}
+
 /** Start (or reuse) the viewer server; resolves to its URL. */
 export function openInventoryViewer(store: DataStore): Promise<string> {
   if (server && baseUrl) return Promise.resolve(baseUrl)
@@ -29,6 +55,8 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
           )
         } else if (url.pathname === '/api/sets') {
           json(res, store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory'))
+        } else if (url.pathname === '/api/rate') {
+          void gbpRate().then((r) => json(res, r))
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' })
           res.end('{"error":"not found"}')
@@ -151,9 +179,13 @@ const q = $('q'), setSel = $('set'), inv = $('inv'), grid = $('grid'),
 let inventory = null;   // cached /api/inventory payload
 let cards = [];         // currently displayed cards
 let debounce = 0;
+let fxRate = null, fxAsOf = null;  // EUR→GBP (ECB); null → show native €
 
 const eur = (v) => v == null ? null : '€' + v.toFixed(2);
 const usd = (v) => v == null ? null : '$' + v.toFixed(2);
+const gbp = (v) => (v == null || !fxRate) ? null : '£' + (v * fxRate).toFixed(2);
+// Cardmarket display price: pounds when we have today's rate, else native euros.
+const cm = (v) => gbp(v) ?? eur(v);
 const esc = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
 
 async function api(path) {
@@ -205,7 +237,7 @@ function render() {
         : '<div class="noimg">' + esc(c.name) + '</div>') +
       '<div class="meta"><div class="nm">' + esc(c.name) + '</div>' +
       '<div class="st">' + esc(c.setName) + ' · #' + esc(c.collectorNumber) + '</div>' +
-      '<div class="pr">' + (eur(p.eur) ? '<span class="eur">' + eur(p.eur) + '</span>' : '<span class="eur">€ —</span>') +
+      '<div class="pr">' + (cm(p.eur) ? '<span class="eur">' + cm(p.eur) + '</span>' : '<span class="eur">' + (fxRate ? '£' : '€') + ' —</span>') +
       (usd(p.usd) ? '<span class="usd">' + usd(p.usd) + '</span>' : '') + '</div></div>';
     const img = d.querySelector('img');
     if (img) img.onerror = () => {
@@ -223,16 +255,18 @@ function showBig(c) {
   const bigUri = c.imageUri ? c.imageUri.replace('/normal/', '/large/') : null;
   const stacks = c.stacks.map((s) =>
     s.finish + ' ×' + s.quantity + (s.finish !== 'nonfoil'
-      ? ' (' + (eur(c.priceEurFoil ?? c.priceEur) ?? '€ —') + ')'
-      : ' (' + (eur(c.priceEur) ?? '€ —') + ')')).join(' · ');
+      ? ' (' + (cm(c.priceEurFoil ?? c.priceEur) ?? '—') + ')'
+      : ' (' + (cm(c.priceEur) ?? '—') + ')')).join(' · ');
   big.innerHTML =
     (bigUri ? '<img src="' + esc(bigUri) + '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
     '<div class="st">' + esc(c.setName) + ' (' + esc(c.setCode.toUpperCase()) + ') · #' +
     esc(c.collectorNumber) + (c.rarity ? ' · ' + esc(c.rarity) : '') + '</div>' +
     '<div class="prices">' +
-    '<div class="eur">' + (eur(c.priceEur) ?? '€ —') + ' <small>Cardmarket</small></div>' +
-    (c.priceEurFoil != null ? '<div>' + eur(c.priceEurFoil) + ' <small>Cardmarket foil</small></div>' : '') +
+    '<div class="eur">' + (cm(c.priceEur) ?? '—') + ' <small>Cardmarket' +
+      (fxRate && c.priceEur != null ? ' (' + eur(c.priceEur) + ')' : '') + '</small></div>' +
+    (c.priceEurFoil != null ? '<div>' + cm(c.priceEurFoil) + ' <small>Cardmarket foil' +
+      (fxRate ? ' (' + eur(c.priceEurFoil) + ')' : '') + '</small></div>' : '') +
     (c.priceUsd != null ? '<div>' + usd(c.priceUsd) + ' <small>USD</small></div>' : '') +
     (c.priceUsdFoil != null ? '<div>' + usd(c.priceUsdFoil) + ' <small>USD foil</small></div>' : '') +
     '</div>' +
@@ -253,8 +287,9 @@ async function refresh() {
       status.textContent = 'Loading collection…';
       inventory = await api('/api/inventory');
     }
-    totals.innerHTML = inventory.totalCards + ' cards · <b>' +
-      (eur(inventory.totalValueEur) ?? '€0.00') + '</b> · ' + (usd(inventory.totalValueUsd) ?? '$0.00');
+    totals.innerHTML = inventory.totalCards + ' cards · <b title="Cardmarket' +
+      (fxAsOf ? ', converted at the ECB rate of ' + fxAsOf : '') + '">' +
+      (cm(inventory.totalValueEur) ?? '—') + '</b> · ' + (usd(inventory.totalValueUsd) ?? '$0.00');
     cards = inventory.cards.filter((c) =>
       (!name || c.name.toLowerCase().includes(name)) && (!set || c.setCode === set));
     if (set) cards = [...cards].sort((a, b) =>
@@ -264,7 +299,8 @@ async function refresh() {
       ? cards.length + ' card' + (cards.length === 1 ? '' : 's') + ' shown'
       : 'Nothing matches — clear the search or pick another set.';
   } else {
-    totals.textContent = 'Browsing all cards · prices: Cardmarket';
+    totals.textContent = 'Browsing all cards · prices: Cardmarket' +
+      (fxRate ? ' in £ (ECB ' + fxAsOf + ')' : ' in €');
     if (!name && !set) {
       cards = [];
       status.textContent = 'Type a card name or pick a set to browse every card that exists.';
@@ -288,7 +324,14 @@ q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeou
 setSel.addEventListener('change', refresh);
 inv.addEventListener('change', async () => { setSel.value = ''; await loadSets(); refresh(); });
 
-(async () => { await loadSets(); await refresh(); })();
+(async () => {
+  try {
+    const r = await api('/api/rate');
+    fxRate = r.gbpPerEur; fxAsOf = r.asOf;
+  } catch (e) { /* € fallback */ }
+  await loadSets();
+  await refresh();
+})();
 </script>
 </body>
 </html>`
