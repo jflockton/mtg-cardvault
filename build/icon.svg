@@ -1,41 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="head" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffd75e"/>
-      <stop offset="1" stop-color="#f2b32c"/>
-    </linearGradient>
-    <linearGradient id="beakTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f09a3a"/>
-      <stop offset="1" stop-color="#d97e22"/>
-    </linearGradient>
+    <radialGradient id="red" cx="0.4" cy="0.35" r="0.9">
+      <stop offset="0" stop-color="#f03540"/>
+      <stop offset="0.7" stop-color="#d61f2b"/>
+      <stop offset="1" stop-color="#a8121d"/>
+    </radialGradient>
+    <clipPath id="face"><circle cx="512" cy="512" r="446"/></clipPath>
   </defs>
-  <g stroke="#4a3608" stroke-width="16" stroke-linejoin="round">
-    <!-- crest: bold FF7-style spiky fan -->
-    <path d="M 330 330 Q 200 240 190 120 Q 330 190 400 300 Z" fill="#f2b32c"/>
-    <path d="M 430 290 Q 380 140 430 40 Q 520 150 500 290 Z" fill="#ffd75e"/>
-    <path d="M 540 290 Q 590 130 700 70 Q 690 210 610 320 Z" fill="#f2b32c"/>
-    <path d="M 640 340 Q 760 260 860 260 Q 790 370 690 410 Z" fill="#e8a825"/>
-    <!-- cheek fluff spikes -->
-    <path d="M 210 660 Q 110 660 60 610 Q 150 590 230 610 Z" fill="#e8a825"/>
-    <path d="M 220 750 Q 130 780 70 760 Q 140 700 240 700 Z" fill="#e8a825"/>
-    <path d="M 814 660 Q 914 660 964 610 Q 874 590 794 610 Z" fill="#e8a825"/>
-    <path d="M 804 750 Q 894 780 954 760 Q 884 700 784 700 Z" fill="#e8a825"/>
-    <!-- head -->
-    <path d="M 512 240 Q 800 240 830 540 Q 850 800 620 880 Q 512 915 404 880 Q 174 800 194 540 Q 224 240 512 240 Z" fill="url(#head)"/>
-    <!-- beak -->
-    <path d="M 512 600 L 386 668 Q 512 720 638 668 Z" fill="url(#beakTop)"/>
-    <path d="M 398 676 Q 512 724 626 676 Q 600 800 512 830 Q 424 800 398 676 Z" fill="#c9741f"/>
+  <!-- round face -->
+  <circle cx="512" cy="512" r="446" fill="url(#red)"/>
+  <!-- web pattern, radiating from between the eyes -->
+  <g clip-path="url(#face)" stroke="#14090a" fill="none">
+    <g stroke-width="9">
+      <path d="M 512 470 L 512 -20"/>
+      <path d="M 512 470 L 750 -60"/>
+      <path d="M 512 470 L 274 -60"/>
+      <path d="M 512 470 L 980 200"/>
+      <path d="M 512 470 L 44 200"/>
+      <path d="M 512 470 L 1030 470"/>
+      <path d="M 512 470 L -6 470"/>
+      <path d="M 512 470 L 960 780"/>
+      <path d="M 512 470 L 64 780"/>
+      <path d="M 512 470 L 700 1010"/>
+      <path d="M 512 470 L 324 1010"/>
+      <path d="M 512 470 L 512 1030"/>
+    </g>
+    <g stroke-width="8">
+      <circle cx="512" cy="470" r="120"/>
+      <circle cx="512" cy="470" r="230"/>
+      <circle cx="512" cy="470" r="340"/>
+      <circle cx="512" cy="470" r="450"/>
+      <circle cx="512" cy="470" r="560"/>
+    </g>
   </g>
-  <!-- eyes: big FF7 ovals, drawn without heavy outline -->
+  <!-- rim -->
+  <circle cx="512" cy="512" r="446" fill="none" stroke="#14090a" stroke-width="14"/>
+  <!-- eyes: big angular white teardrops -->
   <g>
-    <ellipse cx="368" cy="520" rx="66" ry="82" fill="#241a05"/>
-    <ellipse cx="656" cy="520" rx="66" ry="82" fill="#241a05"/>
-    <circle cx="390" cy="488" r="22" fill="#ffffff"/>
-    <circle cx="678" cy="488" r="22" fill="#ffffff"/>
-    <circle cx="352" cy="556" r="10" fill="#8a6a1a"/>
-    <circle cx="640" cy="556" r="10" fill="#8a6a1a"/>
+    <path d="M 470 480 Q 452 372 348 322 Q 240 356 218 448 Q 226 550 340 588 Q 442 570 470 480 Z"
+          fill="#f5f7fa" stroke="#14090a" stroke-width="26"/>
+    <path d="M 554 480 Q 572 372 676 322 Q 784 356 806 448 Q 798 550 684 588 Q 582 570 554 480 Z"
+          fill="#f5f7fa" stroke="#14090a" stroke-width="26"/>
   </g>
-  <!-- brow feathers for attitude -->
-  <path d="M 290 420 Q 350 390 416 408" stroke="#4a3608" stroke-width="18" fill="none" stroke-linecap="round"/>
-  <path d="M 734 420 Q 674 390 608 408" stroke="#4a3608" stroke-width="18" fill="none" stroke-linecap="round"/>
 </svg>
