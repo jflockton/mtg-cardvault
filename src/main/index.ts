@@ -89,13 +89,24 @@ function logScan(entry: Record<string, unknown>): void {
   }
 }
 
+/** The Spidey app icon — repo build/ in dev, resources/ when packaged. */
+function resolveAppIcon(): string | undefined {
+  const dev = path.join(app.getAppPath(), 'build', 'icon.png')
+  if (fs.existsSync(dev)) return dev
+  const packaged = path.join(process.resourcesPath, 'icon.png')
+  if (fs.existsSync(packaged)) return packaged
+  return undefined
+}
+
 function createWindow(): BrowserWindow {
+  const icon = resolveAppIcon()
   const win = new BrowserWindow({
     width: 1320,
     height: 860,
     minWidth: 1080,
     minHeight: 720,
     title: 'MTG CardVault',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
