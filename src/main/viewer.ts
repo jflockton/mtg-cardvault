@@ -175,7 +175,8 @@ const PAGE = /* html */ `<!doctype html>
   #filterbar input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); font-size: 13px; outline: none;
     flex: 0 0 auto; width: 240px; max-width: 240px; }
-  #typeFilter { width: 190px; max-width: 190px; }
+  #subtypeFilter { width: 190px; max-width: 190px; }
+  #typeSel { padding: 6px 10px; font-size: 13px; }
   #filterbar input:focus { border-color: var(--accent); }
   .chip { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--line);
     background: var(--bg); color: var(--dim); cursor: pointer; font-size: 12.5px;
@@ -219,14 +220,15 @@ const PAGE = /* html */ `<!doctype html>
   <span class="lbl">Filter sets:</span>
   <input id="setFilter" type="search" placeholder="type part of a set name or code…">
   <span class="lbl">Card type:</span>
-  <input id="typeFilter" type="search" list="typeList" placeholder="e.g. Instant, Villain…">
-  <datalist id="typeList">
-    <option value="Creature"><option value="Instant"><option value="Sorcery">
-    <option value="Enchantment"><option value="Artifact"><option value="Land">
-    <option value="Planeswalker"><option value="Battle"><option value="Legendary">
-    <option value="Token"><option value="Equipment"><option value="Aura">
-    <option value="Vehicle"><option value="Saga">
-  </datalist>
+  <select id="typeSel">
+    <option value="">Any type</option>
+    <option>Creature</option><option>Instant</option><option>Sorcery</option>
+    <option>Enchantment</option><option>Artifact</option><option>Land</option>
+    <option>Planeswalker</option><option>Battle</option><option>Token</option>
+  </select>
+  <input id="subtypeFilter" type="search" list="subtypeList"
+         placeholder="subtype, e.g. Villain…" style="display:none">
+  <datalist id="subtypeList"></datalist>
   <span class="chip-sep"></span>
   <button class="chip" data-rarity="common">Common</button>
   <button class="chip" data-rarity="uncommon">Uncommon</button>
@@ -277,13 +279,49 @@ let setFilterText = '';
 const activeRarities = new Set();
 let wantCommander = false;
 let wantFoil = false;
-let typeFilterText = '';
+let selectedType = '';
+let subtypeText = '';
+
+function typeSection(line) {
+  return (line || '').split('//').map((p) => p.split('—')[0]).join(' ');
+}
+function subtypeSection(line) {
+  return (line || '').split('//').map((p) => p.split('—')[1] || '').join(' ');
+}
 
 function typeMatch(c) {
-  const t = typeFilterText.trim().toLowerCase();
-  if (!t) return true;
-  const line = (c.typeLine || '').toLowerCase();
-  return t.split(',').map((s) => s.trim()).filter(Boolean).some((term) => line.includes(term));
+  if (selectedType &&
+      !typeSection(c.typeLine).toLowerCase().includes(selectedType.toLowerCase())) return false;
+  const t = subtypeText.trim().toLowerCase();
+  if (t) {
+    const subs = subtypeSection(c.typeLine).toLowerCase();
+    if (!t.split(',').map((s) => s.trim()).filter(Boolean)
+        .some((term) => subs.includes(term))) return false;
+  }
+  return true;
+}
+
+/**
+ * The subtype combo appears only when the chosen type has subtypes among
+ * the cards on screen; its suggestions come from those cards, most
+ * common first — so Villain/Hero/Spider surface automatically.
+ */
+function rebuildSubtypes() {
+  const box = $('subtypeFilter');
+  if (!selectedType) { box.style.display = 'none'; return; }
+  const pool = (inv.checked && inventory ? inventory.cards : cards) || [];
+  const counts = new Map();
+  pool.forEach((c) => {
+    if (!typeSection(c.typeLine).toLowerCase().includes(selectedType.toLowerCase())) return;
+    (subtypeSection(c.typeLine).match(/[A-Za-z'’-]+/g) || []).forEach((w) => {
+      counts.set(w, (counts.get(w) || 0) + 1);
+    });
+  });
+  if (counts.size === 0) { box.style.display = 'none'; return; }
+  const words = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200);
+  $('subtypeList').innerHTML = words.map(([w]) =>
+    '<option value="' + esc(w) + '">').join('');
+  box.style.display = 'inline-block';
 }
 
 /** Chip filters, applied on top of search + set in both modes. */
@@ -301,7 +339,8 @@ function chipMatch(c) {
 }
 
 function chipsActive() {
-  return activeRarities.size > 0 || wantCommander || wantFoil || typeFilterText.trim() !== '';
+  return activeRarities.size > 0 || wantCommander || wantFoil ||
+    selectedType !== '' || subtypeText.trim() !== '';
 }
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
@@ -482,9 +521,18 @@ document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
 setSel.addEventListener('change', () => { updateClear(); refresh(); });
 setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
-const typeFilterInput = $('typeFilter');
-typeFilterInput.addEventListener('input', () => {
-  typeFilterText = typeFilterInput.value;
+const typeSel2 = $('typeSel');
+typeSel2.addEventListener('change', async () => {
+  selectedType = typeSel2.value;
+  subtypeText = '';
+  $('subtypeFilter').value = '';
+  updateClear();
+  await refresh();
+  rebuildSubtypes();
+});
+const subtypeInput = $('subtypeFilter');
+subtypeInput.addEventListener('input', () => {
+  subtypeText = subtypeInput.value;
   updateClear();
   clearTimeout(debounce);
   debounce = setTimeout(refresh, 200);
@@ -515,8 +563,11 @@ chipFoil.onclick = () => {
 clearBtn.onclick = () => {
   setFilterText = '';
   setFilterInput.value = '';
-  typeFilterText = '';
-  typeFilterInput.value = '';
+  selectedType = '';
+  typeSel2.value = '';
+  subtypeText = '';
+  subtypeInput.value = '';
+  subtypeInput.style.display = 'none';
   setSel.value = '';
   activeRarities.clear();
   wantCommander = false;

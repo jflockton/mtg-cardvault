@@ -61,6 +61,8 @@ export interface CardVaultApi {
   openViewer: () => Promise<{ url: string }>
   /** EUR→GBP at the ECB daily rate (null offline) — Cardmarket £ display. */
   fxRate: () => Promise<FxRate>
+  /** Fires when the inventory viewer window closes; returns unsubscribe. */
+  onViewerClosed: (cb: () => void) => () => void
 }
 
 const api: CardVaultApi = {
@@ -90,7 +92,12 @@ const api: CardVaultApi = {
     ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet }),
   note: (text) => ipcRenderer.send('scan:note', text),
   openViewer: () => ipcRenderer.invoke('viewer:open'),
-  fxRate: () => ipcRenderer.invoke('fx:rate')
+  fxRate: () => ipcRenderer.invoke('fx:rate'),
+  onViewerClosed: (cb) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('viewer:closed', listener)
+    return () => ipcRenderer.removeListener('viewer:closed', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -186,7 +186,7 @@ function registerIpc(): void {
 
   // "Show Inventory": loopback-only web viewer, shown in an in-app window
   // (no address bar, no browser). One window, refocused on repeat opens.
-  ipcMain.handle('viewer:open', async () => {
+  ipcMain.handle('viewer:open', async (event) => {
     const url = await openInventoryViewer(store)
     if (viewerWindow && !viewerWindow.isDestroyed()) {
       viewerWindow.focus()
@@ -202,6 +202,8 @@ function registerIpc(): void {
       })
       viewerWindow.on('closed', () => {
         viewerWindow = null
+        // One click: closing the viewer drops the app back at the main menu.
+        if (!event.sender.isDestroyed()) event.sender.send('viewer:closed')
       })
       // External links (e.g. "Full details on Scryfall") open in the user's
       // default browser, never inside this window.
