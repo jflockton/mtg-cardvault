@@ -83,6 +83,7 @@
 <g clip-path="url(#face)" stroke-linejoin="round" stroke-linecap="round">
 <ellipse cx="162" cy="500" rx="30" ry="52" fill="#f2c9a0" stroke="#17141f" stroke-width="10"/>
 <ellipse cx="862" cy="500" rx="30" ry="52" fill="#f2c9a0" stroke="#17141f" stroke-width="10"/>
+<g transform="translate(-76.8,-87.75) scale(1.15)">
 <path d="M 396 282 Q 512 264 628 282" fill="none" stroke="#b98a5e" stroke-width="7"/>
 <path d="M 380 330 Q 512 310 644 330" fill="none" stroke="#b98a5e" stroke-width="7"/>
 <path d="M 352 450 Q 418 434 482 452" fill="none" stroke="#17141f" stroke-width="12"/>
@@ -105,9 +106,10 @@
 <path d="M 444 700 Q 512 722 580 700" fill="none" stroke="#17141f" stroke-width="12"/>
 <path d="M 476 746 Q 512 756 548 746" fill="none" stroke="#b98a5e" stroke-width="7"/>
 <path d="M 416 778 Q 512 812 608 778" fill="none" stroke="#b98a5e" stroke-width="8"/>
-<path d="M 150 1010 C 260 848, 380 802, 512 802 C 644 802, 764 848, 874 1010 Z" fill="#3a3d46" stroke="#17141f" stroke-width="12"/>
-<path d="M 438 810 L 512 894 L 586 810 Z" fill="#9aa0aa" stroke="#17141f" stroke-width="9"/>
-<path d="M 494 880 L 530 880 L 522 916 L 502 916 Z" fill="#23262e" stroke="#17141f" stroke-width="7"/>
+</g>
+<path d="M 150 1030 C 268 876, 388 832, 512 832 C 636 832, 756 876, 874 1030 Z" fill="#3a3d46" stroke="#17141f" stroke-width="12"/>
+<path d="M 440 840 L 512 922 L 584 840 Z" fill="#9aa0aa" stroke="#17141f" stroke-width="9"/>
+<path d="M 496 908 L 530 908 L 523 942 L 503 942 Z" fill="#23262e" stroke="#17141f" stroke-width="7"/>
 </g>
 <circle cx="512" cy="512" r="400" fill="none" stroke="#17141f" stroke-width="30"/>
 </svg>

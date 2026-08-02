@@ -265,6 +265,8 @@ def fisk():
     # ears at the ring edges
     a.append(E(162, 500, 30, 52, SKIN, 10))
     a.append(E(862, 500, 30, 52, SKIN, 10))
+    # facial features scaled up as a group
+    a.append('<g transform="translate(-76.8,-87.75) scale(1.15)">')
     # forehead creases
     a.append(P('M 396 282 Q 512 264 628 282', 'none', 7, crease))
     a.append(P('M 380 330 Q 512 310 644 330', 'none', 7, crease))
@@ -294,11 +296,12 @@ def fisk():
     a.append(P('M 476 746 Q 512 756 548 746', 'none', 7, crease))
     # jowl / double-chin arc
     a.append(P('M 416 778 Q 512 812 608 778', 'none', 8, crease))
+    a.append('</g>')
     # dark suit with grey shirt and tie knot
-    a.append(P('M 150 1010 C 260 848, 380 802, 512 802 '
-               'C 644 802, 764 848, 874 1010 Z', suit, 12))
-    a.append(P('M 438 810 L 512 894 L 586 810 Z', shirt, 9))
-    a.append(P('M 494 880 L 530 880 L 522 916 L 502 916 Z', '#23262e', 7))
+    a.append(P('M 150 1030 C 268 876, 388 832, 512 832 '
+               'C 636 832, 756 876, 874 1030 Z', suit, 12))
+    a.append(P('M 440 840 L 512 922 L 584 840 Z', shirt, 9))
+    a.append(P('M 496 908 L 530 908 L 523 942 L 503 942 Z', '#23262e', 7))
     return a
 
 
