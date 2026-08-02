@@ -164,6 +164,10 @@ const PAGE = /* html */ `<!doctype html>
   #big .prices div { margin: 4px 0; }
   #big .prices .eur { color: var(--gold); font-weight: 700; font-size: 17px; }
   #big .own { margin-top: 12px; color: var(--gold); }
+  .ext-link { display: inline-block; margin-top: 14px; padding: 7px 14px;
+    border: 1px solid var(--line); border-radius: 8px; color: var(--text);
+    text-decoration: none; font-weight: 700; font-size: 13px; }
+  .ext-link:hover { border-color: var(--accent); }
   .banner { background: #4b1620; color: #ffd7dc; padding: 10px 18px; display: none; }
   #filterbar { display: flex; gap: 10px; align-items: center; padding: 8px 18px 0;
     flex-wrap: wrap; }
@@ -395,6 +399,10 @@ function showBig(c) {
       ? 'In stock: ' + c.quantity
       : '<span style="color:var(--dim)">Not in inventory</span>') +
     stockRows(c) + '</div>' +
+    '<a class="ext-link" target="_blank" rel="noreferrer" href="https://scryfall.com/card/' +
+      encodeURIComponent(c.setCode) + '/' + encodeURIComponent(c.collectorNumber) +
+      '" title="Rulings, legality, card backs / transforms, every printing — opens in your browser">' +
+      'Full details on Scryfall ↗</a>' +
     '</div>';
   big.querySelectorAll('.adj').forEach((btn) => {
     btn.onclick = () => adjust(c, btn.dataset.f, Number(btn.dataset.d));

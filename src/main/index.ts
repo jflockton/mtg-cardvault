@@ -203,6 +203,18 @@ function registerIpc(): void {
       viewerWindow.on('closed', () => {
         viewerWindow = null
       })
+      // External links (e.g. "Full details on Scryfall") open in the user's
+      // default browser, never inside this window.
+      viewerWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+        void shell.openExternal(target)
+        return { action: 'deny' }
+      })
+      viewerWindow.webContents.on('will-navigate', (e, target) => {
+        if (!target.startsWith(url)) {
+          e.preventDefault()
+          void shell.openExternal(target)
+        }
+      })
       await viewerWindow.loadURL(url)
     }
     return { url }
