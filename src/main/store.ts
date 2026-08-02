@@ -1358,11 +1358,14 @@ export class DataStore {
               image_uri, prices_eur, prices_eur_foil, prices_usd
        FROM scryfall_cards WHERE scryfall_id = ?`
     )
+    // Owned is matched by card NAME (any printing/finish) — a shop owns "Sol
+    // Ring" whichever printing it scanned, and deck lines resolve to the newest
+    // printing on import, so a scryfall_id match would miss almost everything.
     const owned = new Map<string, number>()
     for (const o of this.invDb
-      .prepare('SELECT scryfall_id, SUM(quantity) AS qty FROM inventory GROUP BY scryfall_id')
-      .all() as { scryfall_id: string; qty: number }[]) {
-      owned.set(o.scryfall_id, o.qty)
+      .prepare('SELECT name, SUM(quantity) AS qty FROM inventory GROUP BY name COLLATE NOCASE')
+      .all() as { name: string; qty: number }[]) {
+      owned.set(o.name.toLowerCase(), o.qty)
     }
 
     const rows = this.invDb
@@ -1406,7 +1409,7 @@ export class DataStore {
         priceEur: ref?.prices_eur ?? null,
         priceEurFoil: ref?.prices_eur_foil ?? null,
         priceUsd: ref?.prices_usd ?? null,
-        owned: r.scryfall_id ? (owned.get(r.scryfall_id) ?? 0) : 0
+        owned: owned.get(r.name.toLowerCase()) ?? 0
       }
     })
 

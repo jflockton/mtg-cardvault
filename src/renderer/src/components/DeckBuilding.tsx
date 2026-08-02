@@ -386,6 +386,7 @@ function DeckDetailView(props: {
 
   const [openRowId, setOpenRowId] = useState<number | null>(null)
   const openCard = deck.cards.find((c) => c.rowId === openRowId) ?? null
+  const hasCommander = deck.cards.some((c) => c.category === 'commander')
 
   const priceLabel = (eur: number): string =>
     gbpPerEur != null ? `£${(eur * gbpPerEur).toFixed(2)}` : `€${eur.toFixed(2)}`
@@ -408,6 +409,13 @@ function DeckDetailView(props: {
           🗑 Delete
         </button>
       </div>
+
+      {deck.format === 'commander' && !hasCommander && deck.cards.length > 0 && (
+        <p className="commander-hint">
+          ♛ No commander set — click a card and choose <b>Set as commander</b> to pin it to
+          its own column on the left.
+        </p>
+      )}
 
       {deck.cards.length === 0 ? (
         <p className="muted">

@@ -839,6 +839,15 @@ header {
   min-height: 0;
   overflow-y: auto;
 }
+.commander-hint {
+  background: rgba(244, 197, 82, 0.12);
+  border: 1px solid rgba(244, 197, 82, 0.4);
+  color: #f4c552;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
 .deck-body {
   display: flex;
   gap: 14px;
@@ -1068,12 +1077,12 @@ button.danger {
    peeks. Hovering a card lifts the one after it away, revealing the hovered
    card in full and cascading every card below it down. */
 .deck-stacks {
-  --card-w: 215px;
+  --card-w: 240px;
   flex: 1;
   min-width: 0;
   display: flex;
-  gap: 14px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 16px 18px;
   align-items: flex-start;
   padding-bottom: 8px;
 }
@@ -1081,14 +1090,9 @@ button.danger {
   flex: 0 0 var(--card-w);
   min-width: var(--card-w);
 }
-/* Commander pinned to the left so it's always in view while you scroll. */
-.stack-col.commander-col {
-  position: sticky;
-  left: 0;
-  z-index: 6;
-  background: var(--bg);
-  padding-right: 10px;
-  box-shadow: 10px 0 12px -8px rgba(0, 0, 0, 0.65);
+/* Commander sits first (top-left). Gold label to mark it. */
+.stack-col.commander-col .stack-label {
+  color: #f4c552;
 }
 .stack-card-controls button.is-cmd {
   color: #f4c552;
