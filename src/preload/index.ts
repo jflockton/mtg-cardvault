@@ -98,6 +98,8 @@ export interface CardVaultApi {
   ) => Promise<void>
   deckSetQuantity: (rowId: number, quantity: number) => Promise<void>
   deckSetCategory: (rowId: number, category: string) => Promise<void>
+  /** Promote to commander; returns commander count, or -1 if not eligible. */
+  deckSetCommander: (rowId: number, replace: boolean) => Promise<number>
   deckSetImage: (deckId: number, imageUri: string | null) => Promise<void>
   deckPrintings: (name: string) => Promise<CardRef[]>
   deckSetPrinting: (rowId: number, scryfallId: string) => Promise<void>
@@ -164,6 +166,8 @@ const api: CardVaultApi = {
     ipcRenderer.invoke('deck:setQuantity', { rowId, quantity }),
   deckSetCategory: (rowId, category) =>
     ipcRenderer.invoke('deck:setCategory', { rowId, category }),
+  deckSetCommander: (rowId, replace) =>
+    ipcRenderer.invoke('deck:setCommander', { rowId, replace }),
   deckSetImage: (deckId, imageUri) => ipcRenderer.invoke('deck:setImage', { deckId, imageUri }),
   deckPrintings: (name) => ipcRenderer.invoke('deck:printings', name),
   deckSetPrinting: (rowId, scryfallId) =>

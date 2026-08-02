@@ -30,6 +30,7 @@ import type {
   ScanResolution
 } from '../shared/types'
 import type { CornerParse } from './cornerParse'
+import { canBeCommander, MAX_COMMANDERS } from '../shared/deckStats'
 
 const INV_SCHEMA = `
 CREATE TABLE IF NOT EXISTS inventory (
@@ -1519,6 +1520,44 @@ export class DataStore {
     if (!row) return
     this.invDb.prepare('UPDATE deck_cards SET category = ? WHERE id = ?').run(category, rowId)
     this.touchDeck(row.deck_id)
+  }
+
+  /**
+   * Promote a line to commander. Only legendary creatures / Backgrounds are
+   * eligible. `replace` demotes every existing commander first (→ single
+   * commander); otherwise the deck is capped at MAX_COMMANDERS (partners) and a
+   * further add is rejected. Returns the resulting commander count, or -1 if the
+   * card isn't eligible.
+   */
+  setCommander(rowId: number, replace: boolean): number {
+    const row = this.invDb
+      .prepare('SELECT deck_id, scryfall_id FROM deck_cards WHERE id = ?')
+      .get(rowId) as { deck_id: number; scryfall_id: string | null } | undefined
+    if (!row) return -1
+    const card = row.scryfall_id ? this.byScryfallId(row.scryfall_id) : null
+    if (!card || !canBeCommander(card.typeLine)) return -1
+
+    const others = this.invDb
+      .prepare(
+        "SELECT id FROM deck_cards WHERE deck_id = ? AND category = 'commander' AND id <> ?"
+      )
+      .all(row.deck_id, rowId) as { id: number }[]
+    if (!replace && others.length >= MAX_COMMANDERS) return others.length
+
+    const run = this.invDb.transaction(() => {
+      if (replace) {
+        this.invDb
+          .prepare("UPDATE deck_cards SET category = '' WHERE deck_id = ? AND category = 'commander'")
+          .run(row.deck_id)
+      }
+      this.invDb.prepare("UPDATE deck_cards SET category = 'commander' WHERE id = ?").run(rowId)
+      this.touchDeck(row.deck_id)
+    })
+    run()
+    const count = this.invDb
+      .prepare("SELECT COUNT(*) AS n FROM deck_cards WHERE deck_id = ? AND category = 'commander'")
+      .get(row.deck_id) as { n: number }
+    return count.n
   }
 
   /**

@@ -5,6 +5,8 @@ import {
   computeDeckStats,
   deckCategory,
   manaValue,
+  canBeCommander,
+  MAX_COMMANDERS,
   CATEGORY_LABELS,
   COLORS,
   type ManaColor
@@ -259,7 +261,8 @@ function CardModal(props: {
   gbpPerEur: number | null
   isDeckImage: boolean
   onQty: (q: number) => void
-  onToggleCommander: () => void
+  onUnsetCommander: () => void
+  onSetCommander: () => void
   onSetDeckImage: () => void
   onSetPrinting: (scryfallId: string) => void
   onRemove: () => void
@@ -267,6 +270,7 @@ function CardModal(props: {
 }): React.JSX.Element {
   const { card } = props
   const isCmd = card.category === 'commander'
+  const eligibleCommander = canBeCommander(card.typeLine)
   const [printings, setPrintings] = useState<CardRef[] | null>(null)
   const [showPrintings, setShowPrintings] = useState(false)
 
@@ -321,9 +325,23 @@ function CardModal(props: {
           </div>
 
           <div className="card-modal-actions">
-            <button className={isCmd ? 'primary' : ''} onClick={props.onToggleCommander}>
-              ♛ {isCmd ? 'Unset commander' : 'Set as commander'}
-            </button>
+            {isCmd ? (
+              <button className="primary" onClick={props.onUnsetCommander}>
+                ♛ Unset commander
+              </button>
+            ) : (
+              <button
+                onClick={props.onSetCommander}
+                disabled={!eligibleCommander}
+                title={
+                  eligibleCommander
+                    ? undefined
+                    : 'Only legendary creatures (or Backgrounds) can be a commander'
+                }
+              >
+                ♛ Set as commander
+              </button>
+            )}
             {card.scryfallId && (
               <button className={showPrintings ? 'primary' : ''} onClick={() => void openPrintings()}>
                 🎴 Change printing / art
@@ -480,6 +498,33 @@ function DeckDetailView(props: {
     props.onReload()
   }
 
+  const [cmdPrompt, setCmdPrompt] = useState<{
+    rowId: number
+    existing: string[]
+    canAdd: boolean
+  } | null>(null)
+
+  const doSetCommander = async (rowId: number, replace: boolean): Promise<void> => {
+    await window.api.deckSetCommander(rowId, replace)
+    setCmdPrompt(null)
+    props.onReload()
+  }
+
+  // Setting a commander: straight through if there's none yet, otherwise ask
+  // whether to replace the current one(s) or add a partner (capped at 2).
+  const requestSetCommander = (rowId: number): void => {
+    const existing = deck.cards.filter((c) => c.category === 'commander' && c.rowId !== rowId)
+    if (existing.length === 0) {
+      void doSetCommander(rowId, false)
+    } else {
+      setCmdPrompt({
+        rowId,
+        existing: existing.map((c) => c.name),
+        canAdd: existing.length < MAX_COMMANDERS
+      })
+    }
+  }
+
   const priceLabel = (eur: number): string =>
     gbpPerEur != null ? `£${(eur * gbpPerEur).toFixed(2)}` : `€${eur.toFixed(2)}`
 
@@ -627,9 +672,8 @@ function DeckDetailView(props: {
             void setQty(openCard.rowId, q)
             if (q <= 0) setOpenRowId(null)
           }}
-          onToggleCommander={() =>
-            void setCategory(openCard.rowId, openCard.category === 'commander' ? '' : 'commander')
-          }
+          onUnsetCommander={() => void setCategory(openCard.rowId, '')}
+          onSetCommander={() => requestSetCommander(openCard.rowId)}
           onSetDeckImage={() => {
             if (openCard.imageUri) {
               // toggle: clicking the current deck image clears it back to commander art
@@ -642,6 +686,29 @@ function DeckDetailView(props: {
           }}
           onClose={() => setOpenRowId(null)}
         />
+      )}
+
+      {cmdPrompt && (
+        <div className="modal-overlay" onClick={() => setCmdPrompt(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>This deck already has a commander</h3>
+            <p className="muted small">
+              Current: <b>{cmdPrompt.existing.join(', ')}</b>. A deck can have at most{' '}
+              {MAX_COMMANDERS} commanders (partners / a Background).
+            </p>
+            <div className="cmd-choices">
+              <button className="primary" onClick={() => void doSetCommander(cmdPrompt.rowId, true)}>
+                Replace — make this the only commander
+              </button>
+              {cmdPrompt.canAdd && (
+                <button onClick={() => void doSetCommander(cmdPrompt.rowId, false)}>
+                  Add as a second commander (partner)
+                </button>
+              )}
+              <button onClick={() => setCmdPrompt(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

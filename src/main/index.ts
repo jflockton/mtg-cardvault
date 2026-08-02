@@ -440,6 +440,9 @@ function registerIpc(): void {
   ipcMain.handle('deck:setCategory', (_e, a: { rowId: number; category: string }) =>
     store.setDeckCardCategory(a.rowId, a.category)
   )
+  ipcMain.handle('deck:setCommander', (_e, a: { rowId: number; replace: boolean }) =>
+    store.setCommander(a.rowId, a.replace)
+  )
   ipcMain.handle('deck:setImage', (_e, a: { deckId: number; imageUri: string | null }) =>
     store.setDeckImage(a.deckId, a.imageUri)
   )

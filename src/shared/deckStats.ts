@@ -49,6 +49,21 @@ export function deckCategory(typeLine: string | null): string {
   return 'Other'
 }
 
+/**
+ * Whether a card may be a commander from its type line alone (we have no oracle
+ * text). Legendary Creatures qualify, as do Backgrounds (for the "choose a
+ * Background" pairing). Legendary planeswalkers that read "can be your
+ * commander" aren't detectable here, so they're intentionally excluded for now.
+ */
+export function canBeCommander(typeLine: string | null): boolean {
+  if (!typeLine) return false
+  if (typeLine.includes('Background')) return true
+  return typeLine.includes('Legendary') && typeLine.includes('Creature')
+}
+
+/** Maximum commanders in any format (partners / background). */
+export const MAX_COMMANDERS = 2
+
 /** Split a mana cost string into its `{...}` symbols. `"{2}{U}{U}"` → ['2','U','U']. */
 function manaSymbols(manaCost: string | null): string[] {
   if (!manaCost) return []
