@@ -122,6 +122,12 @@ export interface CardVaultApi {
     error?: string
   }>
   deckCopyMissing: (deckId: number) => Promise<{ lines: number }>
+  /** Copy the full deck as a printing-specific list to the clipboard. */
+  deckExportCopy: (deckId: number) => Promise<{ lines: number }>
+  /** Save the printing-specific deck list to a file the user picks. */
+  deckExportFile: (
+    deckId: number
+  ) => Promise<{ ok?: boolean; path?: string; lines?: number; canceled?: boolean }>
 }
 
 const api: CardVaultApi = {
@@ -186,7 +192,9 @@ const api: CardVaultApi = {
   readDeckFile: () => ipcRenderer.invoke('deck:readFile'),
   focusMainFrame: () => ipcRenderer.send('window:focusTop'),
   deckImportUrl: (url) => ipcRenderer.invoke('deck:importUrl', url),
-  deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId)
+  deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId),
+  deckExportCopy: (deckId) => ipcRenderer.invoke('deck:exportCopy', deckId),
+  deckExportFile: (deckId) => ipcRenderer.invoke('deck:exportFile', deckId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

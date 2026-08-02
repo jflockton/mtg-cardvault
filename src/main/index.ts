@@ -513,6 +513,24 @@ function registerIpc(): void {
     clipboard.writeText(text)
     return { lines: text ? text.split('\n').length : 0 }
   })
+  // Copy the full deck as a printing-specific list (for EDHPLAY / Moxfield etc.).
+  ipcMain.handle('deck:exportCopy', (_e, id: number) => {
+    const text = store.deckExportText(id)
+    clipboard.writeText(text)
+    return { lines: text ? text.split('\n').length : 0 }
+  })
+  // Save the same printing-specific list to a .txt file the user picks.
+  ipcMain.handle('deck:exportFile', async (_e, id: number) => {
+    const text = store.deckExportText(id)
+    if (!text) return { canceled: true }
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export deck',
+      defaultPath: path.join(app.getPath('downloads'), 'deck.txt')
+    })
+    if (canceled || !filePath) return { canceled: true }
+    fs.writeFileSync(filePath, text + '\n')
+    return { ok: true, path: filePath, lines: text.split('\n').length }
+  })
 
   ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
     const scan = await scanCorner(imageVariants, resolveTessdataDir())

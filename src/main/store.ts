@@ -1562,6 +1562,25 @@ export class DataStore {
   }
 
   /**
+   * The full deck as an importable, PRINTING-SPECIFIC list — "1 Sol Ring (LDS)
+   * 297" — so a target site (EDHPLAY, Moxfield…) uses the exact printings.
+   * Commander(s) first, then the main deck. Unresolved lines fall back to name.
+   */
+  deckExportText(deckId: number): string {
+    const deck = this.getDeck(deckId)
+    if (!deck) return ''
+    const line = (c: DeckCard): string => {
+      const base = `${c.quantity} ${c.name}`
+      return c.setCode && c.collectorNumber
+        ? `${base} (${c.setCode.toUpperCase()}) ${c.collectorNumber}`
+        : base
+    }
+    const commanders = deck.cards.filter((c) => c.category === 'commander')
+    const main = deck.cards.filter((c) => c.category === '')
+    return [...commanders, ...main].map(line).join('\n')
+  }
+
+  /**
    * A decklist of just the copies this deck is SHORT — `need − owned` per line,
    * over the main deck + commander. Feeds the "buy the missing singles" export.
    */

@@ -477,6 +477,8 @@ function DeckDetailView(props: {
   onDelete: () => void
   onImport: () => void
   onCopyMissing: () => void
+  onExportCopy: () => void
+  onExportFile: () => void
 }): React.JSX.Element {
   const { deck, gbpPerEur } = props
   const stats = useMemo(() => computeDeckStats(deck.cards), [deck.cards])
@@ -602,6 +604,15 @@ function DeckDetailView(props: {
           {stats.totalCards} cards · {totalLabel}
         </span>
         <button onClick={props.onImport}>📥 Import list</button>
+        <button
+          title="Copy a printing-specific decklist (e.g. for EDHPLAY / Moxfield)"
+          onClick={props.onExportCopy}
+        >
+          📤 Export
+        </button>
+        <button title="Save the printing-specific decklist to a .txt file" onClick={props.onExportFile}>
+          💾 File
+        </button>
         <button onClick={props.onRename}>✏ Rename</button>
         <button className="danger" onClick={props.onDelete}>
           🗑 Delete
@@ -904,6 +915,18 @@ export default function DeckBuilding(): React.JSX.Element {
     )
   }
 
+  const exportCopy = async (): Promise<void> => {
+    if (openId == null) return
+    const res = await window.api.deckExportCopy(openId)
+    setMessage(`Copied ${res.lines} cards (with printings) to the clipboard`)
+  }
+
+  const exportFile = async (): Promise<void> => {
+    if (openId == null) return
+    const res = await window.api.deckExportFile(openId)
+    if (res.ok) setMessage(`Saved ${res.lines} cards → ${res.path}`)
+  }
+
   return (
     <div className="section-body deck-wrap">
       {message && (
@@ -922,6 +945,8 @@ export default function DeckBuilding(): React.JSX.Element {
           onDelete={deleteDeck}
           onImport={() => setModal('import')}
           onCopyMissing={() => void copyMissing()}
+          onExportCopy={() => void exportCopy()}
+          onExportFile={() => void exportFile()}
         />
       ) : (
         <section className="panel">
