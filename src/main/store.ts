@@ -1047,17 +1047,74 @@ export class DataStore {
     return { cards, total }
   }
 
-  /** Sets for the viewer dropdown: owned sets with counts, or every set. */
-  viewerSets(mode: 'inventory' | 'all'): { code: string; name: string; count: number }[] {
-    if (mode === 'all') {
-      return this.listSets().map((s) => ({ ...s, count: 0 }))
+  /**
+   * Sets for the viewer dropdown. With filters active, only sets that
+   * CONTAIN matching cards are returned (with match counts) — pick
+   * "Villain" and the dropdown offers only sets holding Villains.
+   */
+  viewerSets(
+    mode: 'inventory' | 'all',
+    f: {
+      name?: string
+      type?: string
+      subtype?: string
+      rarities?: string[]
+      commander?: boolean
+      foil?: boolean
+    } = {}
+  ): { code: string; name: string; count: number }[] {
+    const where: string[] = []
+    const params: (string | number)[] = []
+    if (f.name?.trim()) {
+      where.push('name LIKE ? COLLATE NOCASE')
+      params.push(`%${f.name.trim()}%`)
     }
+    if (f.type?.trim()) {
+      where.push('type_line LIKE ? COLLATE NOCASE')
+      params.push(`%${f.type.trim()}%`)
+    }
+    if (f.subtype?.trim()) {
+      const terms = f.subtype.split(',').map((s) => s.trim()).filter(Boolean)
+      if (terms.length > 0) {
+        where.push(`(${terms.map(() => 'type_line LIKE ? COLLATE NOCASE').join(' OR ')})`)
+        for (const t of terms) params.push(`%${t}%`)
+      }
+    }
+    if (f.rarities && f.rarities.length > 0) {
+      where.push(`rarity IN (${f.rarities.map(() => '?').join(',')})`)
+      params.push(...f.rarities)
+    }
+    if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
+
+    if (mode === 'all') {
+      this.openReferenceIfPresent()
+      if (!this.refDb) return []
+      if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
+      if (where.length === 0) {
+        return this.listSets().map((s) => ({ ...s, count: 0 }))
+      }
+      const rows = this.refDb
+        .prepare(
+          `SELECT set_code, MAX(set_name) AS set_name, COUNT(*) AS n
+           FROM scryfall_cards WHERE ${where.join(' AND ')}
+           GROUP BY set_code ORDER BY set_name COLLATE NOCASE`
+        )
+        .all(...params) as { set_code: string; set_name: string; n: number }[]
+      return rows.map((r) => ({
+        code: r.set_code,
+        name: r.set_name || this.setNameFor(r.set_code),
+        count: r.n
+      }))
+    }
+
+    if (f.foil) where.push("finish != 'nonfoil'")
+    where.push('quantity > 0')
     const rows = this.invDb
       .prepare(
         `SELECT set_code, SUM(quantity) AS qty FROM inventory
-         WHERE quantity > 0 GROUP BY set_code ORDER BY set_code`
+         WHERE ${where.join(' AND ')} GROUP BY set_code`
       )
-      .all() as { set_code: string; qty: number }[]
+      .all(...params) as { set_code: string; qty: number }[]
     return rows
       .map((r) => ({ code: r.set_code, name: this.setNameFor(r.set_code), count: r.qty }))
       .sort((a, b) => a.name.localeCompare(b.name))

@@ -69,7 +69,17 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
             )
           )
         } else if (url.pathname === '/api/sets') {
-          json(res, store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory'))
+          json(
+            res,
+            store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory', {
+              name: url.searchParams.get('name') ?? '',
+              type: url.searchParams.get('type') ?? '',
+              subtype: url.searchParams.get('subtype') ?? '',
+              rarities: (url.searchParams.get('rarities') ?? '').split(',').filter(Boolean),
+              commander: url.searchParams.get('commander') === '1',
+              foil: url.searchParams.get('foil') === '1'
+            })
+          )
         } else if (url.pathname === '/api/rate') {
           void gbpRate().then((r) => json(res, r))
         } else if (url.pathname === '/api/adjust') {
@@ -380,7 +390,13 @@ function renderSetOptions() {
   setSel.innerHTML = '<option value="">All sets</option>' + shown.map((s) =>
     '<option value="' + esc(s.code) + '">' + esc(s.name) + ' (' + s.code.toUpperCase() + ')' +
     (s.count ? ' — ' + s.count : '') + '</option>').join('');
-  if ([...setSel.options].some((o) => o.value === keep)) setSel.value = keep;
+  if ([...setSel.options].some((o) => o.value === keep)) {
+    setSel.value = keep;
+  } else if (keep) {
+    setSel.insertAdjacentHTML('beforeend',
+      '<option value="' + esc(keep) + '">' + esc(keep.toUpperCase()) + ' (no matches)</option>');
+    setSel.value = keep;
+  }
   updateClear();
 }
 
@@ -391,7 +407,13 @@ function updateClear() {
 
 async function loadSets() {
   const mode = inv.checked ? 'inventory' : 'all';
-  setsCache = await api('/api/sets?mode=' + mode);
+  setsCache = await api('/api/sets?mode=' + mode +
+    '&name=' + encodeURIComponent(q.value.trim()) +
+    '&type=' + encodeURIComponent(selectedType) +
+    '&subtype=' + encodeURIComponent(subtypeText) +
+    '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
+    (wantCommander ? '&commander=1' : '') +
+    (wantFoil ? '&foil=1' : ''));
   renderSetOptions();
 }
 
@@ -512,6 +534,7 @@ overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('s
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('show'); });
 
 async function refresh() {
+  void loadSets();
   const name = q.value.trim().toLowerCase();
   const set = setSel.value;
   if (inv.checked) {
@@ -630,14 +653,13 @@ clearBtn.onclick = () => {
 };
 // Toggling the inventory tick keeps the selected set open when it still
 // exists in the new mode (it always does when unticking into all-sets).
-inv.addEventListener('change', async () => { page = 0; await loadSets(); refresh(); });
+inv.addEventListener('change', () => { page = 0; refresh(); });
 
 (async () => {
   try {
     const r = await api('/api/rate');
     fxRate = r.gbpPerEur; fxAsOf = r.asOf;
   } catch (e) { /* € fallback */ }
-  await loadSets();
   await refresh();
 })();
 </script>
