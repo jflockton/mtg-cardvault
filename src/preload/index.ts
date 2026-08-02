@@ -71,8 +71,10 @@ export interface CardVaultApi {
   ) => Promise<CornerScanResult>
   /** Append a loop-decision note to the scan debug log. */
   note: (text: string) => void
-  /** Open the collection viewer page in the default browser. */
+  /** Open the collection viewer page in a separate app window. */
   openViewer: () => Promise<{ url: string }>
+  /** Start (or reuse) the loopback viewer server; returns its URL for in-app embedding. */
+  ensureViewer: () => Promise<{ url: string }>
   /** EUR→GBP at the ECB daily rate (null offline) — Cardmarket £ display. */
   fxRate: () => Promise<FxRate>
   /** Where the inventory db lives + whether it's in a cloud folder. */
@@ -145,6 +147,7 @@ const api: CardVaultApi = {
     ipcRenderer.invoke('scan:title', { imageVariants, pinnedSet }),
   note: (text) => ipcRenderer.send('scan:note', text),
   openViewer: () => ipcRenderer.invoke('viewer:open'),
+  ensureViewer: () => ipcRenderer.invoke('viewer:url'),
   fxRate: () => ipcRenderer.invoke('fx:rate'),
   dataLocation: () => ipcRenderer.invoke('data:location'),
   setDataLocation: (args) => ipcRenderer.invoke('data:setLocation', args ?? {}),

@@ -10,6 +10,7 @@ import faceDoom from './assets/faces/doom.svg'
 import faceNoir from './assets/faces/noir.svg'
 import faceMiles from './assets/faces/miles.svg'
 import DeckBuilding from './components/DeckBuilding'
+import InventoryViewer from './components/InventoryViewer'
 import spideyIcon from './assets/spidey.svg'
 import type {
   CardRef,
@@ -1611,20 +1612,7 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
-      {section === 'viewer' && (
-        <div className="section-body">
-          <section className="panel">
-            <h2>Show Inventory</h2>
-            <p className="muted">
-              The collection viewer just opened in its own window — card images, Cardmarket
-              £ prices, set browsing, and an any-card search across every printing.
-            </p>
-            <button className="primary" onClick={() => void window.api.openViewer()}>
-              Open it again
-            </button>
-          </section>
-        </div>
-      )}
+      {section === 'viewer' && <InventoryViewer />}
 
       {section === 'data' && (
         <div className="section-body">
@@ -1747,7 +1735,7 @@ export default function App(): React.JSX.Element {
             </button>
             <button
               title="Browse the collection — images, Cardmarket prices, any-card search"
-              onClick={() => void window.api.openViewer()}
+              onClick={() => go('viewer')}
             >
               🖼 Show Inventory
             </button>

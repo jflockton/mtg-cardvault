@@ -829,6 +829,22 @@ header {
   font-size: 0.85rem;
 }
 
+/* ------------------------------------------------- embedded inventory viewer */
+.section-body.viewer-body {
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.viewer-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
 /* ----------------------------------------------------------- deck building */
 /* Deck screen uses the full window — override the centred 1100px section cap. */
 .section-body.deck-wrap {

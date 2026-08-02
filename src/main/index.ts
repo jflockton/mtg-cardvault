@@ -293,6 +293,13 @@ function registerIpc(): void {
     }
   })
 
+  // Start (or reuse) the loopback viewer server and return its URL, so the
+  // renderer can embed it in-app via an <iframe> — no separate window.
+  ipcMain.handle('viewer:url', async () => {
+    const url = await openInventoryViewer(store)
+    return { url }
+  })
+
   // "Show Inventory": loopback-only web viewer, shown in an in-app window
   // (no address bar, no browser). One window, refocused on repeat opens.
   ipcMain.handle('viewer:open', async (event) => {
