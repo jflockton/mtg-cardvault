@@ -175,6 +175,7 @@ const PAGE = /* html */ `<!doctype html>
   #filterbar input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); font-size: 13px; outline: none;
     flex: 0 0 auto; width: 240px; max-width: 240px; }
+  #typeFilter { width: 190px; max-width: 190px; }
   #filterbar input:focus { border-color: var(--accent); }
   .chip { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--line);
     background: var(--bg); color: var(--dim); cursor: pointer; font-size: 12.5px;
@@ -217,6 +218,15 @@ const PAGE = /* html */ `<!doctype html>
 <div id="filterbar">
   <span class="lbl">Filter sets:</span>
   <input id="setFilter" type="search" placeholder="type part of a set name or code…">
+  <span class="lbl">Card type:</span>
+  <input id="typeFilter" type="search" list="typeList" placeholder="e.g. Instant, Villain…">
+  <datalist id="typeList">
+    <option value="Creature"><option value="Instant"><option value="Sorcery">
+    <option value="Enchantment"><option value="Artifact"><option value="Land">
+    <option value="Planeswalker"><option value="Battle"><option value="Legendary">
+    <option value="Token"><option value="Equipment"><option value="Aura">
+    <option value="Vehicle"><option value="Saga">
+  </datalist>
   <span class="chip-sep"></span>
   <button class="chip" data-rarity="common">Common</button>
   <button class="chip" data-rarity="uncommon">Uncommon</button>
@@ -267,9 +277,18 @@ let setFilterText = '';
 const activeRarities = new Set();
 let wantCommander = false;
 let wantFoil = false;
+let typeFilterText = '';
+
+function typeMatch(c) {
+  const t = typeFilterText.trim().toLowerCase();
+  if (!t) return true;
+  const line = (c.typeLine || '').toLowerCase();
+  return t.split(',').map((s) => s.trim()).filter(Boolean).some((term) => line.includes(term));
+}
 
 /** Chip filters, applied on top of search + set in both modes. */
 function chipMatch(c) {
+  if (!typeMatch(c)) return false;
   if (activeRarities.size > 0 && !activeRarities.has(c.rarity)) return false;
   if (wantCommander && !(c.typeLine || '').includes('Legendary Creature')) return false;
   if (wantFoil) {
@@ -282,7 +301,7 @@ function chipMatch(c) {
 }
 
 function chipsActive() {
-  return activeRarities.size > 0 || wantCommander || wantFoil;
+  return activeRarities.size > 0 || wantCommander || wantFoil || typeFilterText.trim() !== '';
 }
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
@@ -463,6 +482,13 @@ document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
 setSel.addEventListener('change', () => { updateClear(); refresh(); });
 setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
+const typeFilterInput = $('typeFilter');
+typeFilterInput.addEventListener('input', () => {
+  typeFilterText = typeFilterInput.value;
+  updateClear();
+  clearTimeout(debounce);
+  debounce = setTimeout(refresh, 200);
+});
 document.querySelectorAll('.chip[data-rarity]').forEach((chip) => {
   chip.onclick = () => {
     const r = chip.dataset.rarity;
@@ -489,6 +515,8 @@ chipFoil.onclick = () => {
 clearBtn.onclick = () => {
   setFilterText = '';
   setFilterInput.value = '';
+  typeFilterText = '';
+  typeFilterInput.value = '';
   setSel.value = '';
   activeRarities.clear();
   wantCommander = false;
