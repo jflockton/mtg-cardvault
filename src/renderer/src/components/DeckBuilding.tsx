@@ -143,7 +143,12 @@ function UrlModal(props: {
         <h3>Import deck from a link</h3>
         <p className="muted small">
           Paste an <b>Archidekt</b> deck URL — the commander and exact printings come through
-          automatically. (Moxfield blocks direct import; use its Export → “Import list” paste.)
+          automatically.
+        </p>
+        <p className="muted small">
+          <b>Moxfield can’t be imported by link</b> (their bot protection blocks it). Open your
+          deck on Moxfield → <b>More ⋯ → Export</b>, copy it, then use <b>Import list</b> to
+          paste it in.
         </p>
         <input
           autoFocus
