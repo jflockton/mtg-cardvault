@@ -1582,11 +1582,24 @@ export class DataStore {
     if (!this.refDb) return null
     const trimmed = name.trim()
     if (!trimmed) return null
-    const exact = this.refDb
-      .prepare(
-        'SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE ORDER BY released_at DESC LIMIT 1'
-      )
-      .get(trimmed)
+    // Exact name: prefer a "standard" printing — a numeric collector number and
+    // not Secret Lair — so imports don't default to alt-art / promo / The-List /
+    // Secret-Lair versions (that's the odd art). Fall back to newest of any.
+    const exact =
+      this.refDb
+        .prepare(
+          `SELECT * FROM scryfall_cards
+           WHERE name = ? COLLATE NOCASE
+             AND set_code <> 'sld'
+             AND collector_number NOT GLOB '*[^0-9]*'
+           ORDER BY released_at DESC LIMIT 1`
+        )
+        .get(trimmed) ??
+      this.refDb
+        .prepare(
+          'SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE ORDER BY released_at DESC LIMIT 1'
+        )
+        .get(trimmed)
     if (exact) return rowToCardRef(exact as never, 'local')
     // Split cards / faces: "Fire // Ice" lists often carry only one face name.
     const prefix = this.refDb
