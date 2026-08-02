@@ -9,9 +9,18 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# The release step (softprops/action-gh-release) creates/updates a GitHub
+# Release, which needs write access to repo contents. Without this the default
+# GITHUB_TOKEN is read-only and the attach step 403s after a successful build.
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
+      # Don't let one OS job's failure cancel the other — we want the Windows
+      # installer even if the mac job trips, and vice versa.
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
