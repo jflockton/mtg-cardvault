@@ -3,6 +3,10 @@ import type {
   CardRef,
   CornerScanResult,
   DataLocation,
+  DeckDetail,
+  DeckFormat,
+  DeckImportResult,
+  DeckSummary,
   Finish,
   FxRate,
   InventoryItem,
@@ -79,6 +83,24 @@ export interface CardVaultApi {
   chooseDataLocation: () => Promise<DataLocation>
   /** Fires when the inventory viewer window closes; returns unsubscribe. */
   onViewerClosed: (cb: () => void) => () => void
+  // --- decks
+  deckList: () => Promise<DeckSummary[]>
+  deckCreate: (name: string, format?: DeckFormat) => Promise<DeckSummary>
+  deckRename: (id: number, name: string) => Promise<void>
+  deckSetFormat: (id: number, format: DeckFormat) => Promise<void>
+  deckDelete: (id: number) => Promise<void>
+  deckGet: (id: number) => Promise<DeckDetail | null>
+  deckAddCard: (
+    deckId: number,
+    scryfallId: string,
+    quantity?: number,
+    category?: string
+  ) => Promise<void>
+  deckSetQuantity: (rowId: number, quantity: number) => Promise<void>
+  deckSetCategory: (rowId: number, category: string) => Promise<void>
+  deckSetImage: (deckId: number, imageUri: string | null) => Promise<void>
+  deckImportText: (deckId: number, text: string) => Promise<DeckImportResult>
+  deckCopyMissing: (deckId: number) => Promise<{ lines: number }>
 }
 
 const api: CardVaultApi = {
@@ -118,7 +140,22 @@ const api: CardVaultApi = {
     const listener = (): void => cb()
     ipcRenderer.on('viewer:closed', listener)
     return () => ipcRenderer.removeListener('viewer:closed', listener)
-  }
+  },
+  deckList: () => ipcRenderer.invoke('deck:list'),
+  deckCreate: (name, format) => ipcRenderer.invoke('deck:create', { name, format }),
+  deckRename: (id, name) => ipcRenderer.invoke('deck:rename', { id, name }),
+  deckSetFormat: (id, format) => ipcRenderer.invoke('deck:setFormat', { id, format }),
+  deckDelete: (id) => ipcRenderer.invoke('deck:delete', id),
+  deckGet: (id) => ipcRenderer.invoke('deck:get', id),
+  deckAddCard: (deckId, scryfallId, quantity, category) =>
+    ipcRenderer.invoke('deck:addCard', { deckId, scryfallId, quantity, category }),
+  deckSetQuantity: (rowId, quantity) =>
+    ipcRenderer.invoke('deck:setQuantity', { rowId, quantity }),
+  deckSetCategory: (rowId, category) =>
+    ipcRenderer.invoke('deck:setCategory', { rowId, category }),
+  deckSetImage: (deckId, imageUri) => ipcRenderer.invoke('deck:setImage', { deckId, imageUri }),
+  deckImportText: (deckId, text) => ipcRenderer.invoke('deck:importText', { deckId, text }),
+  deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -119,6 +119,88 @@ export interface PreconAddResult {
   missing: string[]
 }
 
+// ------------------------------------------------------------------ decks
+
+export type DeckFormat =
+  | 'commander'
+  | 'standard'
+  | 'modern'
+  | 'pioneer'
+  | 'pauper'
+  | 'legacy'
+  | 'vintage'
+  | 'casual'
+
+export const DECK_FORMATS: DeckFormat[] = [
+  'commander',
+  'standard',
+  'modern',
+  'pioneer',
+  'pauper',
+  'legacy',
+  'vintage',
+  'casual'
+]
+
+/** A deck in the list view — no card rows, just the headline numbers. */
+export interface DeckSummary {
+  id: number
+  name: string
+  format: DeckFormat
+  /** total quantity of main-deck + commander cards (excludes sideboard/maybe) */
+  cardCount: number
+  /** tile art: the explicit deck image, else the commander's image, else null */
+  imageUri: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * One line in a deck. `scryfallId` is null when an import couldn't resolve the
+ * name to a printing — the row still shows (under "Unresolved") so nothing is
+ * silently dropped. The ref fields are filled by a LEFT JOIN to reference.db.
+ */
+export interface DeckCard {
+  rowId: number
+  scryfallId: string | null
+  name: string
+  quantity: number
+  /** board: '' = main, 'commander', 'sideboard', 'maybe' */
+  category: string
+  setCode: string | null
+  collectorNumber: string | null
+  rarity: string | null
+  typeLine: string | null
+  manaCost: string | null
+  colors: string[] | null
+  imageUri: string | null
+  priceEur: number | null
+  priceEurFoil: number | null
+  priceUsd: number | null
+  /** copies of this printing currently in the shop inventory (0 if none) */
+  owned: number
+}
+
+export interface DeckDetail {
+  id: number
+  name: string
+  format: DeckFormat
+  notes: string
+  /** explicitly chosen deck art (a card's image); null falls back to commander */
+  imageUri: string | null
+  createdAt: string
+  updatedAt: string
+  cards: DeckCard[]
+}
+
+export interface DeckImportResult {
+  deckId: number
+  /** total copies added across all resolved + unresolved lines */
+  added: number
+  /** raw lines the parser couldn't turn into a card at all */
+  missing: string[]
+}
+
 /** Outcome of resolving an OCR'd corner against the reference DB. */
 export interface ScanResolution {
   kind: 'exact' | 'candidates' | 'none'

@@ -18,6 +18,11 @@ import {
 } from './refdb'
 import type {
   CardRef,
+  DeckCard,
+  DeckDetail,
+  DeckFormat,
+  DeckImportResult,
+  DeckSummary,
   Finish,
   InventoryItem,
   InventorySummary,
@@ -62,6 +67,36 @@ CREATE TABLE IF NOT EXISTS scan_log (
   scanned_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_scanlog_stack ON scan_log (scryfall_id, finish, id);
+`
+
+// Decks live in inventory.db alongside stock: precious, backed up, and synced
+// to Dropbox with the rest. A deck_card row carries the printing's scryfall_id
+// (null when an import couldn't resolve it) plus a denormalised name so the row
+// survives even before the reference DB knows the card. Card details for
+// analysis are joined from reference.db at read time — never copied in.
+const DECK_SCHEMA = `
+CREATE TABLE IF NOT EXISTS decks (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  format      TEXT NOT NULL DEFAULT 'commander',
+  notes       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS deck_cards (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  deck_id     INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+  scryfall_id TEXT,
+  name        TEXT NOT NULL,
+  quantity    INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+  category    TEXT NOT NULL DEFAULT '',
+  added_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_deckcards_deck ON deck_cards (deck_id);
+-- Resolved printings stack (one row per printing+board); unresolved rows
+-- (null scryfall_id) never collide, so each keeps its own line.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_deckcards_stack
+  ON deck_cards (deck_id, scryfall_id, category) WHERE scryfall_id IS NOT NULL;
 `
 
 /** Market price for a finish; etched falls back to foil (bulk data has no etched price). */
@@ -187,7 +222,14 @@ export class DataStore {
     this.invDb = new Database(this.inventoryDbPath)
     const cloud = path.resolve(this.inventoryDir) !== path.resolve(this.dataDir)
     this.invDb.pragma(cloud ? 'journal_mode = DELETE' : 'journal_mode = WAL')
+    this.invDb.pragma('foreign_keys = ON') // deck_cards → decks cascade
     this.invDb.exec(INV_SCHEMA)
+    this.invDb.exec(DECK_SCHEMA)
+    // Migration: deck tile art, added after the decks tables first shipped.
+    const deckCols = this.invDb.prepare('PRAGMA table_info(decks)').all() as { name: string }[]
+    if (!deckCols.some((c) => c.name === 'image_uri')) {
+      this.invDb.exec('ALTER TABLE decks ADD COLUMN image_uri TEXT')
+    }
     // Migration for inventories created before Cardmarket price capture.
     const logCols = this.invDb.prepare('PRAGMA table_info(scan_log)').all() as { name: string }[]
     const migratedEur = !logCols.some((c) => c.name === 'price_eur')
@@ -1205,6 +1247,349 @@ export class DataStore {
       if (row?.name) return row.name
     }
     return code.toUpperCase()
+  }
+
+  // ------------------------------------------------------------------ decks
+
+  listDecks(): DeckSummary[] {
+    const rows = this.invDb
+      .prepare(
+        `SELECT d.id, d.name, d.format, d.image_uri, d.created_at, d.updated_at,
+                COALESCE((SELECT SUM(quantity) FROM deck_cards dc
+                          WHERE dc.deck_id = d.id
+                            AND dc.category IN ('', 'commander')), 0) AS card_count
+         FROM decks d ORDER BY d.updated_at DESC`
+      )
+      .all() as {
+      id: number
+      name: string
+      format: string
+      image_uri: string | null
+      created_at: string
+      updated_at: string
+      card_count: number
+    }[]
+    // Tile art: explicit deck image, else the commander's image.
+    this.openReferenceIfPresent()
+    const cmdStmt = this.invDb.prepare(
+      "SELECT scryfall_id FROM deck_cards WHERE deck_id = ? AND category = 'commander' AND scryfall_id IS NOT NULL LIMIT 1"
+    )
+    const imgStmt = this.refDb?.prepare('SELECT image_uri FROM scryfall_cards WHERE scryfall_id = ?')
+    return rows.map((r) => {
+      let image = r.image_uri ?? null
+      if (!image && imgStmt) {
+        const cmd = cmdStmt.get(r.id) as { scryfall_id: string } | undefined
+        if (cmd?.scryfall_id) {
+          image = (imgStmt.get(cmd.scryfall_id) as { image_uri: string | null } | undefined)?.image_uri ?? null
+        }
+      }
+      return {
+        id: r.id,
+        name: r.name,
+        format: r.format as DeckFormat,
+        cardCount: r.card_count,
+        imageUri: image,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      }
+    })
+  }
+
+  /** Pin a card's art as the deck's tile image (null clears it → commander art). */
+  setDeckImage(deckId: number, imageUri: string | null): void {
+    this.invDb
+      .prepare("UPDATE decks SET image_uri = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(imageUri, deckId)
+  }
+
+  createDeck(name: string, format: DeckFormat = 'commander'): DeckSummary {
+    const info = this.invDb
+      .prepare('INSERT INTO decks (name, format) VALUES (?, ?)')
+      .run(name.trim() || 'Untitled deck', format)
+    return {
+      id: Number(info.lastInsertRowid),
+      name: name.trim() || 'Untitled deck',
+      format,
+      cardCount: 0,
+      imageUri: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  renameDeck(id: number, name: string): void {
+    this.invDb
+      .prepare("UPDATE decks SET name = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(name.trim() || 'Untitled deck', id)
+  }
+
+  setDeckFormat(id: number, format: DeckFormat): void {
+    this.invDb
+      .prepare("UPDATE decks SET format = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(format, id)
+  }
+
+  deleteDeck(id: number): void {
+    // ON DELETE CASCADE clears deck_cards.
+    this.invDb.prepare('DELETE FROM decks WHERE id = ?').run(id)
+  }
+
+  private touchDeck(id: number): void {
+    this.invDb.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(id)
+  }
+
+  getDeck(id: number): DeckDetail | null {
+    const deck = this.invDb.prepare('SELECT * FROM decks WHERE id = ?').get(id) as
+      | {
+          id: number
+          name: string
+          format: string
+          notes: string
+          image_uri: string | null
+          created_at: string
+          updated_at: string
+        }
+      | undefined
+    if (!deck) return null
+
+    this.openReferenceIfPresent()
+    const refStmt = this.refDb?.prepare(
+      `SELECT set_code, collector_number, rarity, type_line, mana_cost, colors,
+              image_uri, prices_eur, prices_eur_foil, prices_usd
+       FROM scryfall_cards WHERE scryfall_id = ?`
+    )
+    const owned = new Map<string, number>()
+    for (const o of this.invDb
+      .prepare('SELECT scryfall_id, SUM(quantity) AS qty FROM inventory GROUP BY scryfall_id')
+      .all() as { scryfall_id: string; qty: number }[]) {
+      owned.set(o.scryfall_id, o.qty)
+    }
+
+    const rows = this.invDb
+      .prepare('SELECT * FROM deck_cards WHERE deck_id = ? ORDER BY id')
+      .all(id) as {
+      id: number
+      scryfall_id: string | null
+      name: string
+      quantity: number
+      category: string
+    }[]
+
+    const cards: DeckCard[] = rows.map((r) => {
+      const ref = (r.scryfall_id ? refStmt?.get(r.scryfall_id) : undefined) as
+        | {
+            set_code: string
+            collector_number: string
+            rarity: string
+            type_line: string
+            mana_cost: string
+            colors: string
+            image_uri: string | null
+            prices_eur: number | null
+            prices_eur_foil: number | null
+            prices_usd: number | null
+          }
+        | undefined
+      return {
+        rowId: r.id,
+        scryfallId: r.scryfall_id,
+        name: r.name,
+        quantity: r.quantity,
+        category: r.category,
+        setCode: ref?.set_code ?? null,
+        collectorNumber: ref?.collector_number ?? null,
+        rarity: ref?.rarity ?? null,
+        typeLine: ref?.type_line ?? null,
+        manaCost: ref?.mana_cost ?? null,
+        colors: ref ? (JSON.parse(ref.colors) as string[]) : null,
+        imageUri: ref?.image_uri ?? null,
+        priceEur: ref?.prices_eur ?? null,
+        priceEurFoil: ref?.prices_eur_foil ?? null,
+        priceUsd: ref?.prices_usd ?? null,
+        owned: r.scryfall_id ? (owned.get(r.scryfall_id) ?? 0) : 0
+      }
+    })
+
+    return {
+      id: deck.id,
+      name: deck.name,
+      format: deck.format as DeckFormat,
+      notes: deck.notes,
+      imageUri: deck.image_uri ?? null,
+      createdAt: deck.created_at,
+      updatedAt: deck.updated_at,
+      cards
+    }
+  }
+
+  /** Add copies of a resolved printing to a deck, stacking an existing line. */
+  addCardToDeck(deckId: number, scryfallId: string, quantity = 1, category = ''): void {
+    if (quantity <= 0) return
+    const card = this.byScryfallId(scryfallId)
+    const name = card?.name ?? scryfallId
+    const existing = this.invDb
+      .prepare(
+        'SELECT id FROM deck_cards WHERE deck_id = ? AND scryfall_id = ? AND category = ?'
+      )
+      .get(deckId, scryfallId, category) as { id: number } | undefined
+    if (existing) {
+      this.invDb
+        .prepare('UPDATE deck_cards SET quantity = quantity + ? WHERE id = ?')
+        .run(quantity, existing.id)
+    } else {
+      this.invDb
+        .prepare(
+          'INSERT INTO deck_cards (deck_id, scryfall_id, name, quantity, category) VALUES (?, ?, ?, ?, ?)'
+        )
+        .run(deckId, scryfallId, name, quantity, category)
+    }
+    this.touchDeck(deckId)
+  }
+
+  /** Set a deck line's quantity; a value of 0 or less deletes the line. */
+  setDeckCardQuantity(rowId: number, quantity: number): void {
+    const row = this.invDb
+      .prepare('SELECT deck_id FROM deck_cards WHERE id = ?')
+      .get(rowId) as { deck_id: number } | undefined
+    if (!row) return
+    if (quantity <= 0) {
+      this.invDb.prepare('DELETE FROM deck_cards WHERE id = ?').run(rowId)
+    } else {
+      this.invDb.prepare('UPDATE deck_cards SET quantity = ? WHERE id = ?').run(quantity, rowId)
+    }
+    this.touchDeck(row.deck_id)
+  }
+
+  removeDeckCard(rowId: number): void {
+    this.setDeckCardQuantity(rowId, 0)
+  }
+
+  /** Move a deck line to another board — '', 'commander', 'sideboard', 'maybe'. */
+  setDeckCardCategory(rowId: number, category: string): void {
+    const row = this.invDb
+      .prepare('SELECT deck_id FROM deck_cards WHERE id = ?')
+      .get(rowId) as { deck_id: number } | undefined
+    if (!row) return
+    this.invDb.prepare('UPDATE deck_cards SET category = ? WHERE id = ?').run(category, rowId)
+    this.touchDeck(row.deck_id)
+  }
+
+  /**
+   * A decklist of just the copies this deck is SHORT — `need − owned` per line,
+   * over the main deck + commander. Feeds the "buy the missing singles" export.
+   */
+  deckMissingText(deckId: number): string {
+    const deck = this.getDeck(deckId)
+    if (!deck) return ''
+    const lines: string[] = []
+    for (const c of deck.cards) {
+      if (c.category !== '' && c.category !== 'commander') continue
+      const short = c.quantity - c.owned
+      if (short > 0) lines.push(`${short} ${c.name}`)
+    }
+    return lines.join('\n')
+  }
+
+  /** Exact name first (newest printing), else a prefix match. Null if unknown. */
+  private findPrintingByName(name: string): CardRef | null {
+    this.openReferenceIfPresent()
+    if (!this.refDb) return null
+    const trimmed = name.trim()
+    if (!trimmed) return null
+    const exact = this.refDb
+      .prepare(
+        'SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE ORDER BY released_at DESC LIMIT 1'
+      )
+      .get(trimmed)
+    if (exact) return rowToCardRef(exact as never, 'local')
+    // Split cards / faces: "Fire // Ice" lists often carry only one face name.
+    const prefix = this.refDb
+      .prepare(
+        `SELECT * FROM scryfall_cards WHERE name LIKE ? COLLATE NOCASE
+         ORDER BY released_at DESC LIMIT 1`
+      )
+      .get(`${trimmed}%`)
+    return prefix ? rowToCardRef(prefix as never, 'local') : null
+  }
+
+  /**
+   * Import a pasted decklist. Understands "2 Sol Ring", "2x Island (FIN) 297",
+   * the foil / etched markers, "SB:" prefixes, and section headers (Commander /
+   * Sideboard / Maybeboard). Resolved lines stack on their printing; lines that
+   * can't be resolved are kept as null-scryfall rows (still shown, still
+   * counted) and their names returned in `missing`.
+   */
+  importDeckText(deckId: number, text: string): DeckImportResult {
+    let added = 0
+    const missing: string[] = []
+    const insertUnresolved = this.invDb.prepare(
+      'INSERT INTO deck_cards (deck_id, scryfall_id, name, quantity, category) VALUES (?, NULL, ?, ?, ?)'
+    )
+
+    const run = this.invDb.transaction(() => {
+      let category = ''
+      for (const rawLine of text.split(/\r?\n/)) {
+        let line = rawLine.trim()
+        if (!line || line.startsWith('//') || line.startsWith('#')) continue
+
+        // Section headers (a bare word, no quantity). Strip a trailing colon.
+        const header = line.toLowerCase().replace(/:+$/, '')
+        if (!/^\d/.test(line) && !/^sb:/i.test(line)) {
+          if (header === 'commander' || header === 'command zone') {
+            category = 'commander'
+            continue
+          }
+          if (header === 'sideboard' || header === 'maybeboard' || header === 'maybe') {
+            category = header === 'sideboard' ? 'sideboard' : 'maybe'
+            continue
+          }
+          if (header === 'deck' || header === 'mainboard' || header === 'main') {
+            category = ''
+            continue
+          }
+        }
+
+        let lineCategory = category
+        if (/^sb:/i.test(line)) {
+          lineCategory = 'sideboard'
+          line = line.replace(/^sb:\s*/i, '')
+        }
+
+        // quantity + rest
+        const qm = line.match(/^(\d+)\s*[xX]?\s+(.+)$/)
+        const quantity = qm ? Math.max(1, Number(qm[1])) : 1
+        let rest = qm ? qm[2] : line
+
+        // strip foil / etched markers and a trailing (SET) collector number
+        rest = rest.replace(/\*[fFeE]\*/g, '').trim()
+        let setCode: string | null = null
+        let collectorNumber: string | null = null
+        const setMatch = rest.match(/^(.*?)\s*\(([A-Za-z0-9]{2,6})\)\s*([A-Za-z0-9-★]+)?\s*$/)
+        if (setMatch) {
+          rest = setMatch[1].trim()
+          setCode = setMatch[2]
+          collectorNumber = setMatch[3] ?? null
+        }
+        const name = rest.trim()
+        if (!name) continue
+
+        let card: CardRef | null = null
+        if (setCode && collectorNumber) card = this.lookup(setCode, collectorNumber)
+        if (!card) card = this.findPrintingByName(name)
+
+        if (card) {
+          this.addCardToDeck(deckId, card.scryfallId, quantity, lineCategory)
+          added += quantity
+        } else {
+          insertUnresolved.run(deckId, name, quantity, lineCategory)
+          added += quantity
+          missing.push(name)
+        }
+      }
+      this.touchDeck(deckId)
+    })
+    run()
+    return { deckId, added, missing }
   }
 
   close(): void {

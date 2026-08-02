@@ -8,6 +8,8 @@ import faceGwen from './assets/faces/spider-gwen.svg'
 import faceOck from './assets/faces/doc-ock.svg'
 import faceDoom from './assets/faces/doom.svg'
 import faceNoir from './assets/faces/noir.svg'
+import faceMiles from './assets/faces/miles.svg'
+import DeckBuilding from './components/DeckBuilding'
 import spideyIcon from './assets/spidey.svg'
 import type {
   CardRef,
@@ -28,13 +30,23 @@ interface CapturePreview {
 }
 
 /** One face button per app section — the home screen launcher. */
-type Section = 'home' | 'scan' | 'remove' | 'collection' | 'viewer' | 'precon' | 'data' | 'settings'
+type Section =
+  | 'home'
+  | 'scan'
+  | 'remove'
+  | 'collection'
+  | 'viewer'
+  | 'deckbuild'
+  | 'precon'
+  | 'data'
+  | 'settings'
 
 const SECTIONS: { id: Exclude<Section, 'home'>; label: string; face: string; blurb: string }[] = [
   { id: 'scan', label: 'Scan cards in', face: faceHam, blurb: 'Camera scanning, name mode & manual add' },
   { id: 'remove', label: 'Sell / Remove', face: faceVenom, blurb: 'Scan cards back out of stock' },
   { id: 'collection', label: 'Collection', face: faceFisk, blurb: 'Stock list, values & exports' },
   { id: 'viewer', label: 'Show Inventory', face: faceGwen, blurb: 'Browse the collection in your browser' },
+  { id: 'deckbuild', label: 'Deck building', face: faceMiles, blurb: 'Build & analyse decks; import from text' },
   { id: 'precon', label: 'Precon import', face: faceOck, blurb: 'Bulk-add a preconstructed deck' },
   { id: 'data', label: 'Card data', face: faceDoom, blurb: 'Refresh the Scryfall reference' },
   { id: 'settings', label: 'Settings', face: faceNoir, blurb: 'Sounds & preferences' }
@@ -1583,6 +1595,8 @@ export default function App(): React.JSX.Element {
 
       </div>
       )}
+
+      {section === 'deckbuild' && <DeckBuilding />}
 
       {section === 'precon' && (
         <div className="section-body">

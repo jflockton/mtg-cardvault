@@ -828,3 +828,527 @@ header {
   border-radius: 6px;
   font-size: 0.85rem;
 }
+
+/* ----------------------------------------------------------- deck building */
+/* Deck screen uses the full window — override the centred 1100px section cap. */
+.section-body.deck-wrap {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.deck-body {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.deck-side {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+}
+.buy-panel h3,
+.owned-panel h3 {
+  margin: 0 0 6px;
+}
+.buy-list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.buy-list li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.buy-short {
+  color: var(--muted);
+  min-width: 22px;
+}
+.buy-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.buy-price {
+  color: var(--muted);
+}
+.buy-cost {
+  color: var(--warn);
+  font-weight: 600;
+}
+.buy-panel button.primary {
+  width: 100%;
+  margin-top: 6px;
+}
+.owned-meter {
+  height: 10px;
+  background: var(--bg);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+.owned-fill {
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.2s;
+}
+.deck-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.deck-title {
+  margin: 0;
+}
+.deck-format-badge {
+  text-transform: capitalize;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+button.danger {
+  color: var(--warn);
+}
+
+.deck-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.deck-tile {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  min-height: 92px;
+  text-align: left;
+  background-size: cover;
+  background-position: center 20%;
+}
+.deck-tile-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 12px;
+  width: 100%;
+  min-height: 92px;
+}
+.deck-tile.has-art {
+  min-height: 130px;
+}
+.deck-tile.has-art .deck-tile-overlay {
+  min-height: 130px;
+  background: linear-gradient(180deg, rgba(20, 22, 26, 0.1) 30%, rgba(20, 22, 26, 0.9));
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.deck-tile-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.deck-tile-meta {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.deck-tile.has-art .deck-tile-meta {
+  color: #d7dbe0;
+}
+
+/* click-a-card detail modal */
+.card-modal {
+  display: flex;
+  gap: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  width: 720px;
+  max-width: 94vw;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
+}
+.card-modal-art {
+  flex: 0 0 300px;
+}
+.card-modal-art img {
+  width: 300px;
+  display: block;
+  border-radius: 14px;
+}
+.card-modal-noart {
+  width: 300px;
+  height: 418px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+}
+.card-modal-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-modal-head h3 {
+  margin: 0;
+}
+.modal-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  padding: 0 4px;
+}
+.card-modal-qty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.qty-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.qty-step button {
+  padding: 2px 11px;
+  font-size: 15px;
+}
+.card-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.card-modal-actions button {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+}
+.ext-link {
+  text-decoration: none;
+}
+.deck-scryfall {
+  margin-top: 10px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Stacks view: category columns of overlapping cards; only each name banner
+   peeks. Hovering a card lifts the one after it away, revealing the hovered
+   card in full and cascading every card below it down. */
+.deck-stacks {
+  --card-w: 215px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding-bottom: 8px;
+}
+.stack-col {
+  flex: 0 0 var(--card-w);
+  min-width: var(--card-w);
+}
+/* Commander pinned to the left so it's always in view while you scroll. */
+.stack-col.commander-col {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: var(--bg);
+  padding-right: 10px;
+  box-shadow: 10px 0 12px -8px rgba(0, 0, 0, 0.65);
+}
+.stack-card-controls button.is-cmd {
+  color: #f4c552;
+  border-color: #f4c552;
+}
+.stack-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 2px 6px;
+}
+.stack-label {
+  font-weight: 600;
+}
+.stack {
+  position: relative;
+}
+.stack-card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  transition: margin-top 0.16s ease;
+}
+.stack-card-crown {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #f4c552;
+  font-size: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.stack-card + .stack-card {
+  /* pull each card up over the previous, leaving ~34px (its title) showing */
+  margin-top: calc(-1 * var(--card-w) * 1.3955 + 34px);
+}
+.stack-card:hover {
+  z-index: 30;
+}
+.stack-card:hover + .stack-card {
+  margin-top: 6px;
+}
+.stack-card-img,
+.stack-card-placeholder {
+  display: block;
+  width: var(--card-w);
+  height: calc(var(--card-w) * 1.3955);
+  border-radius: 9px;
+  box-shadow: 0 -2px 7px rgba(0, 0, 0, 0.55);
+}
+.stack-card-placeholder {
+  background: repeating-linear-gradient(
+    -45deg,
+    #23262d,
+    #23262d 8px,
+    #1d2026 8px,
+    #1d2026 16px
+  );
+  border: 1px dashed var(--border);
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scp-name {
+  font-weight: 600;
+}
+.stack-card-qty {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(20, 22, 26, 0.86);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.stack-card-owned {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+}
+.stack-card-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  display: none;
+  justify-content: center;
+  gap: 4px;
+}
+.stack-card:hover .stack-card-controls {
+  display: flex;
+}
+.stack-card-controls button {
+  padding: 2px 9px;
+  font-size: 13px;
+  line-height: 1.1;
+  background: rgba(20, 22, 26, 0.9);
+  border: 1px solid var(--border);
+}
+
+/* analysis panels below the stacks */
+.deck-analysis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.analysis-panel h3 {
+  margin: 0 0 4px;
+}
+.color-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.color-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 11px;
+  color: #14161a;
+  flex: 0 0 auto;
+}
+.color-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.color-fill {
+  height: 100%;
+}
+.color-pct {
+  width: 38px;
+  text-align: right;
+  color: var(--muted);
+}
+.curve {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  margin-top: 6px;
+}
+.curve-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 4px;
+}
+.curve-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+.curve-count {
+  font-size: 11px;
+  color: var(--muted);
+  height: 14px;
+}
+.curve-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.odds-table {
+  width: 100%;
+}
+.odds-table td:not(:first-child),
+.odds-table th:not(:first-child) {
+  text-align: right;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.pip {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* modals (new-deck name popup, paste-import) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 14, 0.62);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  width: 380px;
+  max-width: 92vw;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.modal-wide {
+  width: 560px;
+}
+.modal h3 {
+  margin: 0 0 10px;
+}
+.modal-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.modal-format {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--muted);
+}
+.import-textarea {
+  width: 100%;
+  height: 220px;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 13px;
+  resize: vertical;
+  padding: 8px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}

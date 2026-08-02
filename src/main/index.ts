@@ -15,7 +15,7 @@ import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
 import { openInventoryViewer, closeInventoryViewer, gbpRate } from './viewer'
-import type { CornerScanResult, Finish, LookupQuery, RefProgress } from '../shared/types'
+import type { CornerScanResult, DeckFormat, Finish, LookupQuery, RefProgress } from '../shared/types'
 
 /** Tesseract traineddata: repo-local in dev, resources/tessdata when packaged. */
 function resolveTessdataDir(): string {
@@ -414,6 +414,44 @@ function registerIpc(): void {
     (_e, args: { scryfallId: string; from: Finish; to: Finish; quantity?: number }) =>
       store.moveFinish(args.scryfallId, args.from, args.to, args.quantity ?? 1)
   )
+
+  // ---- decks
+  ipcMain.handle('deck:list', () => store.listDecks())
+  ipcMain.handle('deck:create', (_e, a: { name: string; format?: DeckFormat }) =>
+    store.createDeck(a.name, a.format ?? 'commander')
+  )
+  ipcMain.handle('deck:rename', (_e, a: { id: number; name: string }) =>
+    store.renameDeck(a.id, a.name)
+  )
+  ipcMain.handle('deck:setFormat', (_e, a: { id: number; format: DeckFormat }) =>
+    store.setDeckFormat(a.id, a.format)
+  )
+  ipcMain.handle('deck:delete', (_e, id: number) => store.deleteDeck(id))
+  ipcMain.handle('deck:get', (_e, id: number) => store.getDeck(id))
+  ipcMain.handle(
+    'deck:addCard',
+    (_e, a: { deckId: number; scryfallId: string; quantity?: number; category?: string }) =>
+      store.addCardToDeck(a.deckId, a.scryfallId, a.quantity ?? 1, a.category ?? '')
+  )
+  ipcMain.handle('deck:setQuantity', (_e, a: { rowId: number; quantity: number }) =>
+    store.setDeckCardQuantity(a.rowId, a.quantity)
+  )
+  ipcMain.handle('deck:setCategory', (_e, a: { rowId: number; category: string }) =>
+    store.setDeckCardCategory(a.rowId, a.category)
+  )
+  ipcMain.handle('deck:setImage', (_e, a: { deckId: number; imageUri: string | null }) =>
+    store.setDeckImage(a.deckId, a.imageUri)
+  )
+  ipcMain.handle('deck:importText', (_e, a: { deckId: number; text: string }) =>
+    store.importDeckText(a.deckId, a.text)
+  )
+  // Copy the "missing singles" decklist to the clipboard (renderer clipboard is
+  // locked down, so it's done here) — ready to paste into a shop or /buy-deck.
+  ipcMain.handle('deck:copyMissing', (_e, id: number) => {
+    const text = store.deckMissingText(id)
+    clipboard.writeText(text)
+    return { lines: text ? text.split('\n').length : 0 }
+  })
 
   ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
     const scan = await scanCorner(imageVariants, resolveTessdataDir())
