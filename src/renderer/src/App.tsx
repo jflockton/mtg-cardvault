@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CameraPanel, { type CapturedFrame } from './components/CameraPanel'
 import { playSuccess, playAttention, playUndo } from './scan/audio'
+import faceHam from './assets/faces/spider-ham.svg'
+import faceVenom from './assets/faces/venom.png'
+import faceFisk from './assets/faces/fisk.svg'
+import faceGwen from './assets/faces/spider-gwen.svg'
+import faceOck from './assets/faces/doc-ock.svg'
+import faceDoom from './assets/faces/doom.svg'
+import faceNoir from './assets/faces/noir.svg'
 import type {
   CardRef,
   CornerScanResult,
@@ -17,6 +24,19 @@ interface CapturePreview {
   width: number
   height: number
 }
+
+/** One face button per app section — the home screen launcher. */
+type Section = 'home' | 'scan' | 'remove' | 'collection' | 'viewer' | 'precon' | 'data' | 'settings'
+
+const SECTIONS: { id: Exclude<Section, 'home'>; label: string; face: string; blurb: string }[] = [
+  { id: 'scan', label: 'Scan cards in', face: faceHam, blurb: 'Camera scanning, name mode & manual add' },
+  { id: 'remove', label: 'Sell / Remove', face: faceVenom, blurb: 'Scan cards back out of stock' },
+  { id: 'collection', label: 'Collection', face: faceFisk, blurb: 'Stock list, values & exports' },
+  { id: 'viewer', label: 'Show Inventory', face: faceGwen, blurb: 'Browse the collection in your browser' },
+  { id: 'precon', label: 'Precon import', face: faceOck, blurb: 'Bulk-add a preconstructed deck' },
+  { id: 'data', label: 'Card data', face: faceDoom, blurb: 'Refresh the Scryfall reference' },
+  { id: 'settings', label: 'Settings', face: faceNoir, blurb: 'Sounds & preferences' }
+]
 
 type ScanState =
   | { status: 'idle' }
@@ -136,7 +156,8 @@ function CardPreview({
   quantity,
   setQuantity,
   onAdd,
-  onCancel
+  onCancel,
+  actionLabel
 }: {
   card: CardRef
   finish: Finish
@@ -145,6 +166,7 @@ function CardPreview({
   setQuantity: (n: number) => void
   onAdd: () => void
   onCancel: () => void
+  actionLabel?: string
 }): React.JSX.Element {
   const eur = finish === 'nonfoil' ? card.pricesEur : (card.pricesEurFoil ?? card.pricesEur)
   const usd = finish === 'nonfoil' ? card.pricesUsd : (card.pricesUsdFoil ?? card.pricesUsd)
@@ -192,7 +214,7 @@ function CardPreview({
         )}
         <div className="action-row">
           <button className="primary" onClick={onAdd}>
-            Add to inventory (Enter)
+            {actionLabel ?? 'Add to inventory (Enter)'}
           </button>
           <button onClick={onCancel}>Cancel (Esc)</button>
         </div>
@@ -352,7 +374,13 @@ function ScanReadout({
   )
 }
 
-function PreconPanel({ onAdded }: { onAdded: (summary: string) => void }): React.JSX.Element {
+function PreconPanel({
+  onAdded,
+  standalone
+}: {
+  onAdded: (summary: string) => void
+  standalone?: boolean
+}): React.JSX.Element {
   const [decks, setDecks] = useState<PreconSummary[] | null>(null)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<PreconSummary | null>(null)
@@ -408,11 +436,8 @@ function PreconPanel({ onAdded }: { onAdded: (summary: string) => void }): React
     }
   }
 
-  return (
-    <details className="panel manual-panel" onToggle={(e) => e.currentTarget.open && loadList()}>
-      <summary>
-        <h2>Add a precon deck</h2>
-      </summary>
+  const body = (
+    <>
       <p className="muted small">
         Deck lists from MTGJSON — every card of the precon is added with its exact printing,
         counts and foils, priced into the scan log.
@@ -452,11 +477,48 @@ function PreconPanel({ onAdded }: { onAdded: (summary: string) => void }): React
         </div>
       )}
       {error && <p className="warn">{error}</p>}
+    </>
+  )
+
+  if (standalone) {
+    return <StandalonePrecon loadList={loadList}>{body}</StandalonePrecon>
+  }
+  return (
+    <details className="panel manual-panel" onToggle={(e) => e.currentTarget.open && loadList()}>
+      <summary>
+        <h2>Add a precon deck</h2>
+      </summary>
+      {body}
     </details>
   )
 }
 
+function StandalonePrecon({
+  loadList,
+  children
+}: {
+  loadList: () => Promise<void>
+  children: React.ReactNode
+}): React.JSX.Element {
+  useEffect(() => {
+    void loadList()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <section className="panel">
+      <h2>Add a precon deck</h2>
+      {children}
+    </section>
+  )
+}
+
 export default function App(): React.JSX.Element {
+  // Launcher navigation: one section on screen at a time, chosen from the
+  // face buttons on the home screen. A ref mirrors it so the frame loop's
+  // callbacks always see the CURRENT section without re-wiring.
+  const [section, setSection] = useState<Section>('home')
+  const sectionRef = useRef<Section>('home')
+
   const [refStatus, setRefStatus] = useState<RefStatus | null>(null)
   const [inventory, setInventory] = useState<InventorySummary | null>(null)
 
@@ -510,7 +572,9 @@ export default function App(): React.JSX.Element {
     missStreak: 0, // consecutive frames with content but no lock
     warned: false // attention beep already played this episode
   })
-  const undoStack = useRef<{ scryfallId: string; finish: Finish; name: string }[]>([])
+  const undoStack = useRef<
+    { scryfallId: string; finish: Finish; name: string; action: 'add' | 'remove'; card?: CardRef }[]
+  >([])
   // While a candidates pick-list is on screen, noisy frames must not blink
   // it away — the operator is trying to CLICK it (live-log finding).
   const candidatesHold = useRef(0)
@@ -628,7 +692,12 @@ export default function App(): React.JSX.Element {
         finishOverride ?? (c.finishes.includes('nonfoil') ? 'nonfoil' : (c.finishes[0] ?? 'nonfoil'))
       window.api.note?.(`ADD ${c.name} [${c.setCode} #${c.collectorNumber}] ${addFinish}`)
       const item = await window.api.addCard(c, addFinish, 1)
-      undoStack.current.push({ scryfallId: c.scryfallId, finish: addFinish, name: c.name })
+      undoStack.current.push({
+        scryfallId: c.scryfallId,
+        finish: addFinish,
+        name: c.name,
+        action: 'add'
+      })
       playSuccess()
       setFlash(true)
       setTimeout(() => setFlash(false), 350)
@@ -640,6 +709,59 @@ export default function App(): React.JSX.Element {
     [loadInventory]
   )
 
+  /**
+   * Sell / Remove mode: same scan loop, opposite direction. Tries the
+   * scanned printing's stacks in finish order until one yields stock; a
+   * card the shop doesn't stock beeps attention instead of going negative.
+   */
+  const removeStock = useCallback(
+    async (c: CardRef, finishOverride?: Finish, qty = 1) => {
+      const order: Finish[] = finishOverride
+        ? [finishOverride]
+        : ['nonfoil', 'foil', 'etched']
+      let item: import('../../shared/types').InventoryItem | null = null
+      let used: Finish | null = null
+      for (const f of order) {
+        item = await window.api.removeCard(c.scryfallId, f, qty)
+        if (item) {
+          used = f
+          break
+        }
+      }
+      if (!item || !used) {
+        playAttention()
+        window.api.note?.(`SELL-MISS ${c.name} [${c.setCode} #${c.collectorNumber}]`)
+        setMessage(`⚠ ${c.name} (${c.setCode.toUpperCase()} #${c.collectorNumber}) — none in stock`)
+        return
+      }
+      undoStack.current.push({
+        scryfallId: c.scryfallId,
+        finish: used,
+        name: c.name,
+        action: 'remove',
+        card: c
+      })
+      window.api.note?.(`SELL ${c.name} [${c.setCode} #${c.collectorNumber}] ${used}`)
+      playUndo()
+      setFlash(true)
+      setTimeout(() => setFlash(false), 350)
+      setMessage(
+        `✂ Sold ${qty}× ${item.name} (${item.setCode.toUpperCase()} #${item.collectorNumber}, ${used}) — ×${item.quantity} left`
+      )
+      loadInventory()
+    },
+    [loadInventory]
+  )
+
+  /** Route a locked/confirmed card to add or remove, per the open section. */
+  const applyStock = useCallback(
+    async (c: CardRef, finishOverride?: Finish) => {
+      if (sectionRef.current === 'remove') return removeStock(c, finishOverride)
+      return autoAdd(c, finishOverride)
+    },
+    [autoAdd, removeStock]
+  )
+
   const commitPending = useCallback(async () => {
     const p = pendingRef.current
     if (!p) return
@@ -649,8 +771,8 @@ export default function App(): React.JSX.Element {
     auto.current.lastAddedId = p.card.scryfallId
     auto.current.clearFrames = 0
     auto.current.lastAddTime = Date.now()
-    await autoAdd(p.card, p.finish)
-  }, [autoAdd, setPending])
+    await applyStock(p.card, p.finish)
+  }, [applyStock, setPending])
 
   const discardPending = useCallback(() => {
     const p = pendingRef.current
@@ -664,7 +786,7 @@ export default function App(): React.JSX.Element {
   /** F after a beep: cycle the just-added copy's finish (foil → etched → back). */
   const flipLastFinish = useCallback(async () => {
     const last = undoStack.current[undoStack.current.length - 1]
-    if (!last) return
+    if (!last || last.action !== 'add') return
     const order: Finish[] = ['nonfoil', 'foil', 'etched']
     const next = order[(order.indexOf(last.finish) + 1) % order.length]
     const moved = await window.api.moveFinish(last.scryfallId, last.finish, next, 1)
@@ -678,9 +800,14 @@ export default function App(): React.JSX.Element {
   const undoLast = useCallback(async () => {
     const last = undoStack.current.pop()
     if (!last) return
-    await window.api.removeCard(last.scryfallId, last.finish, 1)
+    if (last.action === 'remove' && last.card) {
+      await window.api.addCard(last.card, last.finish, 1)
+      setMessage(`↩ Restocked 1× ${last.name}`)
+    } else {
+      await window.api.removeCard(last.scryfallId, last.finish, 1)
+      setMessage(`↩ Removed 1× ${last.name}`)
+    }
     playUndo()
-    setMessage(`↩ Removed 1× ${last.name}`)
     loadInventory()
   }, [loadInventory])
 
@@ -807,7 +934,7 @@ export default function App(): React.JSX.Element {
               a.clearFrames = 0
               a.lastAddTime = Date.now()
               setAutoStatus('')
-              await autoAdd(res.card)
+              await applyStock(res.card)
             } else {
               // Shaky digit read: stage it, keep scanning. Visible for a
               // foil-flip or discard; the next lock commits it untouched.
@@ -876,7 +1003,7 @@ export default function App(): React.JSX.Element {
         auto.current.busy = false
       }
     },
-    [card, autoAdd, commitPending, setPending, scanFrame, scanMode]
+    [card, applyStock, commitPending, setPending, scanFrame, scanMode]
   )
 
   const onCapture = useCallback(
@@ -908,15 +1035,20 @@ export default function App(): React.JSX.Element {
 
   const addCard = useCallback(async () => {
     if (!card) return
-    const item = await window.api.addCard(card, finish, quantity)
-    undoStack.current.push({ scryfallId: card.scryfallId, finish, name: card.name })
     if (autoMode) {
       // Confirmed via preview during auto scan: arm the same-card cooldown
-      // so the card still in frame doesn't immediately re-add.
+      // so the card still in frame doesn't immediately re-add (or re-sell).
       auto.current.lastAddedId = card.scryfallId
       auto.current.clearFrames = 0
       auto.current.lastAddTime = Date.now()
     }
+    if (sectionRef.current === 'remove') {
+      await removeStock(card, finish, quantity)
+      resetForNext()
+      return
+    }
+    const item = await window.api.addCard(card, finish, quantity)
+    undoStack.current.push({ scryfallId: card.scryfallId, finish, name: card.name, action: 'add' })
     playSuccess()
     setMessage(
       `Added ${item.name} (${item.setCode.toUpperCase()} #${item.collectorNumber}, ${item.finish}) — now ×${item.quantity}`
@@ -925,13 +1057,55 @@ export default function App(): React.JSX.Element {
     setTimeout(() => setFlash(false), 350)
     loadInventory()
     resetForNext()
-  }, [card, finish, quantity, autoMode, loadInventory, resetForNext])
+  }, [card, finish, quantity, autoMode, loadInventory, resetForNext, removeStock])
+
+  /** Navigate between sections; scanning state never leaks across. */
+  const go = useCallback(
+    (s: Section) => {
+      const leaving = sectionRef.current
+      if (pendingRef.current) {
+        // Leaving Scan commits the stage ("probably right", same rule as
+        // toggling auto off); leaving Sell just drops it — selling stock on
+        // a low-confidence read nobody confirmed would be worse.
+        if (leaving === 'scan') void commitPending()
+        else setPending(null)
+      }
+      auto.current = {
+        busy: false,
+        busySince: 0,
+        lastId: null,
+        hits: 0,
+        lockConf: 0,
+        lastAddedId: null,
+        lastAddTime: 0,
+        clearFrames: 0,
+        missStreak: 0,
+        warned: false
+      }
+      setCard(null)
+      setCapture(null)
+      setScan({ status: 'idle' })
+      setMessage(null)
+      setAutoStatus('')
+      setShowSearch(false)
+      sectionRef.current = s
+      setSection(s)
+    },
+    [commitPending, setPending]
+  )
+
+  // Entering Show Inventory opens the browser straight away.
+  useEffect(() => {
+    if (section === 'viewer') void window.api.openViewer()
+  }, [section])
 
   // Keyboard flow. Preview open: Enter = confirm, F = toggle foil, Esc =
   // reject. No preview: F = sticky finish for auto-adds, Backspace = undo
   // the last add.
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      // Scan-loop keys belong to the scanning sections only.
+      if (sectionRef.current !== 'scan' && sectionRef.current !== 'remove') return
       const tag = (e.target as HTMLElement).tagName
       const inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
       if (card) {
@@ -989,24 +1163,55 @@ export default function App(): React.JSX.Element {
     )
   }
 
+  const sectionMeta = SECTIONS.find((s) => s.id === section)
+
   return (
     <div className={`app ${flash ? 'flash' : ''}`}>
       <header>
-        <h1>🃏 MTG CardVault</h1>
-        <ReferencePanel
-          status={refStatus}
-          onStatusChange={() => {
-            loadStatus()
-            loadSets()
-          }}
-        />
+        <h1 className="app-title" onClick={() => go('home')} title="Home">
+          🕷 MTG CardVault
+        </h1>
+        {section !== 'home' && sectionMeta && (
+          <>
+            <img className="header-face" src={sectionMeta.face} alt="" />
+            <span className="section-name">{sectionMeta.label}</span>
+            <button className="home-btn" onClick={() => go('home')}>
+              ⌂ Home
+            </button>
+          </>
+        )}
       </header>
 
-      <div className="columns">
-      <div className="col scan-col">
+      {section === 'home' && (
+        <div className="home">
+          {!refStatus?.ready && (
+            <p className="warn home-warn">
+              No card data yet — open <b>Card data</b> and download it once to enable scanning.
+            </p>
+          )}
+          <div className="home-grid">
+            {SECTIONS.map((s) => (
+              <button key={s.id} className="face-btn" onClick={() => go(s.id)}>
+                <img src={s.face} alt={s.label} />
+                <span className="face-label">{s.label}</span>
+                <span className="face-blurb">{s.blurb}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(section === 'scan' || section === 'remove') && (
+      <div className="section-body">
+      {section === 'remove' && (
+        <p className="sell-banner">
+          ✂ Sell mode — every locked scan REMOVES one copy from stock. Cards not in stock
+          beep and are ignored.
+        </p>
+      )}
       <section className="panel">
         <div className="ref-row">
-          <h2>Scan card</h2>
+          <h2>{section === 'remove' ? 'Scan card to sell' : 'Scan card'}</h2>
           <div className="toolbar-right">
             <button
               className={autoMode ? 'primary' : ''}
@@ -1136,6 +1341,7 @@ export default function App(): React.JSX.Element {
                 setQuantity={() => {}}
                 onAdd={commitPending}
                 onCancel={discardPending}
+                actionLabel={section === 'remove' ? 'Remove from stock (Enter)' : undefined}
               />
             </div>
           )}
@@ -1148,6 +1354,7 @@ export default function App(): React.JSX.Element {
               setQuantity={setQuantity}
               onAdd={addCard}
               onCancel={resetForNext}
+              actionLabel={section === 'remove' ? 'Remove from stock (Enter)' : undefined}
             />
           )}
         </section>
@@ -1237,15 +1444,85 @@ export default function App(): React.JSX.Element {
         )}
       </details>
 
-      <PreconPanel
-        onAdded={(summary) => {
-          setMessage(summary)
-          loadInventory()
-        }}
-      />
       </div>
+      )}
 
-      <div className="col collection-col">
+      {section === 'precon' && (
+        <div className="section-body">
+          {message && <p className="message">{message}</p>}
+          <PreconPanel
+            standalone
+            onAdded={(summary) => {
+              setMessage(summary)
+              loadInventory()
+            }}
+          />
+        </div>
+      )}
+
+      {section === 'viewer' && (
+        <div className="section-body">
+          <section className="panel">
+            <h2>Show Inventory</h2>
+            <p className="muted">
+              The collection viewer just opened in your web browser — card images, Cardmarket
+              £ prices, set browsing, and an any-card search across every printing.
+            </p>
+            <button className="primary" onClick={() => void window.api.openViewer()}>
+              Open it again
+            </button>
+          </section>
+        </div>
+      )}
+
+      {section === 'data' && (
+        <div className="section-body">
+          <section className="panel">
+            <h2>Card data</h2>
+            <p className="muted small">
+              The offline Scryfall reference powers every lookup and price (Cardmarket € and
+              USD). Refresh it roughly weekly, or right after a new set releases.
+            </p>
+            <ReferencePanel
+              status={refStatus}
+              onStatusChange={() => {
+                loadStatus()
+                loadSets()
+              }}
+            />
+          </section>
+        </div>
+      )}
+
+      {section === 'settings' && (
+        <div className="section-body">
+          <section className="panel">
+            <h2>Settings</h2>
+            <label className="tick-label">
+              <input
+                type="checkbox"
+                checked={autoMode}
+                onChange={(e) => {
+                  setAutoMode(e.target.checked)
+                  localStorage.setItem('cardvault.autoScan', e.target.checked ? '1' : '0')
+                }}
+              />{' '}
+              Auto scan on by default
+            </label>
+            <p className="muted small">
+              Camera selection lives inside the scan view. Sound check:
+            </p>
+            <div className="action-row">
+              <button onClick={() => playSuccess()}>✓ counted beep</button>
+              <button onClick={() => playAttention()}>⚠ attention beep</button>
+              <button onClick={() => playUndo()}>↩ undo blip</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {section === 'collection' && (
+      <div className="section-body">
       <section className="panel collection">
         <div className="ref-row collection-head">
           <h2>{exportScope === 'session' ? 'Scanned this session' : 'Collection'}</h2>
@@ -1293,6 +1570,7 @@ export default function App(): React.JSX.Element {
             🖼 Show Inventory
           </button>
         </div>
+        {message && <p className="message">{message}</p>}
         {inventory && inventory.items.length > 0 ? (
           <div className="table-scroll">
           <table>
@@ -1375,7 +1653,7 @@ export default function App(): React.JSX.Element {
         )}
       </section>
       </div>
-      </div>
+      )}
     </div>
   )
 }
