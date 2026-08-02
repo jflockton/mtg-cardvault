@@ -1562,85 +1562,82 @@ export default function App(): React.JSX.Element {
       {section === 'collection' && (
       <div className="section-body">
       <section className="panel collection">
-        <div className="ref-row collection-head">
-          <h2>Collection</h2>
-          {inventory && (
-            <p className="muted">
-              {inventory.totalCards.toLocaleString()} cards ·{' '}
-              {inventory.distinctStacks.toLocaleString()} stacks ·{' '}
-              <span className="collection-value" title="Cardmarket value (ECB rate) · USD value">
-                {cardmarket(inventory.totalValueEur) ?? '—'}
-              </span>{' '}
-              · ${inventory.totalValue.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-              })}
-            </p>
-          )}
-          <label className="date-label">
-            From
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value)
-                dateFromRef.current = e.target.value
-                loadInventory()
-              }}
-            />
-          </label>
-          <label className="date-label">
-            To
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value)
-                dateToRef.current = e.target.value
-                loadInventory()
-              }}
-            />
-          </label>
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => {
-                setDateFrom('')
-                setDateTo('')
-                dateFromRef.current = ''
-                dateToRef.current = ''
-                loadInventory()
-              }}
-            >
-              ✕ Clear filters
+        <div className="collection-head">
+          <div className="collection-title-row">
+            <h2>Collection</h2>
+            {inventory && (
+              <p className="muted">
+                {inventory.totalCards.toLocaleString()} cards ·{' '}
+                {inventory.distinctStacks.toLocaleString()} stacks ·{' '}
+                <span className="collection-value" title="Cardmarket value (ECB rate) · USD value">
+                  {cardmarket(inventory.totalValueEur) ?? '—'}
+                </span>{' '}
+                · ${inventory.totalValue.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}
+              </p>
+            )}
+          </div>
+          <div className="collection-toolbar">
+            <label className="date-label">
+              From
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  dateFromRef.current = e.target.value
+                  loadInventory()
+                }}
+              />
+            </label>
+            <label className="date-label">
+              To
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value)
+                  dateToRef.current = e.target.value
+                  loadInventory()
+                }}
+              />
+            </label>
+            {(dateFrom || dateTo) && (
+              <button
+                className="clear-btn"
+                onClick={() => {
+                  setDateFrom('')
+                  setDateTo('')
+                  dateFromRef.current = ''
+                  dateToRef.current = ''
+                  loadInventory()
+                }}
+              >
+                ✕ Clear filters
+              </button>
+            )}
+            <span className="toolbar-spacer" />
+            <button title="Copy plain list to clipboard: 1 Island (FIN) 297" onClick={() => copyExport('list')}>
+              📋 Copy list
             </button>
-          )}
-          <button
-            title="Plain list: 1 Island (FIN) 297"
-            onClick={() => copyExport('list')}
-          >
-            📋 Copy list
-          </button>
-          <button title="CSV: quantity,card-name,expansion,id" onClick={() => copyExport('csv')}>
-            Copy CSV
-          </button>
-          <button
-            title="Save a CSV file of the filtered collection"
-            onClick={() => downloadExport('csv')}
-          >
-            ⬇ CSV file
-          </button>
-          <button
-            title="Save a plain deck-list file of the filtered collection"
-            onClick={() => downloadExport('list')}
-          >
-            ⬇ Deck list
-          </button>
-          <button
-            title="Browse the collection in your web browser — images, Cardmarket prices, any-card search"
-            onClick={() => void window.api.openViewer()}
-          >
-            🖼 Show Inventory
-          </button>
+            <button title="Copy CSV to clipboard: quantity,card-name,expansion,id" onClick={() => copyExport('csv')}>
+              📋 Copy CSV
+            </button>
+            <button title="Save a CSV file of the filtered collection" onClick={() => downloadExport('csv')}>
+              ⬇ CSV file
+            </button>
+            <button title="Save a plain deck-list file of the filtered collection" onClick={() => downloadExport('list')}>
+              ⬇ Deck list
+            </button>
+            <button
+              title="Browse the collection — images, Cardmarket prices, any-card search"
+              onClick={() => void window.api.openViewer()}
+            >
+              🖼 Show Inventory
+            </button>
+          </div>
         </div>
         {message && <p className="message">{message}</p>}
         {inventory && inventory.items.length > 0 ? (

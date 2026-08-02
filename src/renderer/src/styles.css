@@ -731,3 +731,64 @@ header {
   font-size: 0.85rem;
   color-scheme: dark;
 }
+
+/* collection header: title row + one aligned toolbar */
+.collection-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.collection-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.collection-title-row h2 {
+  margin: 0;
+}
+.collection-title-row p {
+  margin: 0;
+}
+.collection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.collection-toolbar button {
+  white-space: nowrap;
+  height: 34px;
+  padding: 0 12px;
+}
+.toolbar-spacer {
+  flex: 1;
+}
+.date-label {
+  flex-direction: row;
+  align-items: center;
+}
+.date-label input[type='date'] {
+  height: 34px;
+}
+.clear-btn {
+  border-color: var(--accent) !important;
+}
+
+/* every section scrolls; the collection table scrolls inside its panel */
+.section-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.section-body .collection {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
