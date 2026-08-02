@@ -153,10 +153,15 @@ try {
     }[]
     assert(sets.some((s) => s.code === 'ltr' && s.count === 2), 'viewer sets missing ltr ×2')
 
-    const anyCards = (await (
+    const anyResp = (await (
       await fetch(`${viewerUrl}api/cards?name=lightning%20bolt`)
-    ).json()) as { name: string; priceEur: number | null; quantity: number }[]
+    ).json()) as {
+      cards: { name: string; priceEur: number | null; quantity: number }[]
+      total: number
+    }
+    const anyCards = anyResp.cards
     assert(anyCards.length > 0, 'any-card search returned nothing')
+    assert(anyResp.total >= anyCards.length, 'paged total smaller than page')
     assert(anyCards.every((c) => c.name.toLowerCase().includes('lightning')), 'bad search hit')
     assert(anyCards.some((c) => c.priceEur != null), 'no EUR prices in any-card results')
 

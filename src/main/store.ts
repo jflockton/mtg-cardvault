@@ -940,13 +940,21 @@ export class DataStore {
     return { cards: [...byId.values()], totalCards, totalValueEur, totalValueUsd }
   }
 
-  /** Any-card mode: search the whole reference DB by name and/or set. */
-  viewerSearch(nameQuery: string, setCode: string, limit = 200): ViewerCard[] {
+  /**
+   * Any-card mode: search or browse the whole reference DB, paged. With no
+   * name and no set this browses EVERYTHING (name order) — the page size
+   * keeps that light.
+   */
+  viewerSearch(
+    nameQuery: string,
+    setCode: string,
+    limit = 300,
+    offset = 0
+  ): { cards: ViewerCard[]; total: number } {
     this.openReferenceIfPresent()
-    if (!this.refDb) return []
+    if (!this.refDb) return { cards: [], total: 0 }
     const name = nameQuery.trim()
     const set = setCode.trim().toLowerCase()
-    if (!name && !set) return []
 
     const where: string[] = []
     const params: (string | number)[] = []
@@ -958,15 +966,21 @@ export class DataStore {
       where.push('set_code = ?')
       params.push(set)
     }
-    // Set browse reads in collector order — and shows the WHOLE set, so the
-    // cap only applies to name searches (where 200 hits means "narrow it").
+    const whereSql = where.length > 0 ? where.join(' AND ') : '1=1'
+    // Set browse reads in collector order; everything else alphabetically.
     const order = set && !name
       ? 'ORDER BY CAST(collector_number AS INTEGER), collector_number'
       : 'ORDER BY name COLLATE NOCASE, released_at DESC'
-    const cap = set && !name ? Math.max(limit, 1200) : limit
+    const total = (
+      this.refDb
+        .prepare(`SELECT COUNT(*) AS n FROM scryfall_cards WHERE ${whereSql}`)
+        .get(...params) as { n: number }
+    ).n
     const rows = this.refDb
-      .prepare(`SELECT * FROM scryfall_cards WHERE ${where.join(' AND ')} ${order} LIMIT ?`)
-      .all(...params, cap) as {
+      .prepare(
+        `SELECT * FROM scryfall_cards WHERE ${whereSql} ${order} LIMIT ? OFFSET ?`
+      )
+      .all(...params, limit, offset) as {
       scryfall_id: string
       name: string
       set_code: string
@@ -988,7 +1002,7 @@ export class DataStore {
       owned.set(o.scryfall_id, o.qty)
     }
 
-    return rows.map((r) => ({
+    const cards = rows.map((r) => ({
       scryfallId: r.scryfall_id,
       name: r.name,
       setCode: r.set_code,
@@ -1004,6 +1018,7 @@ export class DataStore {
       priceEur: r.prices_eur,
       priceEurFoil: r.prices_eur_foil
     }))
+    return { cards, total }
   }
 
   /** Sets for the viewer dropdown: owned sets with counts, or every set. */

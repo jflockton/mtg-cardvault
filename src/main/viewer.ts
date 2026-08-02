@@ -54,7 +54,12 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
         } else if (url.pathname === '/api/cards') {
           json(
             res,
-            store.viewerSearch(url.searchParams.get('name') ?? '', url.searchParams.get('set') ?? '')
+            store.viewerSearch(
+              url.searchParams.get('name') ?? '',
+              url.searchParams.get('set') ?? '',
+              300,
+              Number(url.searchParams.get('offset') ?? 0)
+            )
           )
         } else if (url.pathname === '/api/sets') {
           json(res, store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory'))
@@ -127,7 +132,13 @@ const PAGE = /* html */ `<!doctype html>
   .tick input { accent-color: var(--accent); width: 16px; height: 16px; }
   .totals { margin-left: auto; color: var(--dim); white-space: nowrap; }
   .totals b { color: var(--gold); }
-  #status { padding: 10px 18px; color: var(--dim); }
+  #status { padding: 10px 18px 0; color: var(--dim); }
+  #pager { display: none; align-items: center; gap: 12px; padding: 8px 18px 0;
+    color: var(--dim); font-size: 13px; }
+  #pager button { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-weight: 700; cursor: pointer; }
+  #pager button:hover:not(:disabled) { border-color: var(--accent); }
+  #pager button:disabled { opacity: 0.3; cursor: default; }
   #grid { display: grid; gap: 14px; padding: 14px 18px 40px;
           grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -241,6 +252,11 @@ const PAGE = /* html */ `<!doctype html>
 </div>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
 <div id="status"></div>
+<div id="pager">
+  <button id="prevPage">‹ Prev</button>
+  <span id="pageInfo"></span>
+  <button id="nextPage">Next ›</button>
+</div>
 <div id="grid"></div>
 
 <div id="overlay"><div id="big"></div></div>
@@ -254,6 +270,9 @@ let inventory = null;   // cached /api/inventory payload
 let cards = [];         // currently displayed cards
 let debounce = 0;
 let fxRate = null, fxAsOf = null;  // EUR→GBP (ECB); null → show native €
+const PAGE_SIZE = 300;
+let page = 0;          // any-card mode pagination
+let totalResults = 0;  // server-side total before chip filtering
 
 const eur = (v) => v == null ? null : '€' + v.toFixed(2);
 const usd = (v) => v == null ? null : '$' + v.toFixed(2);
@@ -378,6 +397,20 @@ function cardPrice(c) {
   };
 }
 
+const pagerEl = $('pager'), prevBtn = $('prevPage'), nextBtn = $('nextPage'), pageInfo = $('pageInfo');
+
+function renderPager() {
+  if (inv.checked || totalResults <= PAGE_SIZE) { pagerEl.style.display = 'none'; return; }
+  pagerEl.style.display = 'flex';
+  const pages = Math.ceil(totalResults / PAGE_SIZE);
+  pageInfo.textContent = 'page ' + (page + 1).toLocaleString() + ' of ' + pages.toLocaleString();
+  prevBtn.disabled = page === 0;
+  nextBtn.disabled = page >= pages - 1;
+}
+
+prevBtn.onclick = () => { if (page > 0) { page--; refresh(); window.scrollTo(0, 0); } };
+nextBtn.onclick = () => { page++; refresh(); window.scrollTo(0, 0); };
+
 function render() {
   grid.innerHTML = '';
   const frag = document.createDocumentFragment();
@@ -475,6 +508,7 @@ async function refresh() {
   const name = q.value.trim().toLowerCase();
   const set = setSel.value;
   if (inv.checked) {
+    pagerEl.style.display = 'none';
     if (!inventory) {
       status.textContent = 'Loading collection…';
       inventory = await api('/api/inventory');
@@ -494,20 +528,23 @@ async function refresh() {
   } else {
     totals.textContent = 'Browsing all cards · prices: Cardmarket' +
       (fxRate ? ' in £ (ECB ' + fxAsOf + ')' : ' in €');
-    if (!name && !set) {
-      cards = [];
-      status.textContent = 'Type a card name or pick a set to browse every card that exists.';
-    } else {
-      status.textContent = 'Searching…';
-      cards = await api('/api/cards?name=' + encodeURIComponent(name) + '&set=' + encodeURIComponent(set));
-      cards = cards.filter(chipMatch);
-      const ownedCount = cards.filter((c) => c.quantity > 0).length;
-      status.textContent = cards.length
-        ? cards.length + ' result' + (cards.length === 1 ? '' : 's') +
-          (cards.length === 200 ? ' (first 200 — narrow the search)' : '') +
-          (set && ownedCount > 0 ? ' · you own ' + ownedCount + ' of these (green tiles)' : '')
-        : 'No cards match.';
-    }
+    status.textContent = 'Loading…';
+    const r = await api('/api/cards?name=' + encodeURIComponent(name) +
+      '&set=' + encodeURIComponent(set) + '&offset=' + (page * PAGE_SIZE));
+    totalResults = r.total;
+    const fetched = r.cards;
+    cards = fetched.filter(chipMatch);
+    const ownedCount = cards.filter((c) => c.quantity > 0).length;
+    const from = page * PAGE_SIZE + 1;
+    const to = page * PAGE_SIZE + fetched.length;
+    const hidden = fetched.length - cards.length;
+    status.textContent = totalResults === 0
+      ? 'No cards match.'
+      : 'Cards ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' +
+        totalResults.toLocaleString() +
+        (hidden > 0 ? ' · ' + hidden + ' on this page hidden by filters' : '') +
+        (set && ownedCount > 0 ? ' · you own ' + ownedCount + ' shown (green tiles)' : '');
+    renderPager();
   }
   render();
   // Auto-open the big view when a name search narrows to exactly one card name.
@@ -518,11 +555,12 @@ async function refresh() {
 }
 
 document.getElementById('menuBtn').onclick = () => window.close();
-q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
-setSel.addEventListener('change', () => { updateClear(); refresh(); });
+q.addEventListener('input', () => { page = 0; clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
+setSel.addEventListener('change', () => { page = 0; updateClear(); refresh(); });
 setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
 const typeSel2 = $('typeSel');
 typeSel2.addEventListener('change', async () => {
+  page = 0;
   selectedType = typeSel2.value;
   subtypeText = '';
   $('subtypeFilter').value = '';
@@ -532,6 +570,7 @@ typeSel2.addEventListener('change', async () => {
 });
 const subtypeInput = $('subtypeFilter');
 subtypeInput.addEventListener('input', () => {
+  page = 0;
   subtypeText = subtypeInput.value;
   updateClear();
   clearTimeout(debounce);
@@ -542,12 +581,14 @@ document.querySelectorAll('.chip[data-rarity]').forEach((chip) => {
     const r = chip.dataset.rarity;
     if (activeRarities.has(r)) { activeRarities.delete(r); chip.classList.remove('on'); }
     else { activeRarities.add(r); chip.classList.add('on'); }
+    page = 0;
     updateClear();
     refresh();
   };
 });
 const chipCommander = $('chipCommander');
 chipCommander.onclick = () => {
+  page = 0;
   wantCommander = !wantCommander;
   chipCommander.classList.toggle('on', wantCommander);
   updateClear();
@@ -555,12 +596,14 @@ chipCommander.onclick = () => {
 };
 const chipFoil = $('chipFoil');
 chipFoil.onclick = () => {
+  page = 0;
   wantFoil = !wantFoil;
   chipFoil.classList.toggle('on', wantFoil);
   updateClear();
   refresh();
 };
 clearBtn.onclick = () => {
+  page = 0;
   setFilterText = '';
   setFilterInput.value = '';
   selectedType = '';
@@ -578,7 +621,7 @@ clearBtn.onclick = () => {
 };
 // Toggling the inventory tick keeps the selected set open when it still
 // exists in the new mode (it always does when unticking into all-sets).
-inv.addEventListener('change', async () => { await loadSets(); refresh(); });
+inv.addEventListener('change', async () => { page = 0; await loadSets(); refresh(); });
 
 (async () => {
   try {
