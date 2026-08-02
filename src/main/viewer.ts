@@ -5,6 +5,9 @@
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { DataStore } from './store'
+import type { Finish } from '../shared/types'
+// Inlined art: Gwen badges the page header, Spidey rides the menu button.
+import { GWEN_SVG as gwenSvg, SPIDEY_SVG as spideySvg } from './viewerArt'
 
 let server: http.Server | null = null
 let baseUrl: string | null = null
@@ -57,6 +60,13 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
           json(res, store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory'))
         } else if (url.pathname === '/api/rate') {
           void gbpRate().then((r) => json(res, r))
+        } else if (url.pathname === '/api/adjust') {
+          const ok = store.viewerAdjust(
+            url.searchParams.get('id') ?? '',
+            (url.searchParams.get('finish') ?? 'nonfoil') as Finish,
+            Number(url.searchParams.get('delta') ?? 0)
+          )
+          json(res, { ok })
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' })
           res.end('{"error":"not found"}')
@@ -154,16 +164,30 @@ const PAGE = /* html */ `<!doctype html>
   #big .prices .eur { color: var(--gold); font-weight: 700; font-size: 17px; }
   #big .own { margin-top: 12px; color: var(--gold); }
   .banner { background: #4b1620; color: #ffd7dc; padding: 10px 18px; display: none; }
+  .face-badge svg { width: 44px; height: 44px; border-radius: 10px; display: block; }
+  .menu-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--text); cursor: pointer; font-weight: 700; white-space: nowrap; }
+  .menu-btn:hover { border-color: var(--accent); }
+  .menu-btn svg { width: 22px; height: 22px; border-radius: 6px; }
+  .stock-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .stock-row .fin { width: 62px; color: var(--dim); }
+  .adj { width: 34px; height: 30px; font-weight: 800; font-size: 16px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+  .adj:hover:not(:disabled) { border-color: var(--accent); }
+  .adj:disabled { opacity: 0.3; cursor: default; }
   @media (max-width: 700px) { #big { flex-direction: column; } #big img { height: 52vh; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>🕷 <span>MTG CardVault</span></h1>
+  <span class="face-badge">${gwenSvg}</span>
+  <h1><span>Show Inventory</span></h1>
   <input id="q" type="search" placeholder="Type a card name…" autofocus>
   <select id="set"><option value="">All sets</option></select>
   <label class="tick"><input id="inv" type="checkbox" checked> In my inventory</label>
   <div class="totals" id="totals"></div>
+  <button id="menuBtn" class="menu-btn" title="Close this window">${spideySvg}<span>Return to main menu</span></button>
 </header>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
 <div id="status"></div>
@@ -251,12 +275,32 @@ function render() {
   grid.appendChild(frag);
 }
 
+function stockRows(c) {
+  const finishes = ['nonfoil', 'foil'];
+  if (c.stacks.some((s) => s.finish === 'etched')) finishes.push('etched');
+  return finishes.map((f) => {
+    const st = c.stacks.find((s) => s.finish === f);
+    const q = st ? st.quantity : 0;
+    return '<div class="stock-row"><span class="fin">' + f + '</span>' +
+      '<button class="adj" data-f="' + f + '" data-d="-1"' + (q === 0 ? ' disabled' : '') + '>−</button>' +
+      '<b>×' + q + '</b>' +
+      '<button class="adj" data-f="' + f + '" data-d="1">＋</button></div>';
+  }).join('');
+}
+
+async function adjust(c, finish, delta) {
+  await api('/api/adjust?id=' + encodeURIComponent(c.scryfallId) +
+    '&finish=' + encodeURIComponent(finish) + '&delta=' + delta);
+  inventory = null;
+  await refresh();
+  const pool = inv.checked && inventory ? inventory.cards : cards;
+  const updated = pool.find((x) => x.scryfallId === c.scryfallId);
+  if (updated) showBig(updated);
+  else overlay.classList.remove('show');
+}
+
 function showBig(c) {
   const bigUri = c.imageUri ? c.imageUri.replace('/normal/', '/large/') : null;
-  const stacks = c.stacks.map((s) =>
-    s.finish + ' ×' + s.quantity + (s.finish !== 'nonfoil'
-      ? ' (' + (cm(c.priceEurFoil ?? c.priceEur) ?? '—') + ')'
-      : ' (' + (cm(c.priceEur) ?? '—') + ')')).join(' · ');
   big.innerHTML =
     (bigUri ? '<img src="' + esc(bigUri) + '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
@@ -270,10 +314,14 @@ function showBig(c) {
     (c.priceUsd != null ? '<div>' + usd(c.priceUsd) + ' <small>USD</small></div>' : '') +
     (c.priceUsdFoil != null ? '<div>' + usd(c.priceUsdFoil) + ' <small>USD foil</small></div>' : '') +
     '</div>' +
-    (c.quantity > 0
-      ? '<div class="own">In stock: ' + c.quantity + (stacks ? '<br><small>' + stacks + '</small>' : '') + '</div>'
-      : '<div class="own" style="color:var(--dim)">Not in inventory</div>') +
+    '<div class="own">' + (c.quantity > 0
+      ? 'In stock: ' + c.quantity
+      : '<span style="color:var(--dim)">Not in inventory</span>') +
+    stockRows(c) + '</div>' +
     '</div>';
+  big.querySelectorAll('.adj').forEach((btn) => {
+    btn.onclick = () => adjust(c, btn.dataset.f, Number(btn.dataset.d));
+  });
   overlay.classList.add('show');
 }
 overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('show'); };
@@ -320,6 +368,7 @@ async function refresh() {
   }
 }
 
+document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
 setSel.addEventListener('change', refresh);
 inv.addEventListener('change', async () => { setSel.value = ''; await loadSets(); refresh(); });

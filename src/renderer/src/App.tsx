@@ -8,6 +8,7 @@ import faceGwen from './assets/faces/spider-gwen.svg'
 import faceOck from './assets/faces/doc-ock.svg'
 import faceDoom from './assets/faces/doom.svg'
 import faceNoir from './assets/faces/noir.svg'
+import spideyIcon from './assets/spidey.svg'
 import type {
   CardRef,
   CornerScanResult,
@@ -1176,7 +1177,7 @@ export default function App(): React.JSX.Element {
             <img className="header-face" src={sectionMeta.face} alt="" />
             <span className="section-name">{sectionMeta.label}</span>
             <button className="home-btn" onClick={() => go('home')}>
-              ⌂ Home
+              <img className="btn-icon" src={spideyIcon} alt="" /> Return to main menu
             </button>
           </>
         )}

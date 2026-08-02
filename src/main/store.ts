@@ -1020,6 +1020,18 @@ export class DataStore {
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  /** Viewer stock buttons: +1 adds a copy (logged like a scan), −1 removes. */
+  viewerAdjust(scryfallId: string, finish: Finish, delta: number): boolean {
+    if (!scryfallId || !Number.isFinite(delta) || delta === 0) return false
+    if (delta > 0) {
+      const card = this.byScryfallId(scryfallId)
+      if (!card) return false
+      this.addToInventory(card, finish, delta)
+      return true
+    }
+    return this.removeFromInventory(scryfallId, finish, -delta) != null
+  }
+
   private setNameFor(code: string): string {
     this.openReferenceIfPresent()
     if (this.refDb && this.hasSetMetadata()) {
