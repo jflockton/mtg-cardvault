@@ -168,7 +168,8 @@ const PAGE = /* html */ `<!doctype html>
   #filterbar { display: flex; gap: 10px; align-items: center; padding: 8px 18px 0; }
   #filterbar .lbl { color: var(--dim); font-size: 13px; white-space: nowrap; }
   #filterbar input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--text); font-size: 13px; width: 240px; outline: none; }
+    background: var(--bg); color: var(--text); font-size: 13px; outline: none;
+    flex: 0 0 auto; width: 240px; max-width: 240px; }
   #filterbar input:focus { border-color: var(--accent); }
   #clearFilters { display: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--accent); background: var(--bg); color: var(--text); font-weight: 700; }
@@ -178,11 +179,6 @@ const PAGE = /* html */ `<!doctype html>
     border: 1px solid var(--line); font-size: 19px; line-height: 1; cursor: pointer; }
   .close-x:hover { border-color: #fff; }
   .face-badge svg { width: 44px; height: 44px; border-radius: 10px; display: block; }
-  .set-box { display: flex; flex-direction: column; gap: 6px; }
-  #setq { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--text); font-size: 12px; outline: none; }
-  #setq:focus { border-color: var(--accent); }
-  .clear-btn { display: none; border-color: var(--accent); color: var(--gold); }
   .menu-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
     border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
     color: var(--text); cursor: pointer; font-weight: 700; white-space: nowrap; }
@@ -202,11 +198,7 @@ const PAGE = /* html */ `<!doctype html>
   <span class="face-badge">${gwenSvg}</span>
   <h1><span>Show Inventory</span></h1>
   <input id="q" type="search" placeholder="Type a card name…" autofocus>
-  <div class="set-box">
-    <select id="set"><option value="">All sets</option></select>
-    <input id="setq" type="search" placeholder="Filter sets…">
-  </div>
-  <button id="clearBtn" class="menu-btn clear-btn">✕ Clear filters</button>
+  <select id="set"><option value="">All sets</option></select>
   <label class="tick"><input id="inv" type="checkbox" checked> In my inventory</label>
   <div class="totals" id="totals"></div>
   <button id="menuBtn" class="menu-btn" title="Close this window">${spideySvg}<span>Return to main menu</span></button>
