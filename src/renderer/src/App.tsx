@@ -580,25 +580,51 @@ export default function App(): React.JSX.Element {
   // it away — the operator is trying to CLICK it (live-log finding).
   const candidatesHold = useRef(0)
 
-  const [exportScope, setExportScope] = useState<'all' | 'session' | 'today'>('all')
+  // Collection date filter (YYYY-MM-DD, either side open). Refs mirror the
+  // state so loadInventory always reads the current bounds.
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const dateFromRef = useRef('')
+  const dateToRef = useRef('')
+  const dateOpts = useCallback(
+    () => ({
+      from: dateFromRef.current || undefined,
+      to: dateToRef.current || undefined
+    }),
+    []
+  )
+  const rangeText = useCallback(() => {
+    const f = dateFromRef.current
+    const t = dateToRef.current
+    if (f && t) return `scanned ${f} → ${t}`
+    if (f) return `scanned since ${f}`
+    if (t) return `scanned up to ${t}`
+    return 'all cards'
+  }, [])
+
   const copyExport = useCallback(
     async (format: 'list' | 'csv') => {
-      const { lines } = await window.api.exportCollection(format, exportScope)
-      const scopeText =
-        exportScope === 'session'
-          ? 'scanned this session'
-          : exportScope === 'today'
-            ? 'scanned today'
-            : 'all cards'
+      const { lines } = await window.api.exportCollection(format, dateOpts())
       setMessage(
         lines > 0
-          ? `📋 Copied ${lines} rows (${scopeText}, ${format === 'csv' ? 'CSV' : 'plain list'})`
-          : exportScope === 'session'
-            ? 'Nothing scanned this session yet'
-            : 'Nothing to export yet'
+          ? `📋 Copied ${lines} rows (${rangeText()}, ${format === 'csv' ? 'CSV' : 'plain list'})`
+          : 'Nothing to export for this filter'
       )
     },
-    [exportScope]
+    [dateOpts, rangeText]
+  )
+
+  const downloadExport = useCallback(
+    async (format: 'list' | 'csv') => {
+      const result = await window.api.exportFile(format, dateOpts())
+      if (result.canceled) return
+      setMessage(
+        result.ok
+          ? `⬇ Saved ${result.lines} rows (${rangeText()}) to ${result.path}`
+          : 'Export failed'
+      )
+    },
+    [dateOpts, rangeText]
   )
 
   // A low-confidence lock is STAGED, not blocking: shown for a glance/foil
@@ -621,11 +647,13 @@ export default function App(): React.JSX.Element {
   const loadStatus = useCallback(() => {
     window.api.refStatus().then(setRefStatus)
   }, [])
-  // Ref, not state, so every callback that refreshes the list sees the
-  // CURRENT scope without re-wiring the whole callback chain.
-  const exportScopeRef = useRef<'all' | 'session' | 'today'>('all')
   const loadInventory = useCallback(() => {
-    window.api.listInventory(exportScopeRef.current).then(setInventory)
+    window.api
+      .listInventory({
+        from: dateFromRef.current || undefined,
+        to: dateToRef.current || undefined
+      })
+      .then(setInventory)
   }, [])
 
   // Set list for the set-code dropdowns — loaded at start, refreshed after
@@ -1535,7 +1563,7 @@ export default function App(): React.JSX.Element {
       <div className="section-body">
       <section className="panel collection">
         <div className="ref-row collection-head">
-          <h2>{exportScope === 'session' ? 'Scanned this session' : 'Collection'}</h2>
+          <h2>Collection</h2>
           {inventory && (
             <p className="muted">
               {inventory.totalCards.toLocaleString()} cards ·{' '}
@@ -1549,21 +1577,43 @@ export default function App(): React.JSX.Element {
               })}
             </p>
           )}
-          <select
-            className="finish-select"
-            value={exportScope}
-            title="what the list shows and what gets exported"
-            onChange={(e) => {
-              const scope = e.target.value as 'all' | 'session' | 'today'
-              setExportScope(scope)
-              exportScopeRef.current = scope
-              loadInventory()
-            }}
-          >
-            <option value="all">All cards</option>
-            <option value="session">Scanned this session</option>
-            <option value="today">Scanned today</option>
-          </select>
+          <label className="date-label">
+            From
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value)
+                dateFromRef.current = e.target.value
+                loadInventory()
+              }}
+            />
+          </label>
+          <label className="date-label">
+            To
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value)
+                dateToRef.current = e.target.value
+                loadInventory()
+              }}
+            />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => {
+                setDateFrom('')
+                setDateTo('')
+                dateFromRef.current = ''
+                dateToRef.current = ''
+                loadInventory()
+              }}
+            >
+              ✕ Clear filters
+            </button>
+          )}
           <button
             title="Plain list: 1 Island (FIN) 297"
             onClick={() => copyExport('list')}
@@ -1572,6 +1622,18 @@ export default function App(): React.JSX.Element {
           </button>
           <button title="CSV: quantity,card-name,expansion,id" onClick={() => copyExport('csv')}>
             Copy CSV
+          </button>
+          <button
+            title="Save a CSV file of the filtered collection"
+            onClick={() => downloadExport('csv')}
+          >
+            ⬇ CSV file
+          </button>
+          <button
+            title="Save a plain deck-list file of the filtered collection"
+            onClick={() => downloadExport('list')}
+          >
+            ⬇ Deck list
           </button>
           <button
             title="Browse the collection in your web browser — images, Cardmarket prices, any-card search"
@@ -1654,11 +1716,9 @@ export default function App(): React.JSX.Element {
           </div>
         ) : (
           <p className="muted">
-            {exportScope === 'session'
-              ? 'Nothing scanned this session yet.'
-              : exportScope === 'today'
-                ? 'Nothing scanned today yet.'
-                : 'Nothing in inventory yet.'}
+            {dateFrom || dateTo
+              ? 'Nothing scanned in this date range.'
+              : 'Nothing in inventory yet.'}
           </p>
         )}
       </section>

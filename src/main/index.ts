@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, systemPreferences } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import Database from 'better-sqlite3'
@@ -161,23 +161,62 @@ function registerIpc(): void {
       store.removeFromInventory(args.scryfallId, args.finish, args.quantity ?? 1)
   )
 
-  ipcMain.handle('inv:list', (_e, args?: { scope?: 'all' | 'session' | 'today' }) =>
-    store.listInventory(500, args?.scope ?? 'all', sinceFor(args?.scope))
+  // Date bounds (YYYY-MM-DD, from the collection view) become a 'range'
+  // scope over the scan log; either side may be open.
+  const rangeBounds = (from?: string, to?: string): [string, string] | null =>
+    from || to
+      ? [
+          from ? `${from}T00:00:00Z` : '0000-01-01T00:00:00Z',
+          to ? `${to}T23:59:59Z` : '9999-12-31T23:59:59Z'
+        ]
+      : null
+
+  ipcMain.handle(
+    'inv:list',
+    (_e, args?: { scope?: 'all' | 'session' | 'today'; from?: string; to?: string }) => {
+      const range = rangeBounds(args?.from, args?.to)
+      if (range) return store.listInventory(500, 'range', range[0], range[1])
+      return store.listInventory(500, args?.scope ?? 'all', sinceFor(args?.scope))
+    }
   )
 
   // Copy the export to the clipboard from the main process — renderer
   // clipboard permissions are locked down. Scope 'session' = adds since this
   // app launch (undone adds retract from the scan log, so it stays honest).
+  const exportTextFor = (format: 'csv' | 'list', from?: string, to?: string): string => {
+    const range = rangeBounds(from, to)
+    return range
+      ? store.exportText(format, 'range', range[0], range[1])
+      : store.exportText(format, 'all')
+  }
+
   ipcMain.handle(
     'inv:exportCopy',
-    (_e, args?: { format?: 'csv' | 'list'; scope?: 'all' | 'session' | 'today' }) => {
-      const text = store.exportText(
-        args?.format ?? 'list',
-        args?.scope ?? 'all',
-        sinceFor(args?.scope)
-      )
+    (_e, args?: { format?: 'csv' | 'list'; from?: string; to?: string }) => {
+      const text = exportTextFor(args?.format ?? 'list', args?.from, args?.to)
       clipboard.writeText(text)
       return { lines: text ? text.split('\n').length : 0 }
+    }
+  )
+
+  // File export: same content, saved wherever the user picks.
+  ipcMain.handle(
+    'inv:exportFile',
+    async (_e, args?: { format?: 'csv' | 'list'; from?: string; to?: string }) => {
+      const format = args?.format ?? 'list'
+      const text = exportTextFor(format, args?.from, args?.to)
+      const stamp = new Date().toISOString().slice(0, 10)
+      const ext = format === 'csv' ? 'csv' : 'txt'
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Export collection',
+        defaultPath: path.join(
+          app.getPath('downloads'),
+          `cardvault-${format === 'csv' ? 'export' : 'decklist'}-${stamp}.${ext}`
+        )
+      })
+      if (canceled || !filePath) return { canceled: true }
+      fs.writeFileSync(filePath, text + '\n')
+      return { ok: true, path: filePath, lines: text ? text.split('\n').length : 0 }
     }
   )
 

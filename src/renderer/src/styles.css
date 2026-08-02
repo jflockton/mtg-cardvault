@@ -713,3 +713,21 @@ header {
   border-radius: 6px;
   display: block;
 }
+
+/* collection date filter */
+.date-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #9aa0ac;
+}
+.date-label input[type='date'] {
+  background: var(--bg);
+  color: inherit;
+  border: 1px solid #333845;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  color-scheme: dark;
+}

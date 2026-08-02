@@ -26,7 +26,11 @@ export interface CardVaultApi {
     finish: Finish,
     quantity?: number
   ) => Promise<InventoryItem | null>
-  listInventory: (scope?: 'all' | 'session' | 'today') => Promise<InventorySummary>
+  listInventory: (opts?: {
+    scope?: 'all' | 'session' | 'today'
+    from?: string
+    to?: string
+  }) => Promise<InventorySummary>
   /** All non-digital sets (code + name), newest first. */
   listSets: () => Promise<SetInfo[]>
   /** List all known preconstructed decks (MTGJSON). */
@@ -35,11 +39,16 @@ export interface CardVaultApi {
   preconInfo: (fileName: string) => Promise<{ name: string; totalCards: number }>
   /** Add every card of a precon to inventory. */
   preconAdd: (fileName: string) => Promise<PreconAddResult>
-  /** Copy an export to the clipboard: plain list or CSV, all cards or this session's adds. */
+  /** Copy an export to the clipboard, honouring the date filter. */
   exportCollection: (
     format: 'list' | 'csv',
-    scope: 'all' | 'session' | 'today'
+    opts?: { from?: string; to?: string }
   ) => Promise<{ lines: number }>
+  /** Save an export to a file the user picks, honouring the date filter. */
+  exportFile: (
+    format: 'list' | 'csv',
+    opts?: { from?: string; to?: string }
+  ) => Promise<{ ok?: boolean; path?: string; lines?: number; canceled?: boolean }>
   /** Move copies between finish stacks of the same printing. */
   moveFinish: (
     scryfallId: string,
@@ -78,11 +87,13 @@ const api: CardVaultApi = {
   addCard: (card, finish, quantity) => ipcRenderer.invoke('inv:add', { card, finish, quantity }),
   removeCard: (scryfallId, finish, quantity) =>
     ipcRenderer.invoke('inv:remove', { scryfallId, finish, quantity }),
-  listInventory: (scope) => ipcRenderer.invoke('inv:list', { scope }),
+  listInventory: (opts) => ipcRenderer.invoke('inv:list', opts ?? {}),
   moveFinish: (scryfallId, from, to, quantity) =>
     ipcRenderer.invoke('inv:moveFinish', { scryfallId, from, to, quantity }),
-  exportCollection: (format, scope) =>
-    ipcRenderer.invoke('inv:exportCopy', { format, scope }),
+  exportCollection: (format, opts) =>
+    ipcRenderer.invoke('inv:exportCopy', { format, ...(opts ?? {}) }),
+  exportFile: (format, opts) =>
+    ipcRenderer.invoke('inv:exportFile', { format, ...(opts ?? {}) }),
   listSets: () => ipcRenderer.invoke('sets:list'),
   preconList: () => ipcRenderer.invoke('precon:list'),
   preconInfo: (fileName) => ipcRenderer.invoke('precon:info', fileName),

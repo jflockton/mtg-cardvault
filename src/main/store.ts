@@ -688,18 +688,23 @@ export class DataStore {
    * Scope 'session' aggregates the scan_log since `sinceIso` (this app run;
    * undos retract their log rows, so the session view stays honest).
    */
-  exportText(format: 'csv' | 'list', scope: 'all' | 'session' | 'today', sinceIso?: string): string {
+  exportText(
+    format: 'csv' | 'list',
+    scope: 'all' | 'session' | 'today' | 'range',
+    sinceIso?: string,
+    untilIso?: string
+  ): string {
     const rows = (
       scope !== 'all' && sinceIso
         ? this.invDb
             .prepare(
               `SELECT name, set_code, collector_number, SUM(quantity) AS qty,
                       MAX(scanned_at) AS imported_at
-               FROM scan_log WHERE scanned_at >= ?
+               FROM scan_log WHERE scanned_at >= ? AND scanned_at <= ?
                GROUP BY name, set_code, collector_number
                ORDER BY name COLLATE NOCASE, set_code, collector_number`
             )
-            .all(sinceIso)
+            .all(sinceIso, untilIso ?? '9999-12-31T23:59:59Z')
         : this.invDb
             .prepare(
               `SELECT i.name, i.set_code, i.collector_number, SUM(i.quantity) AS qty,
@@ -784,8 +789,9 @@ export class DataStore {
    */
   listInventory(
     limit = 500,
-    scope: 'all' | 'session' | 'today' = 'all',
-    sinceIso?: string
+    scope: 'all' | 'session' | 'today' | 'range' = 'all',
+    sinceIso?: string,
+    untilIso?: string
   ): InventorySummary {
     if (scope !== 'all' && sinceIso) {
       const rows = this.invDb
@@ -802,12 +808,14 @@ export class DataStore {
                    ORDER BY sl.id DESC LIMIT 1) AS last_scanned_at
            FROM inventory i
            JOIN (SELECT scryfall_id, finish, SUM(quantity) AS qty, MAX(scanned_at) AS last
-                 FROM scan_log WHERE scanned_at >= ?
+                 FROM scan_log WHERE scanned_at >= ? AND scanned_at <= ?
                  GROUP BY scryfall_id, finish) s
              ON s.scryfall_id = i.scryfall_id AND s.finish = i.finish
            ORDER BY s.last DESC LIMIT ?`
         )
-        .all(sinceIso, limit) as (InvRow & { session_qty: number })[]
+        .all(sinceIso, untilIso ?? '9999-12-31T23:59:59Z', limit) as (InvRow & {
+        session_qty: number
+      })[]
       let totalCards = 0
       let totalValue = 0
       let totalValueEur = 0
