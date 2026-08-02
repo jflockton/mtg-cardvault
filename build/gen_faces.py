@@ -258,36 +258,47 @@ def ham():
 # ---------------------------------------------------------------- Fisk
 def fisk():
     a = []
-    suit = '#f4f4f8'
-    cravat = '#7a4ea8'
-    # massive bald head fills the badge
-    a.append(P('M 512 128 C 330 128, 218 262, 224 452 '
-               'C 228 624, 300 764, 512 786 '
-               'C 724 764, 796 624, 800 452 '
-               'C 806 262, 694 128, 512 128 Z', SKIN, 12))
+    suit = '#3a3d46'
+    shirt = '#9aa0aa'
+    crease = '#b98a5e'
+    # the badge circle IS his head (circle fill is skin)
     # ears at the ring edges
-    a.append(E(196, 480, 34, 58, SKIN, 10))
-    a.append(E(828, 480, 34, 58, SKIN, 10))
-    # heavy scowl brows
-    a.append(P('M 296 420 L 470 448 L 464 494 L 302 470 Z', INK))
-    a.append(P('M 728 420 L 554 448 L 560 494 L 722 470 Z', INK))
-    # small hard eyes
-    a.append(E(392, 528, 38, 21, WHITE, 9))
-    a.append(E(632, 528, 38, 21, WHITE, 9))
-    a.append(E(392, 528, 11, 11, INK))
-    a.append(E(632, 528, 11, 11, INK))
-    # broad nose + deep frown
-    a.append(P('M 512 510 Q 494 606 468 642 Q 512 664 560 642', 'none', 11))
-    a.append(P('M 398 726 Q 512 672 626 726', 'none', 14))
-    # jaw creases
-    a.append(P('M 318 606 Q 330 690 386 742', 'none', 8))
-    a.append(P('M 706 606 Q 694 690 638 742', 'none', 8))
-    # white suit shoulders + cravat with pin
-    a.append(P('M 160 1000 C 268 828, 386 782, 512 782 '
-               'C 638 782, 756 828, 864 1000 Z', suit, 12))
-    a.append(P('M 436 790 C 464 848, 560 848, 588 790 L 588 940 '
-               'C 536 976, 488 976, 436 940 Z', cravat, 10))
-    a.append(E(512, 884, 15, 15, GOLD, 6))
+    a.append(E(162, 500, 30, 52, SKIN, 10))
+    a.append(E(862, 500, 30, 52, SKIN, 10))
+    # forehead creases
+    a.append(P('M 396 282 Q 512 264 628 282', 'none', 7, crease))
+    a.append(P('M 380 330 Q 512 310 644 330', 'none', 7, crease))
+    # heavy brow ridges + frown lines between them
+    a.append(P('M 352 450 Q 418 434 482 452', 'none', 12))
+    a.append(P('M 672 450 Q 606 434 542 452', 'none', 12))
+    a.append(P('M 498 432 L 492 470', 'none', 7, crease))
+    a.append(P('M 526 432 L 532 470', 'none', 7, crease))
+    # small heavy-lidded eyes
+    a.append(P('M 372 486 Q 416 472 460 488', 'none', 9))
+    a.append(P('M 652 486 Q 608 472 564 488', 'none', 9))
+    a.append(E(416, 502, 40, 19, WHITE, 8))
+    a.append(E(608, 502, 40, 19, WHITE, 8))
+    a.append(E(416, 503, 11, 11, '#3a2a1c'))
+    a.append(E(608, 503, 11, 11, '#3a2a1c'))
+    # broad nose
+    a.append(P('M 492 482 C 488 540, 484 572, 474 600', 'none', 8, crease))
+    a.append(P('M 532 482 C 536 540, 540 572, 550 600', 'none', 8, crease))
+    a.append(P('M 456 608 Q 472 626 496 620', 'none', 9))
+    a.append(P('M 568 608 Q 552 626 528 620', 'none', 9))
+    a.append(P('M 496 620 Q 512 628 528 620', 'none', 8))
+    # nasolabial folds framing the mouth
+    a.append(P('M 452 626 Q 428 672 438 706', 'none', 8, crease))
+    a.append(P('M 572 626 Q 596 672 586 706', 'none', 8, crease))
+    # thin set mouth, slightly downturned, with lip shadow
+    a.append(P('M 444 700 Q 512 722 580 700', 'none', 12))
+    a.append(P('M 476 746 Q 512 756 548 746', 'none', 7, crease))
+    # jowl / double-chin arc
+    a.append(P('M 416 778 Q 512 812 608 778', 'none', 8, crease))
+    # dark suit with grey shirt and tie knot
+    a.append(P('M 150 1010 C 260 848, 380 802, 512 802 '
+               'C 644 802, 764 848, 874 1010 Z', suit, 12))
+    a.append(P('M 438 810 L 512 894 L 586 810 Z', shirt, 9))
+    a.append(P('M 494 880 L 530 880 L 522 916 L 502 916 Z', '#23262e', 7))
     return a
 
 
@@ -471,7 +482,7 @@ CHARS = [
     ('doom',       '#16697a', '#0e3a2c', doom),
     ('spider-gwen','#a1237a', '#701850', gwen),
     ('spider-ham', '#e2a41f', RED, ham),
-    ('fisk',       '#8f1d2c', '#f4f4f8', fisk),
+    ('fisk',       '#f4f4f8', SKIN, fisk),
     ('daredevil',  '#d2611f', '#3a3f4d', daredevil),
     ('doc-ock',    '#5a9e21', SKIN, ock),
     ('noir',       '#565d6d', '#2c2f38', noir),
