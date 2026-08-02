@@ -141,10 +141,17 @@ const PAGE = /* html */ `<!doctype html>
 <title>MTG CardVault — Collection</title>
 <style>
   :root {
+    color-scheme: dark;
     --bg: #17141f; --panel: #221e2e; --line: #37324a;
     --text: #e8e5f2; --dim: #9b95b0; --accent: #e01f2f; --gold: #d8b64a;
   }
   * { box-sizing: border-box; }
+  /* Neutral grey scrollbars — the accent colour was too loud. */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3746; border-radius: 6px;
+    border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #4d4a5c; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { position: sticky; top: 0; z-index: 5; background: var(--panel);
