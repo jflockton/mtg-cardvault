@@ -51,6 +51,7 @@ function seedReferenceDbFromResources(dataDir: string): void {
 }
 
 let store: DataStore
+let viewerWindow: BrowserWindow | null = null
 let refreshing = false
 /** UTC start of this app run — the boundary for "scanned this session". */
 const launchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -183,10 +184,27 @@ function registerIpc(): void {
   // EUR→GBP at the ECB daily rate, for showing Cardmarket prices in pounds.
   ipcMain.handle('fx:rate', () => gbpRate())
 
-  // "Show Inventory": loopback-only web viewer opened in the default browser.
+  // "Show Inventory": loopback-only web viewer, shown in an in-app window
+  // (no address bar, no browser). One window, refocused on repeat opens.
   ipcMain.handle('viewer:open', async () => {
     const url = await openInventoryViewer(store)
-    await shell.openExternal(url)
+    if (viewerWindow && !viewerWindow.isDestroyed()) {
+      viewerWindow.focus()
+    } else {
+      viewerWindow = new BrowserWindow({
+        width: 1320,
+        height: 900,
+        minWidth: 900,
+        minHeight: 600,
+        title: 'MTG CardVault — Collection',
+        autoHideMenuBar: true,
+        webPreferences: { sandbox: true, contextIsolation: true }
+      })
+      viewerWindow.on('closed', () => {
+        viewerWindow = null
+      })
+      await viewerWindow.loadURL(url)
+    }
     return { url }
   })
 

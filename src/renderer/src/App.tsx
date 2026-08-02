@@ -1465,7 +1465,7 @@ export default function App(): React.JSX.Element {
           <section className="panel">
             <h2>Show Inventory</h2>
             <p className="muted">
-              The collection viewer just opened in your web browser — card images, Cardmarket
+              The collection viewer just opened in its own window — card images, Cardmarket
               £ prices, set browsing, and an any-card search across every printing.
             </p>
             <button className="primary" onClick={() => void window.api.openViewer()}>
