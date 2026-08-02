@@ -165,12 +165,19 @@ const PAGE = /* html */ `<!doctype html>
   #big .prices .eur { color: var(--gold); font-weight: 700; font-size: 17px; }
   #big .own { margin-top: 12px; color: var(--gold); }
   .banner { background: #4b1620; color: #ffd7dc; padding: 10px 18px; display: none; }
-  #filterbar { display: flex; gap: 10px; align-items: center; padding: 8px 18px 0; }
+  #filterbar { display: flex; gap: 10px; align-items: center; padding: 8px 18px 0;
+    flex-wrap: wrap; }
   #filterbar .lbl { color: var(--dim); font-size: 13px; white-space: nowrap; }
   #filterbar input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); font-size: 13px; outline: none;
     flex: 0 0 auto; width: 240px; max-width: 240px; }
   #filterbar input:focus { border-color: var(--accent); }
+  .chip { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--dim); cursor: pointer; font-size: 12.5px;
+    font-weight: 600; white-space: nowrap; }
+  .chip:hover { border-color: var(--dim); }
+  .chip.on { border-color: var(--accent); color: var(--text); background: #2d1b2e; }
+  .chip-sep { width: 1px; height: 22px; background: var(--line); }
   #clearFilters { display: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--accent); background: var(--bg); color: var(--text); font-weight: 700; }
   .card.owned { border-color: #3fae5c; }
@@ -206,6 +213,14 @@ const PAGE = /* html */ `<!doctype html>
 <div id="filterbar">
   <span class="lbl">Filter sets:</span>
   <input id="setFilter" type="search" placeholder="type part of a set name or code…">
+  <span class="chip-sep"></span>
+  <button class="chip" data-rarity="common">Common</button>
+  <button class="chip" data-rarity="uncommon">Uncommon</button>
+  <button class="chip" data-rarity="rare">Rare</button>
+  <button class="chip" data-rarity="mythic">Mythic</button>
+  <span class="chip-sep"></span>
+  <button class="chip" id="chipCommander">Commander</button>
+  <button class="chip" id="chipFoil">Foil</button>
   <button id="clearFilters">✕ Clear filters</button>
 </div>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
@@ -245,6 +260,26 @@ async function api(path) {
 
 let setsCache = [];
 let setFilterText = '';
+const activeRarities = new Set();
+let wantCommander = false;
+let wantFoil = false;
+
+/** Chip filters, applied on top of search + set in both modes. */
+function chipMatch(c) {
+  if (activeRarities.size > 0 && !activeRarities.has(c.rarity)) return false;
+  if (wantCommander && !(c.typeLine || '').includes('Legendary Creature')) return false;
+  if (wantFoil) {
+    const foil = inv.checked
+      ? c.stacks.some((s) => s.finish !== 'nonfoil')
+      : (c.priceEurFoil != null || c.priceUsdFoil != null);
+    if (!foil) return false;
+  }
+  return true;
+}
+
+function chipsActive() {
+  return activeRarities.size > 0 || wantCommander || wantFoil;
+}
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
 
@@ -262,7 +297,8 @@ function renderSetOptions() {
 }
 
 function updateClear() {
-  clearBtn.style.display = (setFilterText || setSel.value) ? 'inline-block' : 'none';
+  clearBtn.style.display =
+    (setFilterText || setSel.value || chipsActive()) ? 'inline-block' : 'none';
 }
 
 async function loadSets() {
@@ -381,7 +417,8 @@ async function refresh() {
       (fxAsOf ? ', converted at the ECB rate of ' + fxAsOf : '') + '">' +
       (cm(inventory.totalValueEur) ?? '—') + '</b> · ' + (usd(inventory.totalValueUsd) ?? '$0.00');
     cards = inventory.cards.filter((c) =>
-      (!name || c.name.toLowerCase().includes(name)) && (!set || c.setCode === set));
+      (!name || c.name.toLowerCase().includes(name)) && (!set || c.setCode === set) &&
+      chipMatch(c));
     if (set) cards = [...cards].sort((a, b) =>
       (parseInt(a.collectorNumber, 10) || 0) - (parseInt(b.collectorNumber, 10) || 0) ||
       a.collectorNumber.localeCompare(b.collectorNumber));
@@ -397,6 +434,7 @@ async function refresh() {
     } else {
       status.textContent = 'Searching…';
       cards = await api('/api/cards?name=' + encodeURIComponent(name) + '&set=' + encodeURIComponent(set));
+      cards = cards.filter(chipMatch);
       const ownedCount = cards.filter((c) => c.quantity > 0).length;
       status.textContent = cards.length
         ? cards.length + ' result' + (cards.length === 1 ? '' : 's') +
@@ -417,10 +455,37 @@ document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
 setSel.addEventListener('change', () => { updateClear(); refresh(); });
 setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
+document.querySelectorAll('.chip[data-rarity]').forEach((chip) => {
+  chip.onclick = () => {
+    const r = chip.dataset.rarity;
+    if (activeRarities.has(r)) { activeRarities.delete(r); chip.classList.remove('on'); }
+    else { activeRarities.add(r); chip.classList.add('on'); }
+    updateClear();
+    refresh();
+  };
+});
+const chipCommander = $('chipCommander');
+chipCommander.onclick = () => {
+  wantCommander = !wantCommander;
+  chipCommander.classList.toggle('on', wantCommander);
+  updateClear();
+  refresh();
+};
+const chipFoil = $('chipFoil');
+chipFoil.onclick = () => {
+  wantFoil = !wantFoil;
+  chipFoil.classList.toggle('on', wantFoil);
+  updateClear();
+  refresh();
+};
 clearBtn.onclick = () => {
   setFilterText = '';
   setFilterInput.value = '';
   setSel.value = '';
+  activeRarities.clear();
+  wantCommander = false;
+  wantFoil = false;
+  document.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
   renderSetOptions();
   refresh();
 };
