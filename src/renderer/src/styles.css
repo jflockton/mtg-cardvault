@@ -1081,10 +1081,11 @@ button.danger {
 }
 .printing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px;
-  max-height: 300px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  max-height: 470px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 .printing-opt {
   display: flex;
@@ -1108,12 +1109,12 @@ button.danger {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 120px;
+  height: 209px;
   color: var(--muted);
   font-weight: 700;
 }
 .printing-set {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--muted);
   text-align: center;
 }
