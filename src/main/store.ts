@@ -1595,6 +1595,41 @@ export class DataStore {
     return { deckId, added, missing }
   }
 
+  /**
+   * Insert normalised import entries (from a URL import). Each entry's
+   * scryfall_id is tried first (exact printing → correct art), falling back to
+   * a name match; unresolved names are kept as null-scryfall rows. Commander
+   * entries land in the 'commander' board so they pin to the left column.
+   */
+  importDeckEntries(
+    deckId: number,
+    entries: { name: string; scryfallId: string | null; quantity: number; isCommander: boolean }[]
+  ): DeckImportResult {
+    let added = 0
+    const missing: string[] = []
+    const insertUnresolved = this.invDb.prepare(
+      'INSERT INTO deck_cards (deck_id, scryfall_id, name, quantity, category) VALUES (?, NULL, ?, ?, ?)'
+    )
+    const run = this.invDb.transaction(() => {
+      for (const e of entries) {
+        const qty = Math.max(1, e.quantity)
+        const category = e.isCommander ? 'commander' : ''
+        let card = e.scryfallId ? this.byScryfallId(e.scryfallId) : null
+        if (!card) card = this.findPrintingByName(e.name)
+        if (card) {
+          this.addCardToDeck(deckId, card.scryfallId, qty, category)
+        } else {
+          insertUnresolved.run(deckId, e.name, qty, category)
+          missing.push(e.name)
+        }
+        added += qty
+      }
+      this.touchDeck(deckId)
+    })
+    run()
+    return { deckId, added, missing }
+  }
+
   close(): void {
     this.refDb?.close()
     this.refDb = null

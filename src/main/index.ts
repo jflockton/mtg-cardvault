@@ -13,6 +13,7 @@ import {
 } from './dataLocation'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
+import { fetchDeckFromUrl } from './deckImport'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
 import { openInventoryViewer, closeInventoryViewer, gbpRate } from './viewer'
 import type { CornerScanResult, DeckFormat, Finish, LookupQuery, RefProgress } from '../shared/types'
@@ -445,6 +446,25 @@ function registerIpc(): void {
   ipcMain.handle('deck:importText', (_e, a: { deckId: number; text: string }) =>
     store.importDeckText(a.deckId, a.text)
   )
+  // Create a new deck from a public URL (Archidekt supported; Moxfield steers
+  // to paste). Commander + real printings come through for free.
+  ipcMain.handle('deck:importUrl', async (_e, url: string) => {
+    try {
+      const imported = await fetchDeckFromUrl(url)
+      const deck = store.createDeck(imported.name, imported.format)
+      const res = store.importDeckEntries(deck.id, imported.entries)
+      return {
+        ok: true as const,
+        deckId: deck.id,
+        name: imported.name,
+        source: imported.source,
+        added: res.added,
+        missing: res.missing
+      }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
   // Copy the "missing singles" decklist to the clipboard (renderer clipboard is
   // locked down, so it's done here) — ready to paste into a shop or /buy-deck.
   ipcMain.handle('deck:copyMissing', (_e, id: number) => {

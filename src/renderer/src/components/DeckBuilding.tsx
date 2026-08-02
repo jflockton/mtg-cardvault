@@ -128,6 +128,49 @@ function ImportModal(props: {
   )
 }
 
+/** Import-from-URL modal (Archidekt supported; Moxfield steers to paste). */
+function UrlModal(props: {
+  busy: boolean
+  onConfirm: (url: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [url, setUrl] = useState('')
+  return (
+    <div className="modal-overlay" onClick={props.busy ? undefined : props.onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Import deck from a link</h3>
+        <p className="muted small">
+          Paste an <b>Archidekt</b> deck URL — the commander and exact printings come through
+          automatically. (Moxfield blocks direct import; use its Export → “Import list” paste.)
+        </p>
+        <input
+          autoFocus
+          className="modal-input"
+          value={url}
+          placeholder="https://archidekt.com/decks/…"
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && url.trim() && !props.busy) props.onConfirm(url.trim())
+            if (e.key === 'Escape' && !props.busy) props.onCancel()
+          }}
+        />
+        <div className="modal-actions">
+          <button onClick={props.onCancel} disabled={props.busy}>
+            Cancel
+          </button>
+          <button
+            className="primary"
+            disabled={!url.trim() || props.busy}
+            onClick={() => props.onConfirm(url.trim())}
+          >
+            {props.busy ? 'Importing…' : 'Import'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------- analysis panels
 
 function DeckStatsPanel({ stats }: { stats: ReturnType<typeof computeDeckStats> }): React.JSX.Element {
@@ -560,7 +603,8 @@ export default function DeckBuilding(): React.JSX.Element {
   const [openId, setOpenId] = useState<number | null>(null)
   const [detail, setDetail] = useState<DeckDetail | null>(null)
   const [gbpPerEur, setGbpPerEur] = useState<number | null>(null)
-  const [modal, setModal] = useState<'new' | 'rename' | 'import' | null>(null)
+  const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | null>(null)
+  const [urlBusy, setUrlBusy] = useState(false)
   const [message, setMessage] = useState('')
 
   const loadDecks = useCallback(() => {
@@ -597,6 +641,23 @@ export default function DeckBuilding(): React.JSX.Element {
     setMessage(
       `Imported ${res.added} cards` +
         (res.missing.length > 0 ? ` · ${res.missing.length} unresolved (kept & flagged)` : '')
+    )
+  }
+
+  const importUrl = async (url: string): Promise<void> => {
+    setUrlBusy(true)
+    const res = await window.api.deckImportUrl(url)
+    setUrlBusy(false)
+    if (!res.ok) {
+      setMessage(res.error ?? 'Import failed')
+      return
+    }
+    setModal(null)
+    loadDecks()
+    if (res.deckId != null) setOpenId(res.deckId)
+    setMessage(
+      `Imported “${res.name}” — ${res.added} cards` +
+        (res.missing && res.missing.length > 0 ? ` · ${res.missing.length} unresolved` : '')
     )
   }
 
@@ -650,6 +711,7 @@ export default function DeckBuilding(): React.JSX.Element {
           <div className="deck-toolbar">
             <h2>Decks</h2>
             <span className="toolbar-spacer" />
+            <button onClick={() => setModal('url')}>🔗 Import from URL</button>
             <button className="primary" onClick={() => setModal('new')}>
               ✚ New deck
             </button>
@@ -703,6 +765,13 @@ export default function DeckBuilding(): React.JSX.Element {
       )}
       {modal === 'import' && (
         <ImportModal onConfirm={(t) => void doImport(t)} onCancel={() => setModal(null)} />
+      )}
+      {modal === 'url' && (
+        <UrlModal
+          busy={urlBusy}
+          onConfirm={(u) => void importUrl(u)}
+          onCancel={() => setModal(null)}
+        />
       )}
     </div>
   )
