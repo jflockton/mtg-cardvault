@@ -154,7 +154,8 @@ const PAGE = /* html */ `<!doctype html>
   #overlay { position: fixed; inset: 0; background: rgba(10,8,14,.82); display: none;
     align-items: center; justify-content: center; z-index: 20; padding: 24px; }
   #overlay.show { display: flex; }
-  #big { display: flex; gap: 22px; max-width: 900px; max-height: 92vh; align-items: center; }
+  #big { display: flex; gap: 22px; max-width: 900px; max-height: 92vh; align-items: center;
+         position: relative; }
   #big img { height: min(80vh, 640px); border-radius: 18px;
              box-shadow: 0 12px 60px rgba(0,0,0,.6); }
   #big .info { max-width: 300px; }
@@ -164,7 +165,24 @@ const PAGE = /* html */ `<!doctype html>
   #big .prices .eur { color: var(--gold); font-weight: 700; font-size: 17px; }
   #big .own { margin-top: 12px; color: var(--gold); }
   .banner { background: #4b1620; color: #ffd7dc; padding: 10px 18px; display: none; }
+  #filterbar { display: flex; gap: 10px; align-items: center; padding: 8px 18px 0; }
+  #filterbar .lbl { color: var(--dim); font-size: 13px; white-space: nowrap; }
+  #filterbar input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 13px; width: 240px; outline: none; }
+  #filterbar input:focus { border-color: var(--accent); }
+  #clearFilters { display: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--bg); color: var(--text); font-weight: 700; }
+  .card.owned { border-color: #3fae5c; }
+  .close-x { position: absolute; top: -48px; left: 0; width: 38px; height: 38px;
+    border-radius: 50%; background: rgba(13, 11, 18, 0.65); color: #fff;
+    border: 1px solid var(--line); font-size: 19px; line-height: 1; cursor: pointer; }
+  .close-x:hover { border-color: #fff; }
   .face-badge svg { width: 44px; height: 44px; border-radius: 10px; display: block; }
+  .set-box { display: flex; flex-direction: column; gap: 6px; }
+  #setq { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 12px; outline: none; }
+  #setq:focus { border-color: var(--accent); }
+  .clear-btn { display: none; border-color: var(--accent); color: var(--gold); }
   .menu-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
     border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
     color: var(--text); cursor: pointer; font-weight: 700; white-space: nowrap; }
@@ -184,11 +202,20 @@ const PAGE = /* html */ `<!doctype html>
   <span class="face-badge">${gwenSvg}</span>
   <h1><span>Show Inventory</span></h1>
   <input id="q" type="search" placeholder="Type a card name…" autofocus>
-  <select id="set"><option value="">All sets</option></select>
+  <div class="set-box">
+    <select id="set"><option value="">All sets</option></select>
+    <input id="setq" type="search" placeholder="Filter sets…">
+  </div>
+  <button id="clearBtn" class="menu-btn clear-btn">✕ Clear filters</button>
   <label class="tick"><input id="inv" type="checkbox" checked> In my inventory</label>
   <div class="totals" id="totals"></div>
   <button id="menuBtn" class="menu-btn" title="Close this window">${spideySvg}<span>Return to main menu</span></button>
 </header>
+<div id="filterbar">
+  <span class="lbl">Filter sets:</span>
+  <input id="setFilter" type="search" placeholder="type part of a set name or code…">
+  <button id="clearFilters">✕ Clear filters</button>
+</div>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
 <div id="status"></div>
 <div id="grid"></div>
@@ -224,14 +251,32 @@ async function api(path) {
   }
 }
 
-async function loadSets() {
-  const mode = inv.checked ? 'inventory' : 'all';
-  const sets = await api('/api/sets?mode=' + mode);
+let setsCache = [];
+let setFilterText = '';
+const setFilterInput = $('setFilter');
+const clearBtn = $('clearFilters');
+
+function renderSetOptions() {
+  const f = setFilterText.trim().toLowerCase();
+  const shown = f
+    ? setsCache.filter((s) => s.code.includes(f) || s.name.toLowerCase().includes(f))
+    : setsCache;
   const keep = setSel.value;
-  setSel.innerHTML = '<option value="">All sets</option>' + sets.map((s) =>
+  setSel.innerHTML = '<option value="">All sets</option>' + shown.map((s) =>
     '<option value="' + esc(s.code) + '">' + esc(s.name) + ' (' + s.code.toUpperCase() + ')' +
     (s.count ? ' — ' + s.count : '') + '</option>').join('');
   if ([...setSel.options].some((o) => o.value === keep)) setSel.value = keep;
+  updateClear();
+}
+
+function updateClear() {
+  clearBtn.style.display = (setFilterText || setSel.value) ? 'inline-block' : 'none';
+}
+
+async function loadSets() {
+  const mode = inv.checked ? 'inventory' : 'all';
+  setsCache = await api('/api/sets?mode=' + mode);
+  renderSetOptions();
 }
 
 function cardPrice(c) {
@@ -248,10 +293,12 @@ function render() {
   const frag = document.createDocumentFragment();
   cards.forEach((c, i) => {
     const d = document.createElement('div');
-    d.className = 'card';
+    d.className = 'card' + (!inv.checked && c.quantity > 0 ? ' owned' : '');
     d.onclick = () => showBig(c);
     const p = cardPrice(c);
     const hasFoil = c.stacks.some((s) => s.finish !== 'nonfoil');
+    const foilPrice = c.priceEurFoil != null ? cm(c.priceEurFoil)
+      : (c.priceUsdFoil != null ? usd(c.priceUsdFoil) : null);
     d.innerHTML =
       (c.quantity > 1 && inv.checked ? '<div class="badge">×' + c.quantity + '</div>' : '') +
       (!inv.checked && c.quantity > 0 ? '<div class="badge own">own ×' + c.quantity + '</div>' : '') +
@@ -262,7 +309,8 @@ function render() {
       '<div class="meta"><div class="nm">' + esc(c.name) + '</div>' +
       '<div class="st">' + esc(c.setName) + ' · #' + esc(c.collectorNumber) + '</div>' +
       '<div class="pr">' + (cm(p.eur) ? '<span class="eur">' + cm(p.eur) + '</span>' : '<span class="eur">' + (fxRate ? '£' : '€') + ' —</span>') +
-      (usd(p.usd) ? '<span class="usd">' + usd(p.usd) + '</span>' : '') + '</div></div>';
+      (usd(p.usd) ? '<span class="usd">' + usd(p.usd) + '</span>' : '') +
+      (foilPrice ? '<span class="usd">✦ ' + foilPrice + '</span>' : '') + '</div></div>';
     const img = d.querySelector('img');
     if (img) img.onerror = () => {
       const n = document.createElement('div');
@@ -302,6 +350,7 @@ async function adjust(c, finish, delta) {
 function showBig(c) {
   const bigUri = c.imageUri ? c.imageUri.replace('/normal/', '/large/') : null;
   big.innerHTML =
+    '<button class="close-x" title="Close (Esc)">✕</button>' +
     (bigUri ? '<img src="' + esc(bigUri) + '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
     '<div class="st">' + esc(c.setName) + ' (' + esc(c.setCode.toUpperCase()) + ') · #' +
@@ -322,6 +371,7 @@ function showBig(c) {
   big.querySelectorAll('.adj').forEach((btn) => {
     btn.onclick = () => adjust(c, btn.dataset.f, Number(btn.dataset.d));
   });
+  big.querySelector('.close-x').onclick = () => overlay.classList.remove('show');
   overlay.classList.add('show');
 }
 overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('show'); };
@@ -355,8 +405,11 @@ async function refresh() {
     } else {
       status.textContent = 'Searching…';
       cards = await api('/api/cards?name=' + encodeURIComponent(name) + '&set=' + encodeURIComponent(set));
+      const ownedCount = cards.filter((c) => c.quantity > 0).length;
       status.textContent = cards.length
-        ? cards.length + ' result' + (cards.length === 1 ? '' : 's') + (cards.length === 200 ? ' (first 200 — narrow the search)' : '')
+        ? cards.length + ' result' + (cards.length === 1 ? '' : 's') +
+          (cards.length === 200 ? ' (first 200 — narrow the search)' : '') +
+          (set && ownedCount > 0 ? ' · you own ' + ownedCount + ' of these (green tiles)' : '')
         : 'No cards match.';
     }
   }
@@ -370,8 +423,18 @@ async function refresh() {
 
 document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
-setSel.addEventListener('change', refresh);
-inv.addEventListener('change', async () => { setSel.value = ''; await loadSets(); refresh(); });
+setSel.addEventListener('change', () => { updateClear(); refresh(); });
+setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
+clearBtn.onclick = () => {
+  setFilterText = '';
+  setFilterInput.value = '';
+  setSel.value = '';
+  renderSetOptions();
+  refresh();
+};
+// Toggling the inventory tick keeps the selected set open when it still
+// exists in the new mode (it always does when unticking into all-sets).
+inv.addEventListener('change', async () => { await loadSets(); refresh(); });
 
 (async () => {
   try {

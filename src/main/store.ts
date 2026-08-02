@@ -958,13 +958,15 @@ export class DataStore {
       where.push('set_code = ?')
       params.push(set)
     }
-    // Set browse reads in collector order; name search reads newest printings first.
+    // Set browse reads in collector order — and shows the WHOLE set, so the
+    // cap only applies to name searches (where 200 hits means "narrow it").
     const order = set && !name
       ? 'ORDER BY CAST(collector_number AS INTEGER), collector_number'
       : 'ORDER BY name COLLATE NOCASE, released_at DESC'
+    const cap = set && !name ? Math.max(limit, 1200) : limit
     const rows = this.refDb
       .prepare(`SELECT * FROM scryfall_cards WHERE ${where.join(' AND ')} ${order} LIMIT ?`)
-      .all(...params, limit) as {
+      .all(...params, cap) as {
       scryfall_id: string
       name: string
       set_code: string
