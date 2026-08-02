@@ -21,6 +21,9 @@ export default function InventoryViewer(): React.JSX.Element {
       })
     return () => {
       alive = false
+      // The viewer runs in its own (cross-origin) frame and can keep keyboard
+      // focus; hand focus back to the main frame so inputs elsewhere work.
+      window.api.focusMainFrame()
     }
   }, [])
 

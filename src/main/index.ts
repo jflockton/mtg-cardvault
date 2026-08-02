@@ -59,6 +59,7 @@ function seedReferenceDbFromResources(dataDir: string): void {
 }
 
 let store: DataStore
+let mainWindow: BrowserWindow | null = null
 let viewerWindow: BrowserWindow | null = null
 let refreshing = false
 /** UTC start of this app run — the boundary for "scanned this session". */
@@ -125,6 +126,7 @@ function createWindow(): BrowserWindow {
   } else {
     win.loadFile(path.join(import.meta.dirname, '../renderer/index.html'))
   }
+  mainWindow = win
   return win
 }
 
@@ -471,6 +473,20 @@ function registerIpc(): void {
   ipcMain.handle('deck:importText', (_e, a: { deckId: number; text: string }) =>
     store.importDeckText(a.deckId, a.text)
   )
+  ipcMain.handle('clipboard:read', () => clipboard.readText())
+  ipcMain.handle('deck:readFile', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Import decklist',
+      properties: ['openFile'],
+      filters: [{ name: 'Decklist', extensions: ['txt', 'dec', 'csv', 'text'] }]
+    })
+    if (canceled || !filePaths[0]) return null
+    const text = fs.readFileSync(filePaths[0], 'utf8')
+    return { name: path.basename(filePaths[0]).replace(/\.[^.]+$/, ''), text }
+  })
+  // Cross-origin iframes (the embedded viewer) run out-of-process and can hold
+  // keyboard focus; refocusing the top frame lets other inputs type again.
+  ipcMain.on('window:focusTop', () => mainWindow?.webContents.focus())
   // Create a new deck from a public URL (Archidekt supported; Moxfield steers
   // to paste). Commander + real printings come through for free.
   ipcMain.handle('deck:importUrl', async (_e, url: string) => {

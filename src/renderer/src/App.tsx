@@ -1235,19 +1235,8 @@ export default function App(): React.JSX.Element {
     [commitPending, setPending]
   )
 
-  // Entering Show Inventory opens the browser straight away.
-  useEffect(() => {
-    if (section === 'viewer') void window.api.openViewer()
-  }, [section])
-
-  // Closing the viewer window returns the app to the main menu — one click.
-  useEffect(
-    () =>
-      window.api.onViewerClosed(() => {
-        if (sectionRef.current === 'viewer') go('home')
-      }),
-    [go]
-  )
+  // Show Inventory is embedded in-app now (see the 'viewer' section); no
+  // separate window is opened.
 
   // Keyboard flow. Preview open: Enter = confirm, F = toggle foil, Esc =
   // reject. No preview: F = sticky finish for auto-adds, Backspace = undo

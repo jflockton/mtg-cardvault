@@ -130,14 +130,16 @@ function ImportModal(props: {
   )
 }
 
-/** Create a new deck from a pasted list — asks for a name + format up front. */
+/** Create a new deck from a decklist (clipboard or file) — asks for a name + format. */
 function TextImportModal(props: {
+  initialName?: string
+  initialText?: string
   onConfirm: (name: string, format: DeckFormat, text: string) => void
   onCancel: () => void
 }): React.JSX.Element {
-  const [name, setName] = useState('')
+  const [name, setName] = useState(props.initialName ?? '')
   const [format, setFormat] = useState<DeckFormat>('commander')
-  const [text, setText] = useState('')
+  const [text, setText] = useState(props.initialText ?? '')
   return (
     <div className="modal-overlay" onClick={props.onCancel}>
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -782,7 +784,25 @@ export default function DeckBuilding(): React.JSX.Element {
   const [gbpPerEur, setGbpPerEur] = useState<number | null>(null)
   const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | 'text' | null>(null)
   const [urlBusy, setUrlBusy] = useState(false)
+  const [textSeed, setTextSeed] = useState<{ name: string; text: string }>({ name: '', text: '' })
   const [message, setMessage] = useState('')
+
+  const importFromClipboard = async (): Promise<void> => {
+    const text = await window.api.readClipboard()
+    if (!text.trim()) {
+      setMessage('Clipboard is empty — copy a decklist first.')
+      return
+    }
+    setTextSeed({ name: '', text })
+    setModal('text')
+  }
+
+  const importFromFile = async (): Promise<void> => {
+    const f = await window.api.readDeckFile()
+    if (!f) return
+    setTextSeed({ name: f.name, text: f.text })
+    setModal('text')
+  }
 
   const loadDecks = useCallback(() => {
     void window.api.deckList().then(setDecks)
@@ -904,10 +924,18 @@ export default function DeckBuilding(): React.JSX.Element {
           <div className="deck-toolbar">
             <h2>Decks</h2>
             <span className="toolbar-spacer" />
-            <button onClick={() => setModal('text')}>📋 Paste a list</button>
-            <button onClick={() => setModal('url')}>🔗 Import from URL</button>
-            <button className="primary" onClick={() => setModal('new')}>
-              ✚ New deck
+            <span className="muted small">New deck from:</span>
+            <button title="A decklist copied to your clipboard" onClick={() => void importFromClipboard()}>
+              📋 Clipboard
+            </button>
+            <button title="A .txt decklist file" onClick={() => void importFromFile()}>
+              📄 File
+            </button>
+            <button title="An Archidekt deck link" onClick={() => setModal('url')}>
+              🔗 URL
+            </button>
+            <button className="primary" title="An empty deck" onClick={() => setModal('new')}>
+              ✚ Blank
             </button>
           </div>
           {decks == null ? (
@@ -962,6 +990,8 @@ export default function DeckBuilding(): React.JSX.Element {
       )}
       {modal === 'text' && (
         <TextImportModal
+          initialName={textSeed.name}
+          initialText={textSeed.text}
           onConfirm={(name, format, text) => void createFromText(name, format, text)}
           onCancel={() => setModal(null)}
         />

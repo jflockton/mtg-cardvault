@@ -106,6 +106,12 @@ export interface CardVaultApi {
   deckPrintings: (name: string) => Promise<CardRef[]>
   deckSetPrinting: (rowId: number, scryfallId: string) => Promise<void>
   deckImportText: (deckId: number, text: string) => Promise<DeckImportResult>
+  /** Current clipboard text (for "import from clipboard"). */
+  readClipboard: () => Promise<string>
+  /** Pick a .txt decklist file; returns its basename + contents, or null if cancelled. */
+  readDeckFile: () => Promise<{ name: string; text: string } | null>
+  /** Refocus the app's top frame (fixes typing after the embedded viewer grabbed focus). */
+  focusMainFrame: () => void
   deckImportUrl: (url: string) => Promise<{
     ok: boolean
     deckId?: number
@@ -176,6 +182,9 @@ const api: CardVaultApi = {
   deckSetPrinting: (rowId, scryfallId) =>
     ipcRenderer.invoke('deck:setPrinting', { rowId, scryfallId }),
   deckImportText: (deckId, text) => ipcRenderer.invoke('deck:importText', { deckId, text }),
+  readClipboard: () => ipcRenderer.invoke('clipboard:read'),
+  readDeckFile: () => ipcRenderer.invoke('deck:readFile'),
+  focusMainFrame: () => ipcRenderer.send('window:focusTop'),
   deckImportUrl: (url) => ipcRenderer.invoke('deck:importUrl', url),
   deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId)
 }
