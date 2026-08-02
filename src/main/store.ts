@@ -1303,6 +1303,7 @@ export class DataStore {
     const rows = this.refDb
       .prepare(
         `SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE
+           AND type_line <> 'Card' AND type_line NOT LIKE 'Card //%'
          ORDER BY released_at DESC, collector_number`
       )
       .all(name.trim())
@@ -1576,39 +1577,34 @@ export class DataStore {
     return lines.join('\n')
   }
 
-  /** Exact name first (newest printing), else a prefix match. Null if unknown. */
+  /**
+   * Resolve a card name to a printing. Matches the name exactly OR as the front
+   * face of a "// " card (MDFC / split — a list often carries only the front
+   * name), EXCLUDES art-series cards (type_line 'Card' / 'Card // Card' — art
+   * with no gameplay identity, e.g. the ALCI Ojer Axonil), and prefers a
+   * standard printing (numeric collector number, not Secret Lair) so imports
+   * don't default to alt-art / promo / The-List versions. Null if unknown.
+   */
   private findPrintingByName(name: string): CardRef | null {
     this.openReferenceIfPresent()
     if (!this.refDb) return null
     const trimmed = name.trim()
     if (!trimmed) return null
-    // Exact name: prefer a "standard" printing — a numeric collector number and
-    // not Secret Lair — so imports don't default to alt-art / promo / The-List /
-    // Secret-Lair versions (that's the odd art). Fall back to newest of any.
-    const exact =
+    const args = { n: trimmed, front: `${trimmed} // %` }
+    const nameMatch = `(name = @n COLLATE NOCASE OR name LIKE @front COLLATE NOCASE)
+       AND type_line <> 'Card' AND type_line NOT LIKE 'Card //%'`
+    const row =
       this.refDb
         .prepare(
-          `SELECT * FROM scryfall_cards
-           WHERE name = ? COLLATE NOCASE
-             AND set_code <> 'sld'
-             AND collector_number NOT GLOB '*[^0-9]*'
+          `SELECT * FROM scryfall_cards WHERE ${nameMatch}
+             AND set_code <> 'sld' AND collector_number NOT GLOB '*[^0-9]*'
            ORDER BY released_at DESC LIMIT 1`
         )
-        .get(trimmed) ??
+        .get(args) ??
       this.refDb
-        .prepare(
-          'SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE ORDER BY released_at DESC LIMIT 1'
-        )
-        .get(trimmed)
-    if (exact) return rowToCardRef(exact as never, 'local')
-    // Split cards / faces: "Fire // Ice" lists often carry only one face name.
-    const prefix = this.refDb
-      .prepare(
-        `SELECT * FROM scryfall_cards WHERE name LIKE ? COLLATE NOCASE
-         ORDER BY released_at DESC LIMIT 1`
-      )
-      .get(`${trimmed}%`)
-    return prefix ? rowToCardRef(prefix as never, 'local') : null
+        .prepare(`SELECT * FROM scryfall_cards WHERE ${nameMatch} ORDER BY released_at DESC LIMIT 1`)
+        .get(args)
+    return row ? rowToCardRef(row as never, 'local') : null
   }
 
   /**
