@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   CardRef,
   CornerScanResult,
+  DataLocation,
   Finish,
   FxRate,
   InventoryItem,
@@ -70,6 +71,12 @@ export interface CardVaultApi {
   openViewer: () => Promise<{ url: string }>
   /** EUR→GBP at the ECB daily rate (null offline) — Cardmarket £ display. */
   fxRate: () => Promise<FxRate>
+  /** Where the inventory db lives + whether it's in a cloud folder. */
+  dataLocation: () => Promise<DataLocation>
+  /** Move inventory to a folder (or Dropbox if omitted); reset → back to local. */
+  setDataLocation: (args?: { dir?: string; reset?: boolean }) => Promise<DataLocation>
+  /** Pick a folder for the inventory via a native dialog. */
+  chooseDataLocation: () => Promise<DataLocation>
   /** Fires when the inventory viewer window closes; returns unsubscribe. */
   onViewerClosed: (cb: () => void) => () => void
 }
@@ -104,6 +111,9 @@ const api: CardVaultApi = {
   note: (text) => ipcRenderer.send('scan:note', text),
   openViewer: () => ipcRenderer.invoke('viewer:open'),
   fxRate: () => ipcRenderer.invoke('fx:rate'),
+  dataLocation: () => ipcRenderer.invoke('data:location'),
+  setDataLocation: (args) => ipcRenderer.invoke('data:setLocation', args ?? {}),
+  chooseDataLocation: () => ipcRenderer.invoke('data:chooseLocation'),
   onViewerClosed: (cb) => {
     const listener = (): void => cb()
     ipcRenderer.on('viewer:closed', listener)

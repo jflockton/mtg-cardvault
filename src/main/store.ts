@@ -133,26 +133,23 @@ function rowToItem(r: InvRow): InventoryItem {
 export class DataStore {
   readonly dataDir: string
   readonly referenceDbPath: string
-  readonly inventoryDbPath: string
+  inventoryDir: string
+  inventoryDbPath: string
 
   private refDb: Database.Database | null = null
-  private invDb: Database.Database
+  private invDb!: Database.Database
 
-  constructor(dataDir: string) {
+  // `inventoryDir` defaults to `dataDir` (everything in one local folder). When
+  // the shop moves the inventory into a cloud folder (Dropbox), pass it here —
+  // reference.db always stays in the local `dataDir`.
+  constructor(dataDir: string, inventoryDir: string = dataDir) {
     this.dataDir = dataDir
+    this.inventoryDir = inventoryDir
     fs.mkdirSync(dataDir, { recursive: true })
     this.referenceDbPath = path.join(dataDir, 'reference.db')
-    this.inventoryDbPath = path.join(dataDir, 'inventory.db')
+    this.inventoryDbPath = ''
 
-    this.invDb = new Database(this.inventoryDbPath)
-    this.invDb.pragma('journal_mode = WAL')
-    this.invDb.exec(INV_SCHEMA)
-    // Migration for inventories created before Cardmarket price capture.
-    const logCols = this.invDb.prepare('PRAGMA table_info(scan_log)').all() as { name: string }[]
-    const migratedEur = !logCols.some((c) => c.name === 'price_eur')
-    if (migratedEur) {
-      this.invDb.exec('ALTER TABLE scan_log ADD COLUMN price_eur REAL')
-    }
+    const migratedEur = this.connectInventory()
 
     this.openReferenceIfPresent()
 
@@ -170,6 +167,65 @@ export class DataStore {
         if (p.eur != null) upd.run(p.eur, r.scryfall_id, r.finish)
       }
     }
+  }
+
+  /**
+   * Open (or reopen) inventory.db from `this.inventoryDir`, apply schema and the
+   * EUR-price migration. Returns whether the EUR migration was just applied (so
+   * the caller can run the one-time price backfill). Safe to call repeatedly.
+   *
+   * When the inventory lives outside the local data dir it's assumed to be in a
+   * cloud-synced folder (Dropbox), so we use a rollback journal instead of WAL:
+   * WAL keeps `-wal`/`-shm` sidecar files that a file syncer can copy out of step
+   * with the main db and corrupt it. With `journal_mode = DELETE` the committed
+   * database is a single self-consistent file between transactions — exactly what
+   * a sync client can safely replicate.
+   */
+  private connectInventory(): boolean {
+    this.inventoryDbPath = path.join(this.inventoryDir, 'inventory.db')
+    fs.mkdirSync(this.inventoryDir, { recursive: true })
+    this.invDb = new Database(this.inventoryDbPath)
+    const cloud = path.resolve(this.inventoryDir) !== path.resolve(this.dataDir)
+    this.invDb.pragma(cloud ? 'journal_mode = DELETE' : 'journal_mode = WAL')
+    this.invDb.exec(INV_SCHEMA)
+    // Migration for inventories created before Cardmarket price capture.
+    const logCols = this.invDb.prepare('PRAGMA table_info(scan_log)').all() as { name: string }[]
+    const migratedEur = !logCols.some((c) => c.name === 'price_eur')
+    if (migratedEur) {
+      this.invDb.exec('ALTER TABLE scan_log ADD COLUMN price_eur REAL')
+    }
+    return migratedEur
+  }
+
+  /**
+   * Move the live inventory to a new folder (e.g. into Dropbox) and reopen it
+   * there. The current inventory.db is copied into `newDir` if that folder has
+   * none yet; if `newDir` already holds an inventory.db (e.g. Dropbox synced one
+   * from another machine) we adopt it in place rather than overwriting. The old
+   * local file is left untouched as a safety copy. Returns the new db path.
+   */
+  relocateInventory(newDir: string): string {
+    const from = this.inventoryDbPath
+    const resolvedNew = path.resolve(newDir)
+    if (resolvedNew === path.resolve(this.inventoryDir)) return this.inventoryDbPath
+
+    // Flush WAL back into the main file before we copy or leave it.
+    try {
+      this.invDb.pragma('wal_checkpoint(TRUNCATE)')
+    } catch {
+      /* not in WAL — nothing to flush */
+    }
+    this.invDb.close()
+
+    fs.mkdirSync(newDir, { recursive: true })
+    const target = path.join(newDir, 'inventory.db')
+    if (fs.existsSync(from) && !fs.existsSync(target)) {
+      fs.copyFileSync(from, target)
+    }
+
+    this.inventoryDir = newDir
+    this.connectInventory()
+    return this.inventoryDbPath
   }
 
   private openReferenceIfPresent(): void {

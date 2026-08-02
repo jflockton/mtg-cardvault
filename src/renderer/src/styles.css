@@ -792,3 +792,39 @@ header {
   display: flex;
   flex-direction: column;
 }
+
+/* Inventory storage (Settings) — local vs cloud/Dropbox */
+.storage-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.75rem;
+}
+.storage-current code {
+  word-break: break-all;
+}
+.storage-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.storage-badge.cloud {
+  background: #1c3d5a;
+  color: #8ecbff;
+}
+.storage-badge.local {
+  background: #333;
+  color: #ccc;
+}
+.storage-warn {
+  background: #4a2a12;
+  border: 1px solid #a35a1e;
+  color: #ffd9ad;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}

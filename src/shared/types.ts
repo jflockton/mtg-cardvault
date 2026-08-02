@@ -81,6 +81,19 @@ export interface FxRate {
   asOf: string | null
 }
 
+/** Where the inventory db lives, for the data-location UI. */
+export interface DataLocation {
+  inventoryDir: string
+  inventoryDbPath: string
+  localDir: string
+  isCloud: boolean
+  dropboxDefault: string | null
+  conflicts: string[]
+  locked: boolean
+  error?: string
+  canceled?: boolean
+}
+
 export interface LookupQuery {
   setCode: string
   collectorNumber: string

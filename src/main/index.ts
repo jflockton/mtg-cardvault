@@ -4,6 +4,13 @@ import fs from 'node:fs'
 import Database from 'better-sqlite3'
 
 import { DataStore } from './store'
+import {
+  clearInventoryDir,
+  defaultCloudInventoryDir,
+  findConflictedCopies,
+  loadInventoryDir,
+  saveInventoryDir
+} from './dataLocation'
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
@@ -223,6 +230,68 @@ function registerIpc(): void {
   // EUR→GBP at the ECB daily rate, for showing Cardmarket prices in pounds.
   ipcMain.handle('fx:rate', () => gbpRate())
 
+  // --- Inventory data location (local vs cloud/Dropbox) ---
+  const dataDir = resolveDataDir()
+  const locationInfo = (): {
+    inventoryDir: string
+    inventoryDbPath: string
+    localDir: string
+    isCloud: boolean
+    dropboxDefault: string | null
+    conflicts: string[]
+    locked: boolean
+  } => ({
+    inventoryDir: store.inventoryDir,
+    inventoryDbPath: store.inventoryDbPath,
+    localDir: dataDir,
+    isCloud: path.resolve(store.inventoryDir) !== path.resolve(dataDir),
+    dropboxDefault: defaultCloudInventoryDir(),
+    conflicts: findConflictedCopies(store.inventoryDir),
+    // Dev override pins the location; can't be changed from the UI.
+    locked: !!process.env.MTG_CARDVAULT_DATA_DIR
+  })
+
+  ipcMain.handle('data:location', () => locationInfo())
+
+  // Move the live inventory to `dir` (or, with no dir, to the detected Dropbox
+  // folder) and remember it. `reset: true` moves it back to the local data dir.
+  ipcMain.handle(
+    'data:setLocation',
+    (_e, args?: { dir?: string; reset?: boolean }) => {
+      if (process.env.MTG_CARDVAULT_DATA_DIR) return { ...locationInfo(), error: 'locked' }
+      let target = args?.dir
+      if (args?.reset) target = dataDir
+      if (!target) target = defaultCloudInventoryDir() ?? undefined
+      if (!target) return { ...locationInfo(), error: 'no-dropbox' }
+      try {
+        store.relocateInventory(target)
+        if (path.resolve(target) === path.resolve(dataDir)) clearInventoryDir(dataDir)
+        else saveInventoryDir(dataDir, target)
+        return locationInfo()
+      } catch (err) {
+        return { ...locationInfo(), error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+
+  // Folder picker for a custom inventory location.
+  ipcMain.handle('data:chooseLocation', async () => {
+    if (process.env.MTG_CARDVAULT_DATA_DIR) return { ...locationInfo(), error: 'locked' }
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Choose a folder for the inventory',
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: defaultCloudInventoryDir() ?? app.getPath('home')
+    })
+    if (canceled || !filePaths[0]) return { ...locationInfo(), canceled: true }
+    try {
+      store.relocateInventory(filePaths[0])
+      saveInventoryDir(dataDir, filePaths[0])
+      return locationInfo()
+    } catch (err) {
+      return { ...locationInfo(), error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   // "Show Inventory": loopback-only web viewer, shown in an in-app window
   // (no address bar, no browser). One window, refocused on repeat opens.
   ipcMain.handle('viewer:open', async (event) => {
@@ -405,8 +474,14 @@ app.whenReady().then(() => {
 
   const dataDir = resolveDataDir()
   seedReferenceDbFromResources(dataDir)
-  store = new DataStore(dataDir)
+  // In dev (MTG_CARDVAULT_DATA_DIR set) keep everything together; otherwise
+  // honour the shop's chosen inventory location (default: the local data dir).
+  const inventoryDir = process.env.MTG_CARDVAULT_DATA_DIR
+    ? dataDir
+    : loadInventoryDir(dataDir, dataDir)
+  store = new DataStore(dataDir, inventoryDir)
   console.log(`[cardvault] data dir: ${dataDir}`)
+  console.log(`[cardvault] inventory dir: ${inventoryDir}`)
   console.log(`[cardvault] reference: ${JSON.stringify(store.refStatus())}`)
 
   // Reference DBs built before set metadata existed: backfill in the

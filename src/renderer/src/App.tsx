@@ -12,6 +12,7 @@ import spideyIcon from './assets/spidey.svg'
 import type {
   CardRef,
   CornerScanResult,
+  DataLocation,
   Finish,
   InventorySummary,
   PreconSummary,
@@ -509,6 +510,104 @@ function StandalonePrecon({
     <section className="panel">
       <h2>Add a precon deck</h2>
       {children}
+    </section>
+  )
+}
+
+/**
+ * Where the inventory lives: local app-data (default) or a cloud-synced folder
+ * (Dropbox) so it's backed up and shared between machines. reference.db always
+ * stays local — only the small, precious inventory.db moves.
+ */
+function StoragePanel(): React.JSX.Element {
+  const [loc, setLoc] = useState<DataLocation | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoc(await window.api.dataLocation())
+  }, [])
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const apply = async (run: () => Promise<DataLocation>): Promise<void> => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const next = await run()
+      setLoc(next)
+      if (next.canceled) return
+      if (next.error === 'no-dropbox') setMsg("Couldn't find a Dropbox folder on this machine.")
+      else if (next.error === 'locked') setMsg('Location is pinned by MTG_CARDVAULT_DATA_DIR (dev).')
+      else if (next.error) setMsg(next.error)
+      else setMsg(`Inventory now stored in ${next.inventoryDir}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!loc) return <section className="panel">Loading storage…</section>
+
+  return (
+    <section className="panel">
+      <h2>Inventory storage</h2>
+      <p className="muted small">
+        Your stock lives in <code>inventory.db</code>. Store it in Dropbox to back it up
+        automatically and share it between this machine and the shop&apos;s. (The big card database
+        stays local — no reason to sync it.)
+      </p>
+      <p className="storage-current">
+        <span className={`storage-badge ${loc.isCloud ? 'cloud' : 'local'}`}>
+          {loc.isCloud ? '☁ Cloud' : '💻 Local'}
+        </span>{' '}
+        <code>{loc.inventoryDir}</code>
+      </p>
+
+      {loc.conflicts.length > 0 && (
+        <p className="storage-warn">
+          ⚠ Dropbox has {loc.conflicts.length} conflicted{' '}
+          {loc.conflicts.length === 1 ? 'copy' : 'copies'} of the inventory (two machines edited it
+          before sync settled): {loc.conflicts.join(', ')}. Reconcile these before scanning.
+        </p>
+      )}
+
+      <div className="action-row">
+        {!loc.isCloud && loc.dropboxDefault && (
+          <button
+            disabled={busy || loc.locked}
+            onClick={() => apply(() => window.api.setDataLocation())}
+            title={loc.dropboxDefault}
+          >
+            ☁ Store in Dropbox
+          </button>
+        )}
+        <button disabled={busy || loc.locked} onClick={() => apply(() => window.api.chooseDataLocation())}>
+          📁 Choose folder…
+        </button>
+        {loc.isCloud && (
+          <button
+            disabled={busy || loc.locked}
+            onClick={() => apply(() => window.api.setDataLocation({ reset: true }))}
+          >
+            💻 Move back to local
+          </button>
+        )}
+      </div>
+
+      {!loc.dropboxDefault && !loc.isCloud && (
+        <p className="muted small">
+          Dropbox wasn&apos;t detected on this machine — use “Choose folder…” to pick any synced
+          folder.
+        </p>
+      )}
+      {loc.isCloud && (
+        <p className="muted small">
+          <strong>One rule:</strong> run the app on one machine at a time, and let Dropbox finish
+          syncing (green tick) before opening it on the other.
+        </p>
+      )}
+      {msg && <p className="message">{msg}</p>}
     </section>
   )
 }
@@ -1556,6 +1655,7 @@ export default function App(): React.JSX.Element {
               <button onClick={() => playUndo()}>↩ undo blip</button>
             </div>
           </section>
+          <StoragePanel />
         </div>
       )}
 
