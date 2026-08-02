@@ -985,26 +985,28 @@ button.danger {
 /* click-a-card detail modal */
 .card-modal {
   display: flex;
-  gap: 18px;
+  gap: 22px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 18px;
-  width: 720px;
-  max-width: 94vw;
+  padding: 22px;
+  width: 960px;
+  max-width: 95vw;
+  max-height: 92vh;
+  overflow-y: auto;
   box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
 }
 .card-modal-art {
-  flex: 0 0 300px;
+  flex: 0 0 400px;
 }
 .card-modal-art img {
-  width: 300px;
+  width: 400px;
   display: block;
-  border-radius: 14px;
+  border-radius: 16px;
 }
 .card-modal-noart {
-  width: 300px;
-  height: 418px;
+  width: 400px;
+  height: 558px;
   border: 1px dashed var(--border);
   border-radius: 14px;
   display: flex;
