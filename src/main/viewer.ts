@@ -89,6 +89,20 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
             Number(url.searchParams.get('delta') ?? 0)
           )
           json(res, { ok })
+        } else if (url.pathname === '/api/decks') {
+          json(res, store.listDecks())
+        } else if (url.pathname === '/api/deck-add') {
+          const deckId = Number(url.searchParams.get('deckId'))
+          const sid = url.searchParams.get('id') ?? ''
+          const qty = Number(url.searchParams.get('qty') ?? 1)
+          if (deckId && sid) {
+            store.addCardToDeck(deckId, sid, qty > 0 ? qty : 1)
+            json(res, { ok: true })
+          } else {
+            json(res, { ok: false })
+          }
+        } else if (url.pathname === '/api/deck-create') {
+          json(res, store.createDeck(url.searchParams.get('name') ?? 'Untitled deck'))
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' })
           res.end('{"error":"not found"}')
@@ -232,6 +246,28 @@ const PAGE = /* html */ `<!doctype html>
   .adj:hover:not(:disabled) { border-color: var(--accent); }
   .adj:disabled { opacity: 0.3; cursor: default; }
   @media (max-width: 700px) { #big { flex-direction: column; } #big img { height: 52vh; } }
+  .add-deck-btn { display: inline-block; margin: 14px 0 0 10px; padding: 7px 14px;
+    border: 1.5px solid var(--accent); border-radius: 8px; background: rgba(79,142,247,.14);
+    color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
+  .add-deck-btn:hover { background: rgba(79,142,247,.28); }
+  .ctx-menu { position: fixed; z-index: 9999; display: none; min-width: 230px; max-height: 62vh;
+    overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  .ctx-title { font-size: 12px; color: var(--dim); padding: 4px 8px 6px; }
+  .ctx-item { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0;
+    border-radius: 7px; background: none; color: var(--text); cursor: pointer; font-size: 13px; }
+  .ctx-item:hover { background: var(--bg); }
+  .ctx-item.new { color: var(--accent); font-weight: 700; }
+  .ctx-empty { padding: 6px 10px; color: var(--dim); font-size: 12px; }
+  .ctx-newdeck { display: flex; gap: 6px; padding: 4px; }
+  .ctx-input { flex: 1; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+  .ctx-input:focus { border-color: var(--accent); }
+  #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel); border: 1px solid var(--accent); color: var(--text); padding: 10px 18px;
+    border-radius: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .2s;
+    z-index: 10000; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -277,6 +313,8 @@ const PAGE = /* html */ `<!doctype html>
 <div id="grid"></div>
 
 <div id="overlay"><div id="big"></div></div>
+<div id="deckMenu" class="ctx-menu"></div>
+<div id="toast"></div>
 
 <script>
 'use strict';
@@ -447,6 +485,7 @@ function render() {
     const d = document.createElement('div');
     d.className = 'card' + (!inv.checked && c.quantity > 0 ? ' owned' : '');
     d.onclick = () => showBig(c);
+    d.oncontextmenu = (e) => { e.preventDefault(); openDeckMenu(c.scryfallId, c.name, e.clientX, e.clientY); };
     const p = cardPrice(c);
     const hasFoil = c.stacks.some((s) => s.finish !== 'nonfoil');
     const foilPrice = c.priceEurFoil != null ? cm(c.priceEurFoil)
@@ -523,15 +562,82 @@ function showBig(c) {
       encodeURIComponent(c.setCode) + '/' + encodeURIComponent(c.collectorNumber) +
       '" title="Rulings, legality, card backs / transforms, every printing — opens in your browser">' +
       'Full details on Scryfall ↗</a>' +
+    '<button class="add-deck-btn" id="addDeckBtn">＋ Add to deck</button>' +
     '</div>';
   big.querySelectorAll('.adj').forEach((btn) => {
     btn.onclick = () => adjust(c, btn.dataset.f, Number(btn.dataset.d));
   });
+  const addBtn = big.querySelector('#addDeckBtn');
+  if (addBtn) addBtn.onclick = (e) => {
+    e.stopPropagation();
+    const r = addBtn.getBoundingClientRect();
+    openDeckMenu(c.scryfallId, c.name, r.left, r.bottom + 6);
+  };
   big.querySelector('.close-x').onclick = () => overlay.classList.remove('show');
   overlay.classList.add('show');
 }
 overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('show'); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('show'); });
+
+// --- Add to deck (right-click a card, or the button on the full-card view) ---
+let decks = [];
+const deckMenu = $('deckMenu'), toastEl = $('toast');
+function closeDeckMenu() { deckMenu.style.display = 'none'; deckMenu.innerHTML = ''; }
+document.addEventListener('click', (e) => {
+  if (deckMenu.style.display === 'block' && !deckMenu.contains(e.target)) closeDeckMenu();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeckMenu(); });
+function toast(msg) {
+  toastEl.textContent = msg; toastEl.classList.add('show');
+  clearTimeout(toastEl._t); toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 1800);
+}
+async function addToDeck(scryfallId, deckId, deckName) {
+  closeDeckMenu();
+  try {
+    const r = await api('/api/deck-add?deckId=' + deckId + '&id=' + encodeURIComponent(scryfallId) + '&qty=1');
+    toast(r && r.ok ? ('Added to ' + deckName) : 'Could not add card');
+  } catch (e) { toast('Could not add card'); }
+}
+function newDeckInput(scryfallId) {
+  deckMenu.innerHTML = '';
+  const wrap = document.createElement('div'); wrap.className = 'ctx-newdeck';
+  const inp = document.createElement('input'); inp.className = 'ctx-input'; inp.placeholder = 'New deck name…';
+  const go = document.createElement('button'); go.className = 'ctx-item new'; go.textContent = 'Create';
+  const create = async () => {
+    const nm = inp.value.trim(); if (!nm) return;
+    try {
+      const d = await api('/api/deck-create?name=' + encodeURIComponent(nm));
+      if (d && d.id) await addToDeck(scryfallId, d.id, nm);
+    } catch (e) { toast('Could not create deck'); }
+  };
+  go.onclick = (ev) => { ev.stopPropagation(); create(); };
+  inp.onclick = (ev) => ev.stopPropagation();
+  inp.onkeydown = (ev) => { if (ev.key === 'Enter') create(); };
+  wrap.appendChild(inp); wrap.appendChild(go); deckMenu.appendChild(wrap); inp.focus();
+}
+async function openDeckMenu(scryfallId, name, x, y) {
+  try { decks = (await api('/api/decks')) || []; } catch (e) { decks = []; }
+  deckMenu.innerHTML = '';
+  const t = document.createElement('div'); t.className = 'ctx-title';
+  t.textContent = 'Add "' + name + '" to…'; deckMenu.appendChild(t);
+  if (!decks.length) {
+    const em = document.createElement('div'); em.className = 'ctx-empty';
+    em.textContent = 'No decks yet — make one below.'; deckMenu.appendChild(em);
+  }
+  decks.forEach((d) => {
+    const b = document.createElement('button'); b.className = 'ctx-item';
+    b.textContent = d.name + '  (' + d.cardCount + ')';
+    b.onclick = (ev) => { ev.stopPropagation(); addToDeck(scryfallId, d.id, d.name); };
+    deckMenu.appendChild(b);
+  });
+  const nw = document.createElement('button'); nw.className = 'ctx-item new'; nw.textContent = '＋ New deck…';
+  nw.onclick = (ev) => { ev.stopPropagation(); newDeckInput(scryfallId); };
+  deckMenu.appendChild(nw);
+  deckMenu.style.display = 'block';
+  const w = deckMenu.offsetWidth, h = deckMenu.offsetHeight;
+  deckMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+  deckMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+}
 
 async function refresh() {
   void loadSets();
