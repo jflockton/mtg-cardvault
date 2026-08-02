@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { DeckSummary, DeckDetail, DeckCard, DeckFormat } from '../../../shared/types'
+import type { CardRef, DeckSummary, DeckDetail, DeckCard, DeckFormat } from '../../../shared/types'
 import { DECK_FORMATS } from '../../../shared/types'
 import {
   computeDeckStats,
@@ -261,11 +261,19 @@ function CardModal(props: {
   onQty: (q: number) => void
   onToggleCommander: () => void
   onSetDeckImage: () => void
+  onSetPrinting: (scryfallId: string) => void
   onRemove: () => void
   onClose: () => void
 }): React.JSX.Element {
   const { card } = props
   const isCmd = card.category === 'commander'
+  const [printings, setPrintings] = useState<CardRef[] | null>(null)
+  const [showPrintings, setShowPrintings] = useState(false)
+
+  const openPrintings = async (): Promise<void> => {
+    setShowPrintings(true)
+    if (printings == null) setPrintings(await window.api.deckPrintings(card.name))
+  }
   const price =
     card.priceEur != null
       ? props.gbpPerEur != null
@@ -316,6 +324,11 @@ function CardModal(props: {
             <button className={isCmd ? 'primary' : ''} onClick={props.onToggleCommander}>
               ♛ {isCmd ? 'Unset commander' : 'Set as commander'}
             </button>
+            {card.scryfallId && (
+              <button className={showPrintings ? 'primary' : ''} onClick={() => void openPrintings()}>
+                🎴 Change printing / art
+              </button>
+            )}
             <button
               className={props.isDeckImage ? 'primary' : ''}
               onClick={props.onSetDeckImage}
@@ -327,6 +340,36 @@ function CardModal(props: {
               🗑 Remove from deck
             </button>
           </div>
+
+          {showPrintings && (
+            <div className="printing-picker">
+              {printings == null ? (
+                <p className="muted small">Loading printings…</p>
+              ) : printings.length === 0 ? (
+                <p className="muted small">No printings found in the reference data.</p>
+              ) : (
+                <div className="printing-grid">
+                  {printings.map((p) => (
+                    <button
+                      key={p.scryfallId}
+                      className={`printing-opt ${p.scryfallId === card.scryfallId ? 'current' : ''}`}
+                      title={`${p.setName} #${p.collectorNumber}`}
+                      onClick={() => props.onSetPrinting(p.scryfallId)}
+                    >
+                      {p.imageUri ? (
+                        <img src={p.imageUri} alt={p.setName} loading="lazy" />
+                      ) : (
+                        <span className="printing-noimg">{p.setCode.toUpperCase()}</span>
+                      )}
+                      <span className="printing-set">
+                        {p.setCode.toUpperCase()} #{p.collectorNumber}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {card.scryfallId && card.setCode && (
             <a
@@ -430,6 +473,12 @@ function DeckDetailView(props: {
   const [openRowId, setOpenRowId] = useState<number | null>(null)
   const openCard = deck.cards.find((c) => c.rowId === openRowId) ?? null
   const hasCommander = deck.cards.some((c) => c.category === 'commander')
+
+  const setPrinting = async (scryfallId: string): Promise<void> => {
+    if (openRowId == null) return
+    await window.api.deckSetPrinting(openRowId, scryfallId)
+    props.onReload()
+  }
 
   const priceLabel = (eur: number): string =>
     gbpPerEur != null ? `£${(eur * gbpPerEur).toFixed(2)}` : `€${eur.toFixed(2)}`
@@ -569,9 +618,11 @@ function DeckDetailView(props: {
 
       {openCard && (
         <CardModal
+          key={openCard.rowId}
           card={openCard}
           gbpPerEur={gbpPerEur}
           isDeckImage={deck.imageUri != null && deck.imageUri === openCard.imageUri}
+          onSetPrinting={(id) => void setPrinting(id)}
           onQty={(q) => {
             void setQty(openCard.rowId, q)
             if (q <= 0) setOpenRowId(null)

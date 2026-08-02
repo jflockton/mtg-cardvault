@@ -1295,6 +1295,50 @@ export class DataStore {
     })
   }
 
+  /** Every printing of a card name (newest first) — feeds the change-art picker. */
+  printingsForName(name: string): CardRef[] {
+    this.openReferenceIfPresent()
+    if (!this.refDb || !name.trim()) return []
+    const rows = this.refDb
+      .prepare(
+        `SELECT * FROM scryfall_cards WHERE name = ? COLLATE NOCASE
+         ORDER BY released_at DESC, collector_number`
+      )
+      .all(name.trim())
+    return rows.map((r) => rowToCardRef(r as never, 'local'))
+  }
+
+  /**
+   * Switch a deck line to a different printing (same card, new art). If that
+   * printing already exists as another line in the same board, the two merge.
+   */
+  setDeckCardPrinting(rowId: number, scryfallId: string): void {
+    const row = this.invDb
+      .prepare('SELECT deck_id, category, quantity FROM deck_cards WHERE id = ?')
+      .get(rowId) as { deck_id: number; category: string; quantity: number } | undefined
+    if (!row) return
+    const card = this.byScryfallId(scryfallId)
+    const existing = this.invDb
+      .prepare(
+        'SELECT id FROM deck_cards WHERE deck_id = ? AND scryfall_id = ? AND category = ? AND id <> ?'
+      )
+      .get(row.deck_id, scryfallId, row.category, rowId) as { id: number } | undefined
+    const doIt = this.invDb.transaction(() => {
+      if (existing) {
+        this.invDb
+          .prepare('UPDATE deck_cards SET quantity = quantity + ? WHERE id = ?')
+          .run(row.quantity, existing.id)
+        this.invDb.prepare('DELETE FROM deck_cards WHERE id = ?').run(rowId)
+      } else {
+        this.invDb
+          .prepare('UPDATE deck_cards SET scryfall_id = ?, name = COALESCE(?, name) WHERE id = ?')
+          .run(scryfallId, card?.name ?? null, rowId)
+      }
+      this.touchDeck(row.deck_id)
+    })
+    doIt()
+  }
+
   /** Pin a card's art as the deck's tile image (null clears it → commander art). */
   setDeckImage(deckId: number, imageUri: string | null): void {
     this.invDb

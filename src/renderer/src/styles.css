@@ -1072,6 +1072,49 @@ button.danger {
   color: var(--accent);
   font-weight: 600;
 }
+.printing-picker {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.printing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.printing-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.printing-opt.current {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+}
+.printing-opt img {
+  width: 100%;
+  border-radius: 5px;
+  display: block;
+}
+.printing-noimg {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 120px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.printing-set {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: center;
+}
 
 /* Stacks view: category columns of overlapping cards; only each name banner
    peeks. Hovering a card lifts the one after it away, revealing the hovered

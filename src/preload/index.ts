@@ -99,6 +99,8 @@ export interface CardVaultApi {
   deckSetQuantity: (rowId: number, quantity: number) => Promise<void>
   deckSetCategory: (rowId: number, category: string) => Promise<void>
   deckSetImage: (deckId: number, imageUri: string | null) => Promise<void>
+  deckPrintings: (name: string) => Promise<CardRef[]>
+  deckSetPrinting: (rowId: number, scryfallId: string) => Promise<void>
   deckImportText: (deckId: number, text: string) => Promise<DeckImportResult>
   deckImportUrl: (url: string) => Promise<{
     ok: boolean
@@ -163,6 +165,9 @@ const api: CardVaultApi = {
   deckSetCategory: (rowId, category) =>
     ipcRenderer.invoke('deck:setCategory', { rowId, category }),
   deckSetImage: (deckId, imageUri) => ipcRenderer.invoke('deck:setImage', { deckId, imageUri }),
+  deckPrintings: (name) => ipcRenderer.invoke('deck:printings', name),
+  deckSetPrinting: (rowId, scryfallId) =>
+    ipcRenderer.invoke('deck:setPrinting', { rowId, scryfallId }),
   deckImportText: (deckId, text) => ipcRenderer.invoke('deck:importText', { deckId, text }),
   deckImportUrl: (url) => ipcRenderer.invoke('deck:importUrl', url),
   deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId)

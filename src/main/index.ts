@@ -443,6 +443,10 @@ function registerIpc(): void {
   ipcMain.handle('deck:setImage', (_e, a: { deckId: number; imageUri: string | null }) =>
     store.setDeckImage(a.deckId, a.imageUri)
   )
+  ipcMain.handle('deck:printings', (_e, name: string) => store.printingsForName(name))
+  ipcMain.handle('deck:setPrinting', (_e, a: { rowId: number; scryfallId: string }) =>
+    store.setDeckCardPrinting(a.rowId, a.scryfallId)
+  )
   ipcMain.handle('deck:importText', (_e, a: { deckId: number; text: string }) =>
     store.importDeckText(a.deckId, a.text)
   )
