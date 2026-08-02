@@ -990,23 +990,23 @@ button.danger {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 22px;
-  width: 960px;
-  max-width: 95vw;
-  max-height: 92vh;
+  width: 1160px;
+  max-width: 96vw;
+  max-height: 94vh;
   overflow-y: auto;
   box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
 }
 .card-modal-art {
-  flex: 0 0 400px;
+  flex: 0 0 540px;
 }
 .card-modal-art img {
-  width: 400px;
+  width: 540px;
   display: block;
-  border-radius: 16px;
+  border-radius: 18px;
 }
 .card-modal-noart {
-  width: 400px;
-  height: 558px;
+  width: 540px;
+  height: 754px;
   border: 1px dashed var(--border);
   border-radius: 14px;
   display: flex;
