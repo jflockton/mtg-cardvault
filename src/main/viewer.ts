@@ -58,7 +58,14 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
               url.searchParams.get('name') ?? '',
               url.searchParams.get('set') ?? '',
               300,
-              Number(url.searchParams.get('offset') ?? 0)
+              Number(url.searchParams.get('offset') ?? 0),
+              {
+                type: url.searchParams.get('type') ?? '',
+                subtype: url.searchParams.get('subtype') ?? '',
+                rarities: (url.searchParams.get('rarities') ?? '').split(',').filter(Boolean),
+                commander: url.searchParams.get('commander') === '1',
+                foil: url.searchParams.get('foil') === '1'
+              }
             )
           )
         } else if (url.pathname === '/api/sets') {
@@ -530,19 +537,21 @@ async function refresh() {
       (fxRate ? ' in £ (ECB ' + fxAsOf + ')' : ' in €');
     status.textContent = 'Loading…';
     const r = await api('/api/cards?name=' + encodeURIComponent(name) +
-      '&set=' + encodeURIComponent(set) + '&offset=' + (page * PAGE_SIZE));
+      '&set=' + encodeURIComponent(set) + '&offset=' + (page * PAGE_SIZE) +
+      '&type=' + encodeURIComponent(selectedType) +
+      '&subtype=' + encodeURIComponent(subtypeText) +
+      '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
+      (wantCommander ? '&commander=1' : '') +
+      (wantFoil ? '&foil=1' : ''));
     totalResults = r.total;
-    const fetched = r.cards;
-    cards = fetched.filter(chipMatch);
+    cards = r.cards;
     const ownedCount = cards.filter((c) => c.quantity > 0).length;
     const from = page * PAGE_SIZE + 1;
-    const to = page * PAGE_SIZE + fetched.length;
-    const hidden = fetched.length - cards.length;
+    const to = page * PAGE_SIZE + cards.length;
     status.textContent = totalResults === 0
       ? 'No cards match.'
       : 'Cards ' + from.toLocaleString() + '–' + to.toLocaleString() + ' of ' +
         totalResults.toLocaleString() +
-        (hidden > 0 ? ' · ' + hidden + ' on this page hidden by filters' : '') +
         (set && ownedCount > 0 ? ' · you own ' + ownedCount + ' shown (green tiles)' : '');
     renderPager();
   }

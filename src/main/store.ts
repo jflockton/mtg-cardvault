@@ -949,7 +949,14 @@ export class DataStore {
     nameQuery: string,
     setCode: string,
     limit = 300,
-    offset = 0
+    offset = 0,
+    f: {
+      type?: string
+      subtype?: string
+      rarities?: string[]
+      commander?: boolean
+      foil?: boolean
+    } = {}
   ): { cards: ViewerCard[]; total: number } {
     this.openReferenceIfPresent()
     if (!this.refDb) return { cards: [], total: 0 }
@@ -966,6 +973,25 @@ export class DataStore {
       where.push('set_code = ?')
       params.push(set)
     }
+    // Filters run in SQL so pagination pages over the FILTERED results —
+    // a Villain browse fills whole pages with Villains.
+    if (f.type) {
+      where.push('type_line LIKE ? COLLATE NOCASE')
+      params.push(`%${f.type.trim()}%`)
+    }
+    if (f.subtype) {
+      const terms = f.subtype.split(',').map((s) => s.trim()).filter(Boolean)
+      if (terms.length > 0) {
+        where.push(`(${terms.map(() => 'type_line LIKE ? COLLATE NOCASE').join(' OR ')})`)
+        for (const t of terms) params.push(`%${t}%`)
+      }
+    }
+    if (f.rarities && f.rarities.length > 0) {
+      where.push(`rarity IN (${f.rarities.map(() => '?').join(',')})`)
+      params.push(...f.rarities)
+    }
+    if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
+    if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
     const whereSql = where.length > 0 ? where.join(' AND ') : '1=1'
     // Set browse reads in collector order; everything else alphabetically.
     const order = set && !name
