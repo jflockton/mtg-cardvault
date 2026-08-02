@@ -818,9 +818,13 @@ export default function DeckBuilding(): React.JSX.Element {
   }, [loadDecks])
 
   useEffect(() => {
-    if (openId != null) loadDetail(openId)
-    else setDetail(null)
-  }, [openId, loadDetail])
+    if (openId != null) {
+      loadDetail(openId)
+    } else {
+      setDetail(null)
+      loadDecks() // returning to the list — refresh tiles (deck art, card counts)
+    }
+  }, [openId, loadDetail, loadDecks])
 
   const createDeck = async (name: string, format: DeckFormat): Promise<void> => {
     const deck = await window.api.deckCreate(name, format)
