@@ -130,6 +130,60 @@ function ImportModal(props: {
   )
 }
 
+/** Create a new deck from a pasted list — asks for a name + format up front. */
+function TextImportModal(props: {
+  onConfirm: (name: string, format: DeckFormat, text: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [name, setName] = useState('')
+  const [format, setFormat] = useState<DeckFormat>('commander')
+  const [text, setText] = useState('')
+  return (
+    <div className="modal-overlay" onClick={props.onCancel}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <h3>New deck from a list</h3>
+        <input
+          autoFocus
+          className="modal-input"
+          value={name}
+          placeholder="Deck name…"
+          onChange={(e) => setName(e.target.value)}
+        />
+        <label className="modal-format">
+          Format
+          <select value={format} onChange={(e) => setFormat(e.target.value as DeckFormat)}>
+            {DECK_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {f[0].toUpperCase() + f.slice(1)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">
+          One card per line — e.g. <code>1 Sol Ring</code> or <code>2 Island (FIN) 297</code>.
+          A Moxfield export pastes straight in. Unknown cards are kept and flagged.
+        </p>
+        <textarea
+          className="import-textarea"
+          value={text}
+          placeholder={'Commander\n1 Atraxa, Praetors’ Voice\n\nDeck\n1 Sol Ring\n10 Forest'}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="modal-actions">
+          <button onClick={props.onCancel}>Cancel</button>
+          <button
+            className="primary"
+            disabled={!name.trim() || !text.trim()}
+            onClick={() => props.onConfirm(name.trim(), format, text)}
+          >
+            Create &amp; import
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Import-from-URL modal (Archidekt supported; Moxfield steers to paste). */
 function UrlModal(props: {
   busy: boolean
@@ -726,7 +780,7 @@ export default function DeckBuilding(): React.JSX.Element {
   const [openId, setOpenId] = useState<number | null>(null)
   const [detail, setDetail] = useState<DeckDetail | null>(null)
   const [gbpPerEur, setGbpPerEur] = useState<number | null>(null)
-  const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | null>(null)
+  const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | 'text' | null>(null)
   const [urlBusy, setUrlBusy] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -764,6 +818,22 @@ export default function DeckBuilding(): React.JSX.Element {
     setMessage(
       `Imported ${res.added} cards` +
         (res.missing.length > 0 ? ` · ${res.missing.length} unresolved (kept & flagged)` : '')
+    )
+  }
+
+  const createFromText = async (
+    name: string,
+    format: DeckFormat,
+    text: string
+  ): Promise<void> => {
+    const deck = await window.api.deckCreate(name, format)
+    const res = await window.api.deckImportText(deck.id, text)
+    setModal(null)
+    loadDecks()
+    setOpenId(deck.id)
+    setMessage(
+      `Imported ${res.added} cards into “${name}”` +
+        (res.missing.length > 0 ? ` · ${res.missing.length} unresolved` : '')
     )
   }
 
@@ -834,6 +904,7 @@ export default function DeckBuilding(): React.JSX.Element {
           <div className="deck-toolbar">
             <h2>Decks</h2>
             <span className="toolbar-spacer" />
+            <button onClick={() => setModal('text')}>📋 Paste a list</button>
             <button onClick={() => setModal('url')}>🔗 Import from URL</button>
             <button className="primary" onClick={() => setModal('new')}>
               ✚ New deck
@@ -888,6 +959,12 @@ export default function DeckBuilding(): React.JSX.Element {
       )}
       {modal === 'import' && (
         <ImportModal onConfirm={(t) => void doImport(t)} onCancel={() => setModal(null)} />
+      )}
+      {modal === 'text' && (
+        <TextImportModal
+          onConfirm={(name, format, text) => void createFromText(name, format, text)}
+          onCancel={() => setModal(null)}
+        />
       )}
       {modal === 'url' && (
         <UrlModal
