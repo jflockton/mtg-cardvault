@@ -534,7 +534,8 @@ function DeckDetailView(props: {
         cards: byCat
           .get(label)!
           .sort((a, b) => manaValue(a.manaCost) - manaValue(b.manaCost) || a.name.localeCompare(b.name)),
-        count: byCat.get(label)!.reduce((n, c) => n + c.quantity, 0)
+        count: byCat.get(label)!.reduce((n, c) => n + c.quantity, 0),
+        eur: byCat.get(label)!.reduce((n, c) => n + (c.priceEur ?? 0) * c.quantity, 0)
       }))
   }, [deck.cards])
 
@@ -661,7 +662,9 @@ function DeckDetailView(props: {
               <div key={g.label} className={`stack-col ${g.label === 'Commander' ? 'commander-col' : ''}`}>
                 <div className="stack-head">
                   <span className="stack-label">{g.label}</span>
-                  <span className="muted small">{g.count}</span>
+                  <span className="muted small" title="cards · value at current Cardmarket prices">
+                    {g.count} · {priceLabel(g.eur)}
+                  </span>
                 </div>
                 <div className="stack">
                   {g.cards.map((c) => (
