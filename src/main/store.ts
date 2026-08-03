@@ -55,9 +55,12 @@ function colorFilterSql(sel: string[], mode: 'any' | 'only' | 'exact'): string |
     if (picked.length === 0) return "colors = '[]'"
     return `(${[...picked.map(has), ...ALL.filter((c) => !picked.includes(c)).map(lacks)].join(' AND ')})`
   }
-  // 'only' — colourless always fits; all five selected means no constraint
-  const outside = ALL.filter((c) => !picked.includes(c))
-  return outside.length > 0 ? `(${outside.map(lacks).join(' AND ')})` : null
+  // 'only' — W+U means white, blue, or white-blue; nothing outside the picks.
+  // Colourless is included only when the ◇ chip is also selected.
+  if (picked.length === 0) return "colors = '[]'" // ◇ alone
+  const terms = ALL.filter((c) => !picked.includes(c)).map(lacks)
+  if (!wantColorless) terms.push("colors <> '[]'")
+  return terms.length > 0 ? `(${terms.join(' AND ')})` : null
 }
 
 /** Parse a stored colors JSON array, tolerating junk. */

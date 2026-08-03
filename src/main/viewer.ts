@@ -56,7 +56,8 @@ function viewerFilterParams(url: URL): {
     const v = url.searchParams.get(k)
     return v !== null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null
   }
-  const mode = url.searchParams.get('colorMode')
+  const rawMode = url.searchParams.get('colorMode')
+  const mode = rawMode === 'any' || rawMode === 'exact' ? rawMode : 'only'
   return {
     name: url.searchParams.get('name') ?? '',
     type: url.searchParams.get('type') ?? '',
@@ -65,7 +66,7 @@ function viewerFilterParams(url: URL): {
     commander: url.searchParams.get('commander') === '1',
     foil: url.searchParams.get('foil') === '1',
     colors: (url.searchParams.get('colors') ?? '').split(',').filter(Boolean),
-    colorMode: mode === 'only' || mode === 'exact' ? mode : 'any',
+    colorMode: mode,
     mvMin: num('mvMin'),
     mvMax: num('mvMax')
   }
@@ -345,9 +346,9 @@ const PAGE = /* html */ `<!doctype html>
   <button class="chip color-chip" data-color="R" title="Red">🔴</button>
   <button class="chip color-chip" data-color="G" title="Green">🟢</button>
   <button class="chip color-chip" data-color="C" title="Colourless">◇</button>
-  <select id="colorMode" title="How the colour picks match: at least one / fits within / precisely">
+  <select id="colorMode" title="Only these: W+U shows white, blue, and white-blue cards (◇ adds colourless). Any of: at least one picked colour. Exactly: precisely those colours.">
+    <option value="only" selected>Only these</option>
     <option value="any">Any of</option>
-    <option value="only">Only these</option>
     <option value="exact">Exactly</option>
   </select>
   <span class="lbl">Cost:</span>
@@ -409,7 +410,7 @@ let wantFoil = false;
 let selectedType = '';
 let subtypeText = '';
 const activeColors = new Set();  // W/U/B/R/G + 'C' (colourless)
-let colorMode = 'any';           // any | only | exact
+let colorMode = 'only';          // only (default) | any | exact
 let mvMinVal = '';
 let mvMaxVal = '';
 
@@ -440,7 +441,10 @@ function colorMatch(c) {
     if (picked.length === 0) return cols.length === 0;
     return picked.every((x) => cols.includes(x)) && cols.every((x) => picked.includes(x));
   }
-  return cols.every((x) => picked.includes(x)); // only: fits within the selection
+  // only: W+U = white, blue, or white-blue; colourless needs the ◇ chip too
+  if (picked.length === 0) return cols.length === 0; // ◇ alone
+  if (cols.length === 0) return activeColors.has('C');
+  return cols.every((x) => picked.includes(x));
 }
 
 function mvMatch(c) {
@@ -898,8 +902,8 @@ clearBtn.onclick = () => {
   wantCommander = false;
   wantFoil = false;
   activeColors.clear();
-  colorMode = 'any';
-  colorModeSel.value = 'any';
+  colorMode = 'only';
+  colorModeSel.value = 'only';
   mvMinVal = '';
   mvMaxVal = '';
   mvMinInput.value = '';
