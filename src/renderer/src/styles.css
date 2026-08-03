@@ -928,6 +928,10 @@ header {
 .buy-price {
   color: var(--muted);
 }
+.buy-set {
+  color: var(--muted);
+  font-size: 10.5px;
+}
 .buy-cost {
   color: var(--warn);
   font-weight: 600;

@@ -691,9 +691,17 @@ function DeckDetailView(props: {
                   </p>
                   <ul className="buy-list">
                     {buy.missing.map((m) => (
-                      <li key={m.card.rowId}>
+                      <li key={m.card.rowId} title={`${m.card.name} — the printing set on this deck line`}>
                         <span className="buy-short">{m.short}×</span>
-                        <span className="buy-name">{m.card.name}</span>
+                        <span className="buy-name">
+                          {m.card.name}
+                          {m.card.setCode && (
+                            <span className="buy-set">
+                              {' '}
+                              {m.card.setCode.toUpperCase()} #{m.card.collectorNumber}
+                            </span>
+                          )}
+                        </span>
                         <span className="buy-price">
                           {m.card.priceEur != null ? priceLabel(m.card.priceEur * m.short) : '—'}
                         </span>

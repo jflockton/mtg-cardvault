@@ -1591,7 +1591,15 @@ export class DataStore {
     for (const c of deck.cards) {
       if (c.category !== '' && c.category !== 'commander') continue
       const short = c.quantity - c.owned
-      if (short > 0) lines.push(`${short} ${c.name}`)
+      if (short > 0) {
+        // Printing-specific, same shape as the deck export — the buyer picked
+        // this exact (often cheapest) printing, so carry it into the search.
+        const printing =
+          c.setCode && c.collectorNumber
+            ? ` (${c.setCode.toUpperCase()}) ${c.collectorNumber}`
+            : ''
+        lines.push(`${short} ${c.name}${printing}`)
+      }
     }
     return lines.join('\n')
   }
