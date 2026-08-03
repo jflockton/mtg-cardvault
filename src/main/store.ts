@@ -30,7 +30,73 @@ import type {
   ScanResolution
 } from '../shared/types'
 import type { CornerParse } from './cornerParse'
-import { canBeCommander, MAX_COMMANDERS } from '../shared/deckStats'
+import { canBeCommander, manaValue, MAX_COMMANDERS } from '../shared/deckStats'
+
+/**
+ * SQL fragment for the viewer's colour filter. `sel` may hold W/U/B/R/G plus
+ * 'C' (colourless); values are whitelisted here, so embedding is safe.
+ *  - any:   card shows at least one selected colour (or is colourless if C picked)
+ *  - only:  card fits within the selection (no colour outside it; colourless passes)
+ *  - exact: precisely the selected colours (C alone = exactly colourless)
+ */
+function colorFilterSql(sel: string[], mode: 'any' | 'only' | 'exact'): string | null {
+  const ALL = ['W', 'U', 'B', 'R', 'G']
+  const picked = sel.filter((c) => ALL.includes(c))
+  const wantColorless = sel.includes('C')
+  if (picked.length === 0 && !wantColorless) return null
+  const has = (c: string): string => `colors LIKE '%"${c}"%'`
+  const lacks = (c: string): string => `colors NOT LIKE '%"${c}"%'`
+  if (mode === 'any') {
+    const terms = picked.map(has)
+    if (wantColorless) terms.push("colors = '[]'")
+    return `(${terms.join(' OR ')})`
+  }
+  if (mode === 'exact') {
+    if (picked.length === 0) return "colors = '[]'"
+    return `(${[...picked.map(has), ...ALL.filter((c) => !picked.includes(c)).map(lacks)].join(' AND ')})`
+  }
+  // 'only' — colourless always fits; all five selected means no constraint
+  const outside = ALL.filter((c) => !picked.includes(c))
+  return outside.length > 0 ? `(${outside.map(lacks).join(' AND ')})` : null
+}
+
+/** Parse a stored colors JSON array, tolerating junk. */
+function safeColors(raw: string | null): string[] {
+  try {
+    const v = JSON.parse(raw ?? '[]')
+    return Array.isArray(v) ? (v as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+/** Viewer filter set shared by viewerSearch / viewerSets. */
+interface ViewerFilters {
+  name?: string
+  type?: string
+  subtype?: string
+  rarities?: string[]
+  commander?: boolean
+  foil?: boolean
+  colors?: string[]
+  colorMode?: 'any' | 'only' | 'exact'
+  mvMin?: number | null
+  mvMax?: number | null
+}
+
+/** Colour + mana-value WHERE fragments (mana_value is a registered UDF). */
+function colorAndMvSql(f: ViewerFilters): string[] {
+  const where: string[] = []
+  const colorSql = colorFilterSql(f.colors ?? [], f.colorMode ?? 'any')
+  if (colorSql) where.push(colorSql)
+  if (f.mvMin != null && Number.isFinite(f.mvMin)) {
+    where.push(`mana_value(mana_cost) >= ${Math.floor(f.mvMin)}`)
+  }
+  if (f.mvMax != null && Number.isFinite(f.mvMax)) {
+    where.push(`mana_value(mana_cost) <= ${Math.floor(f.mvMax)}`)
+  }
+  return where
+}
 
 const INV_SCHEMA = `
 CREATE TABLE IF NOT EXISTS inventory (
@@ -224,6 +290,9 @@ export class DataStore {
     const cloud = path.resolve(this.inventoryDir) !== path.resolve(this.dataDir)
     this.invDb.pragma(cloud ? 'journal_mode = DELETE' : 'journal_mode = WAL')
     this.invDb.pragma('foreign_keys = ON') // deck_cards → decks cascade
+    this.invDb.function('mana_value', { deterministic: true }, (cost) =>
+      manaValue(typeof cost === 'string' ? cost : null)
+    )
     this.invDb.exec(INV_SCHEMA)
     this.invDb.exec(DECK_SCHEMA)
     // Migration: deck tile art, added after the decks tables first shipped.
@@ -277,6 +346,11 @@ export class DataStore {
     this.refDb = new Database(this.referenceDbPath, { readonly: false })
     this.refDb.exec(REF_SCHEMA)
     this.refDb.exec(REF_INDEXES)
+    // mana_value(mana_cost) in SQL — powers the viewer's mana-cost filter
+    // without needing a cmc column in the schema.
+    this.refDb.function('mana_value', { deterministic: true }, (cost) =>
+      manaValue(typeof cost === 'string' ? cost : null)
+    )
   }
 
   refStatus(): RefStatus {
@@ -987,7 +1061,7 @@ export class DataStore {
     const rows = this.invDb
       .prepare(
         `SELECT scryfall_id, name, set_code, collector_number, rarity, type_line,
-                finish, quantity, image_uri
+                mana_cost, colors, finish, quantity, image_uri
          FROM inventory WHERE quantity > 0 ORDER BY name COLLATE NOCASE, finish`
       )
       .all() as {
@@ -997,6 +1071,8 @@ export class DataStore {
       collector_number: string
       rarity: string
       type_line: string
+      mana_cost: string
+      colors: string
       finish: Finish
       quantity: number
       image_uri: string | null
@@ -1026,6 +1102,8 @@ export class DataStore {
           collectorNumber: r.collector_number,
           rarity: r.rarity,
           typeLine: r.type_line,
+          colors: safeColors(r.colors),
+          manaCost: r.mana_cost || null,
           imageUri: r.image_uri,
           quantity: 0,
           stacks: [],
@@ -1057,13 +1135,7 @@ export class DataStore {
     setCode: string,
     limit = 300,
     offset = 0,
-    f: {
-      type?: string
-      subtype?: string
-      rarities?: string[]
-      commander?: boolean
-      foil?: boolean
-    } = {}
+    f: ViewerFilters = {}
   ): { cards: ViewerCard[]; total: number } {
     this.openReferenceIfPresent()
     if (!this.refDb) return { cards: [], total: 0 }
@@ -1099,6 +1171,7 @@ export class DataStore {
     }
     if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
     if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
+    where.push(...colorAndMvSql(f))
     const whereSql = where.length > 0 ? where.join(' AND ') : '1=1'
     // Set browse reads in collector order; everything else alphabetically.
     const order = set && !name
@@ -1121,6 +1194,8 @@ export class DataStore {
       collector_number: string
       rarity: string
       type_line: string
+      mana_cost: string
+      colors: string
       image_uri: string | null
       prices_usd: number | null
       prices_usd_foil: number | null
@@ -1143,6 +1218,8 @@ export class DataStore {
       collectorNumber: r.collector_number,
       rarity: r.rarity,
       typeLine: r.type_line,
+      colors: safeColors(r.colors),
+      manaCost: r.mana_cost || null,
       imageUri: r.image_uri,
       quantity: owned.get(r.scryfall_id) ?? 0,
       stacks: [],
@@ -1161,14 +1238,7 @@ export class DataStore {
    */
   viewerSets(
     mode: 'inventory' | 'all',
-    f: {
-      name?: string
-      type?: string
-      subtype?: string
-      rarities?: string[]
-      commander?: boolean
-      foil?: boolean
-    } = {}
+    f: ViewerFilters = {}
   ): { code: string; name: string; count: number }[] {
     const where: string[] = []
     const params: (string | number)[] = []
@@ -1192,6 +1262,7 @@ export class DataStore {
       params.push(...f.rarities)
     }
     if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
+    where.push(...colorAndMvSql(f))
 
     if (mode === 'all') {
       this.openReferenceIfPresent()
@@ -1764,6 +1835,9 @@ export interface ViewerCard {
   collectorNumber: string
   rarity: string
   typeLine: string
+  /** colour letters, e.g. ["W","U"] — empty = colourless */
+  colors: string[]
+  manaCost: string | null
   imageUri: string | null
   /** Total owned copies across finishes (0 = not in inventory). */
   quantity: number

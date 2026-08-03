@@ -39,6 +39,38 @@ export async function gbpRate(): Promise<{ gbpPerEur: number | null; asOf: strin
 }
 
 /** Start (or reuse) the viewer server; resolves to its URL. */
+/** Shared filter-param parsing for /api/cards and /api/sets. */
+function viewerFilterParams(url: URL): {
+  name: string
+  type: string
+  subtype: string
+  rarities: string[]
+  commander: boolean
+  foil: boolean
+  colors: string[]
+  colorMode: 'any' | 'only' | 'exact'
+  mvMin: number | null
+  mvMax: number | null
+} {
+  const num = (k: string): number | null => {
+    const v = url.searchParams.get(k)
+    return v !== null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null
+  }
+  const mode = url.searchParams.get('colorMode')
+  return {
+    name: url.searchParams.get('name') ?? '',
+    type: url.searchParams.get('type') ?? '',
+    subtype: url.searchParams.get('subtype') ?? '',
+    rarities: (url.searchParams.get('rarities') ?? '').split(',').filter(Boolean),
+    commander: url.searchParams.get('commander') === '1',
+    foil: url.searchParams.get('foil') === '1',
+    colors: (url.searchParams.get('colors') ?? '').split(',').filter(Boolean),
+    colorMode: mode === 'only' || mode === 'exact' ? mode : 'any',
+    mvMin: num('mvMin'),
+    mvMax: num('mvMax')
+  }
+}
+
 export function openInventoryViewer(store: DataStore): Promise<string> {
   if (server && baseUrl) return Promise.resolve(baseUrl)
 
@@ -59,26 +91,16 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
               url.searchParams.get('set') ?? '',
               300,
               Number(url.searchParams.get('offset') ?? 0),
-              {
-                type: url.searchParams.get('type') ?? '',
-                subtype: url.searchParams.get('subtype') ?? '',
-                rarities: (url.searchParams.get('rarities') ?? '').split(',').filter(Boolean),
-                commander: url.searchParams.get('commander') === '1',
-                foil: url.searchParams.get('foil') === '1'
-              }
+              viewerFilterParams(url)
             )
           )
         } else if (url.pathname === '/api/sets') {
           json(
             res,
-            store.viewerSets(url.searchParams.get('mode') === 'all' ? 'all' : 'inventory', {
-              name: url.searchParams.get('name') ?? '',
-              type: url.searchParams.get('type') ?? '',
-              subtype: url.searchParams.get('subtype') ?? '',
-              rarities: (url.searchParams.get('rarities') ?? '').split(',').filter(Boolean),
-              commander: url.searchParams.get('commander') === '1',
-              foil: url.searchParams.get('foil') === '1'
-            })
+            store.viewerSets(
+              url.searchParams.get('mode') === 'all' ? 'all' : 'inventory',
+              viewerFilterParams(url)
+            )
           )
         } else if (url.pathname === '/api/rate') {
           void gbpRate().then((r) => json(res, r))
@@ -235,6 +257,10 @@ const PAGE = /* html */ `<!doctype html>
   .chip-sep { width: 1px; height: 22px; background: var(--line); }
   #clearFilters { display: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--accent); background: var(--bg); color: var(--text); font-weight: 700; }
+  .color-chip { padding: 4px 8px; font-size: 14px; line-height: 1; }
+  .color-chip.on { background: #2d1b2e; }
+  #colorMode { padding: 6px 8px; font-size: 12.5px; }
+  #filterbar #mvMin, #filterbar #mvMax { width: 58px; max-width: 58px; padding: 6px 8px; }
   .card.owned { border-color: #3fae5c; }
   .close-x { position: absolute; top: -48px; left: 0; width: 38px; height: 38px;
     border-radius: 50%; background: rgba(13, 11, 18, 0.65); color: #fff;
@@ -308,6 +334,22 @@ const PAGE = /* html */ `<!doctype html>
   <span class="chip-sep"></span>
   <button class="chip" id="chipCommander">Commander</button>
   <button class="chip" id="chipFoil">Foil</button>
+  <span class="chip-sep"></span>
+  <button class="chip color-chip" data-color="W" title="White">⚪</button>
+  <button class="chip color-chip" data-color="U" title="Blue">🔵</button>
+  <button class="chip color-chip" data-color="B" title="Black">⚫</button>
+  <button class="chip color-chip" data-color="R" title="Red">🔴</button>
+  <button class="chip color-chip" data-color="G" title="Green">🟢</button>
+  <button class="chip color-chip" data-color="C" title="Colourless">◇</button>
+  <select id="colorMode" title="How the colour picks match: at least one / fits within / precisely">
+    <option value="any">Any of</option>
+    <option value="only">Only these</option>
+    <option value="exact">Exactly</option>
+  </select>
+  <span class="lbl">Cost:</span>
+  <input id="mvMin" type="number" min="0" max="20" placeholder="min">
+  <span class="lbl">–</span>
+  <input id="mvMax" type="number" min="0" max="20" placeholder="max">
   <button id="clearFilters">✕ Clear filters</button>
 </div>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
@@ -362,6 +404,48 @@ let wantCommander = false;
 let wantFoil = false;
 let selectedType = '';
 let subtypeText = '';
+const activeColors = new Set();  // W/U/B/R/G + 'C' (colourless)
+let colorMode = 'any';           // any | only | exact
+let mvMinVal = '';
+let mvMaxVal = '';
+
+// Mana value from a "{2}{U}{U}" cost — mirrors the app's shared parser.
+function manaValueOf(cost) {
+  let n = 0;
+  (cost || '').replace(/\\{([^}]+)\\}/g, (_, s) => {
+    if (/^\\d+$/.test(s)) n += Number(s);
+    else {
+      const d = s.match(/\\d+/);
+      if (d) n += Number(d[0]);
+      else if (!/^[XYZ]$/.test(s)) n += 1;
+    }
+    return '';
+  });
+  return n;
+}
+
+function colorMatch(c) {
+  if (activeColors.size === 0) return true;
+  const cols = c.colors || [];
+  const picked = [...activeColors].filter((x) => x !== 'C');
+  if (colorMode === 'any') {
+    return picked.some((x) => cols.includes(x)) ||
+      (activeColors.has('C') && cols.length === 0);
+  }
+  if (colorMode === 'exact') {
+    if (picked.length === 0) return cols.length === 0;
+    return picked.every((x) => cols.includes(x)) && cols.every((x) => picked.includes(x));
+  }
+  return cols.every((x) => picked.includes(x)); // only: fits within the selection
+}
+
+function mvMatch(c) {
+  if (mvMinVal === '' && mvMaxVal === '') return true;
+  const v = manaValueOf(c.manaCost);
+  if (mvMinVal !== '' && v < Number(mvMinVal)) return false;
+  if (mvMaxVal !== '' && v > Number(mvMaxVal)) return false;
+  return true;
+}
 
 function typeSection(line) {
   return (line || '').split('//').map((p) => p.split('—')[0]).join(' ');
@@ -408,6 +492,7 @@ function rebuildSubtypes() {
 /** Chip filters, applied on top of search + set in both modes. */
 function chipMatch(c) {
   if (!typeMatch(c)) return false;
+  if (!colorMatch(c) || !mvMatch(c)) return false;
   if (activeRarities.size > 0 && !activeRarities.has(c.rarity)) return false;
   if (wantCommander && !(c.typeLine || '').includes('Legendary Creature')) return false;
   if (wantFoil) {
@@ -421,7 +506,8 @@ function chipMatch(c) {
 
 function chipsActive() {
   return activeRarities.size > 0 || wantCommander || wantFoil ||
-    selectedType !== '' || subtypeText.trim() !== '';
+    selectedType !== '' || subtypeText.trim() !== '' ||
+    activeColors.size > 0 || mvMinVal !== '' || mvMaxVal !== '';
 }
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
@@ -458,7 +544,10 @@ async function loadSets() {
     '&subtype=' + encodeURIComponent(subtypeText) +
     '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
     (wantCommander ? '&commander=1' : '') +
-    (wantFoil ? '&foil=1' : ''));
+    (wantFoil ? '&foil=1' : '') +
+    '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
+    (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
+    (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : ''));
   renderSetOptions();
 }
 
@@ -678,7 +767,10 @@ async function refresh() {
       '&subtype=' + encodeURIComponent(subtypeText) +
       '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
       (wantCommander ? '&commander=1' : '') +
-      (wantFoil ? '&foil=1' : ''));
+      (wantFoil ? '&foil=1' : '') +
+      '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
+      (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
+      (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : ''));
     totalResults = r.total;
     cards = r.cards;
     const ownedCount = cards.filter((c) => c.quantity > 0).length;
@@ -747,6 +839,32 @@ chipFoil.onclick = () => {
   updateClear();
   refresh();
 };
+document.querySelectorAll('.color-chip').forEach((chip) => {
+  chip.onclick = () => {
+    const col = chip.dataset.color;
+    if (activeColors.has(col)) { activeColors.delete(col); chip.classList.remove('on'); }
+    else { activeColors.add(col); chip.classList.add('on'); }
+    page = 0;
+    updateClear();
+    refresh();
+  };
+});
+const colorModeSel = $('colorMode');
+colorModeSel.addEventListener('change', () => {
+  colorMode = colorModeSel.value;
+  if (activeColors.size > 0) { page = 0; refresh(); }
+});
+const mvMinInput = $('mvMin'), mvMaxInput = $('mvMax');
+function onMvChange() {
+  mvMinVal = mvMinInput.value.trim();
+  mvMaxVal = mvMaxInput.value.trim();
+  page = 0;
+  updateClear();
+  clearTimeout(debounce);
+  debounce = setTimeout(refresh, 250);
+}
+mvMinInput.addEventListener('input', onMvChange);
+mvMaxInput.addEventListener('input', onMvChange);
 clearBtn.onclick = () => {
   page = 0;
   setFilterText = '';
@@ -760,6 +878,13 @@ clearBtn.onclick = () => {
   activeRarities.clear();
   wantCommander = false;
   wantFoil = false;
+  activeColors.clear();
+  colorMode = 'any';
+  colorModeSel.value = 'any';
+  mvMinVal = '';
+  mvMaxVal = '';
+  mvMinInput.value = '';
+  mvMaxInput.value = '';
   document.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
   renderSetOptions();
   refresh();
