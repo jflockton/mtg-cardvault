@@ -1036,11 +1036,22 @@ button.danger {
 }
 .card-modal-art {
   flex: 0 0 540px;
+  align-self: flex-start;
+  overflow: hidden;
+  border-radius: 18px;
+  cursor: zoom-in;
 }
 .card-modal-art img {
   width: 540px;
   display: block;
   border-radius: 18px;
+  transition: transform 0.15s ease;
+}
+.card-modal-art.zoomed {
+  cursor: zoom-out;
+}
+.card-modal-art.zoomed img {
+  transform: scale(2.4);
 }
 .card-modal-noart {
   width: 540px;

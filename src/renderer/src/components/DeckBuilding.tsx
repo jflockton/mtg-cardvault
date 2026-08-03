@@ -358,6 +358,11 @@ function CardModal(props: {
   const [printings, setPrintings] = useState<CardRef[] | null>(null)
   const [showPrintings, setShowPrintings] = useState(false)
 
+  // Magnifier: click the art to zoom ~2.4×, mouse position pans, click again out.
+  const [zoomed, setZoomed] = useState(false)
+  const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
+  const bigUri = card.imageUri ? card.imageUri.replace('/normal/', '/large/') : null
+
   const openPrintings = async (): Promise<void> => {
     setShowPrintings(true)
     if (printings == null) setPrintings(await window.api.deckPrintings(card.name))
@@ -373,9 +378,24 @@ function CardModal(props: {
   return (
     <div className="modal-overlay" onClick={props.onClose}>
       <div className="card-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="card-modal-art">
+        <div
+          className={`card-modal-art ${zoomed ? 'zoomed' : ''}`}
+          title={zoomed ? 'click to zoom out' : 'click to zoom in'}
+          onClick={() => card.imageUri && setZoomed((z) => !z)}
+          onMouseMove={(e) => {
+            if (!zoomed) return
+            const r = e.currentTarget.getBoundingClientRect()
+            setZoomOrigin(
+              `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}% ${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`
+            )
+          }}
+        >
           {card.imageUri ? (
-            <img src={card.imageUri} alt={card.name} />
+            <img
+              src={zoomed && bigUri ? bigUri : card.imageUri}
+              alt={card.name}
+              style={zoomed ? { transformOrigin: zoomOrigin } : undefined}
+            />
           ) : (
             <div className="card-modal-noart">
               <span className="scp-name">{card.name}</span>

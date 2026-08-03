@@ -229,6 +229,10 @@ const PAGE = /* html */ `<!doctype html>
          position: relative; }
   #big img { height: min(80vh, 640px); border-radius: 18px;
              box-shadow: 0 12px 60px rgba(0,0,0,.6); }
+  .zoom-wrap { overflow: hidden; border-radius: 18px; cursor: zoom-in; line-height: 0; }
+  .zoom-wrap img { transition: transform .15s ease; display: block; }
+  .zoom-wrap.zoomed { cursor: zoom-out; }
+  .zoom-wrap.zoomed img { transform: scale(2.4); }
   #big .info { max-width: 300px; }
   #big h2 { margin: 0 0 6px; font-size: 20px; }
   #big .st { color: var(--dim); margin-bottom: 12px; }
@@ -638,7 +642,10 @@ function showBig(c) {
   const bigUri = c.imageUri ? c.imageUri.replace('/normal/', '/large/') : null;
   big.innerHTML =
     '<button class="close-x" title="Close (Esc)">✕</button>' +
-    (bigUri ? '<img src="' + esc(bigUri) + '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' : '') +
+    (bigUri
+      ? '<div class="zoom-wrap" title="click to zoom"><img src="' + esc(bigUri) +
+        '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'"></div>'
+      : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
     '<div class="st">' + esc(c.setName) + ' (' + esc(c.setCode.toUpperCase()) + ') · #' +
     esc(c.collectorNumber) + (c.rarity ? ' · ' + esc(c.rarity) : '') + '</div>' +
@@ -669,6 +676,18 @@ function showBig(c) {
     const r = addBtn.getBoundingClientRect();
     openDeckMenu(c.scryfallId, c.name, r.left, r.bottom + 6);
   };
+  // Magnifier: click the art to zoom, mouse pans, click again to zoom out.
+  const zw = big.querySelector('.zoom-wrap');
+  if (zw) {
+    zw.onclick = (e) => { e.stopPropagation(); zw.classList.toggle('zoomed'); };
+    zw.onmousemove = (e) => {
+      if (!zw.classList.contains('zoomed')) return;
+      const r = zw.getBoundingClientRect();
+      zw.querySelector('img').style.transformOrigin =
+        ((e.clientX - r.left) / r.width * 100).toFixed(1) + '% ' +
+        ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%';
+    };
+  }
   big.querySelector('.close-x').onclick = () => overlay.classList.remove('show');
   overlay.classList.add('show');
 }
