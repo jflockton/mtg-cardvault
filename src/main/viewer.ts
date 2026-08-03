@@ -7,7 +7,6 @@ import type { AddressInfo } from 'node:net'
 import type { DataStore } from './store'
 import type { Finish } from '../shared/types'
 // Inlined art: Gwen badges the page header, Spidey rides the menu button.
-import { GWEN_SVG as gwenSvg, SPIDEY_SVG as spideySvg } from './viewerArt'
 
 let server: http.Server | null = null
 let baseUrl: string | null = null
@@ -310,13 +309,10 @@ const PAGE = /* html */ `<!doctype html>
 </head>
 <body>
 <header>
-  <span class="face-badge">${gwenSvg}</span>
-  <h1><span>Show Inventory</span></h1>
   <input id="q" type="search" placeholder="Type a card name…" autofocus>
   <select id="set"><option value="">All sets</option></select>
   <label class="tick"><input id="inv" type="checkbox" checked> In my inventory</label>
   <div class="totals" id="totals"></div>
-  <button id="menuBtn" class="menu-btn" title="Close this window">${spideySvg}<span>Return to main menu</span></button>
 </header>
 <div id="filterbar">
   <span class="lbl">Filter sets:</span>
@@ -817,7 +813,6 @@ async function refresh() {
   }
 }
 
-document.getElementById('menuBtn').onclick = () => window.close();
 q.addEventListener('input', () => { page = 0; clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
 setSel.addEventListener('change', () => { page = 0; updateClear(); refresh(); });
 setFilterInput.addEventListener('input', () => { setFilterText = setFilterInput.value; renderSetOptions(); });
