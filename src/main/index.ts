@@ -517,11 +517,13 @@ function registerIpc(): void {
     const text = fs.readFileSync(filePaths[0], 'utf8')
     return { name: path.basename(filePaths[0]).replace(/\.[^.]+$/, ''), text }
   })
-  // Cross-origin iframes (the embedded viewer) run out-of-process and can hold
-  // keyboard focus; refocusing the window AND its top frame lets other inputs
-  // type again (webContents.focus() alone isn't always enough).
+  // Cross-origin iframes (the embedded viewer) run out-of-process and can
+  // wedge keyboard routing even after the frame is gone — plain
+  // webContents.focus() doesn't always recover it. A full OS-level blur→focus
+  // cycle forces Chromium to recompute the focused frame.
   ipcMain.on('window:focusTop', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.blur()
     mainWindow.focus()
     mainWindow.webContents.focus()
   })

@@ -20,11 +20,17 @@ import {
 function useStubbornFocus(): React.RefObject<HTMLInputElement | null> {
   const ref = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
-    ref.current?.focus()
-    const t = setTimeout(() => {
-      if (document.activeElement !== ref.current) ref.current?.focus()
-    }, 120)
-    return () => clearTimeout(t)
+    // Re-assert focus a few times: the main-process blur/focus (which fixes the
+    // stuck out-of-process-iframe keyboard frame) resolves a beat after mount.
+    let tries = 0
+    const grab = (): void => {
+      const el = ref.current
+      if (el && document.activeElement !== el) el.focus()
+      if (++tries < 4 && ref.current && document.activeElement !== ref.current) {
+        setTimeout(grab, 80)
+      }
+    }
+    grab()
   }, [])
   return ref
 }
@@ -171,6 +177,12 @@ function TextImportModal(props: {
           value={name}
           placeholder="Deck name…"
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            // Diagnostic: if keys reach here but the value never changes, focus
+            // is fine and something else is eating input; if they never reach
+            // here, the frame never got keyboard focus.
+            console.log('[deck-name] keydown', e.key, 'active=', document.activeElement?.className)
+          }}
         />
         <label className="modal-format">
           Format
