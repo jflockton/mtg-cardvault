@@ -485,8 +485,13 @@ function registerIpc(): void {
     return { name: path.basename(filePaths[0]).replace(/\.[^.]+$/, ''), text }
   })
   // Cross-origin iframes (the embedded viewer) run out-of-process and can hold
-  // keyboard focus; refocusing the top frame lets other inputs type again.
-  ipcMain.on('window:focusTop', () => mainWindow?.webContents.focus())
+  // keyboard focus; refocusing the window AND its top frame lets other inputs
+  // type again (webContents.focus() alone isn't always enough).
+  ipcMain.on('window:focusTop', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.focus()
+    mainWindow.webContents.focus()
+  })
   // Create a new deck from a public URL (Archidekt supported; Moxfield steers
   // to paste). Commander + real printings come through for free.
   ipcMain.handle('deck:importUrl', async (_e, url: string) => {

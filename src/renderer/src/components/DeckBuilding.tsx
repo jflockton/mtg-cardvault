@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CardRef, DeckSummary, DeckDetail, DeckCard, DeckFormat } from '../../../shared/types'
 import { DECK_FORMATS } from '../../../shared/types'
 import {
@@ -11,6 +11,23 @@ import {
   COLORS,
   type ManaColor
 } from '../../../shared/deckStats'
+
+/**
+ * Focus an input reliably. autoFocus alone can lose the race when the embedded
+ * viewer's out-of-process iframe held keyboard focus — this re-asserts focus a
+ * beat later if something else still has it.
+ */
+function useStubbornFocus(): React.RefObject<HTMLInputElement | null> {
+  const ref = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    ref.current?.focus()
+    const t = setTimeout(() => {
+      if (document.activeElement !== ref.current) ref.current?.focus()
+    }, 120)
+    return () => clearTimeout(t)
+  }, [])
+  return ref
+}
 
 const COLOR_HEX: Record<ManaColor, string> = {
   W: '#e9e2c8',
@@ -55,11 +72,13 @@ function NameModal(props: {
 }): React.JSX.Element {
   const [name, setName] = useState(props.initial ?? '')
   const [format, setFormat] = useState<DeckFormat>(props.format ?? 'commander')
+  const inputRef = useStubbornFocus()
   return (
     <div className="modal-overlay" onClick={props.onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{props.title}</h3>
         <input
+          ref={inputRef}
           autoFocus
           className="modal-input"
           value={name}
@@ -140,11 +159,13 @@ function TextImportModal(props: {
   const [name, setName] = useState(props.initialName ?? '')
   const [format, setFormat] = useState<DeckFormat>('commander')
   const [text, setText] = useState(props.initialText ?? '')
+  const inputRef = useStubbornFocus()
   return (
     <div className="modal-overlay" onClick={props.onCancel}>
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
         <h3>New deck from a list</h3>
         <input
+          ref={inputRef}
           autoFocus
           className="modal-input"
           value={name}
@@ -193,6 +214,7 @@ function UrlModal(props: {
   onCancel: () => void
 }): React.JSX.Element {
   const [url, setUrl] = useState('')
+  const inputRef = useStubbornFocus()
   return (
     <div className="modal-overlay" onClick={props.busy ? undefined : props.onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -207,6 +229,7 @@ function UrlModal(props: {
           paste it in.
         </p>
         <input
+          ref={inputRef}
           autoFocus
           className="modal-input"
           value={url}
@@ -805,6 +828,12 @@ export default function DeckBuilding(): React.JSX.Element {
   const [urlBusy, setUrlBusy] = useState(false)
   const [textSeed, setTextSeed] = useState<{ name: string; text: string }>({ name: '', text: '' })
   const [message, setMessage] = useState('')
+
+  // Any modal opening: yank keyboard focus back from the embedded viewer's
+  // out-of-process iframe (else its inputs can stay deaf until an app restart).
+  useEffect(() => {
+    if (modal != null) window.api.focusMainFrame()
+  }, [modal])
 
   const importFromClipboard = async (): Promise<void> => {
     const text = await window.api.readClipboard()
