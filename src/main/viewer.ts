@@ -345,7 +345,7 @@ const PAGE = /* html */ `<!doctype html>
   <button class="chip color-chip" data-color="B" title="Black">⚫</button>
   <button class="chip color-chip" data-color="R" title="Red">🔴</button>
   <button class="chip color-chip" data-color="G" title="Green">🟢</button>
-  <button class="chip color-chip" data-color="C" title="Colourless">◇</button>
+  <button class="chip color-chip" data-color="C" title="Colourless spells (never lands — use the type filter for those)">◇</button>
   <select id="colorMode" title="Only these: W+U shows white, blue, and white-blue cards (◇ adds colourless). Any of: at least one picked colour. Exactly: precisely those colours.">
     <option value="only" selected>Only these</option>
     <option value="any">Any of</option>
@@ -433,17 +433,20 @@ function colorMatch(c) {
   if (activeColors.size === 0) return true;
   const cols = c.colors || [];
   const picked = [...activeColors].filter((x) => x !== 'C');
+  // Lands have an empty colour list in the data — the ◇ chip means colourless
+  // SPELLS, so lands never match a colour filter (use the type filter for lands).
+  const isLand = (c.typeLine || '').includes('Land');
   if (colorMode === 'any') {
     return picked.some((x) => cols.includes(x)) ||
-      (activeColors.has('C') && cols.length === 0);
+      (activeColors.has('C') && cols.length === 0 && !isLand);
   }
   if (colorMode === 'exact') {
-    if (picked.length === 0) return cols.length === 0;
+    if (picked.length === 0) return cols.length === 0 && !isLand;
     return picked.every((x) => cols.includes(x)) && cols.every((x) => picked.includes(x));
   }
-  // only: W+U = white, blue, or white-blue; colourless needs the ◇ chip too
-  if (picked.length === 0) return cols.length === 0; // ◇ alone
-  if (cols.length === 0) return activeColors.has('C');
+  // only: W+U = white, blue, or white-blue; colourless (non-land) needs ◇ too
+  if (picked.length === 0) return cols.length === 0 && !isLand; // ◇ alone
+  if (cols.length === 0) return activeColors.has('C') && !isLand;
   return cols.every((x) => picked.includes(x));
 }
 

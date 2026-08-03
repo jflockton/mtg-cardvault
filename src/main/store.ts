@@ -46,21 +46,25 @@ function colorFilterSql(sel: string[], mode: 'any' | 'only' | 'exact'): string |
   if (picked.length === 0 && !wantColorless) return null
   const has = (c: string): string => `colors LIKE '%"${c}"%'`
   const lacks = (c: string): string => `colors NOT LIKE '%"${c}"%'`
+  // Lands carry an empty colour list in the data (a Forest is "colourless"
+  // there), which is technically true and practically absurd — so the ◇ chip
+  // means colourless SPELLS, never lands. Want lands? Use the type filter.
+  const colorlessNonLand = "(colors = '[]' AND type_line NOT LIKE '%Land%')"
   if (mode === 'any') {
     const terms = picked.map(has)
-    if (wantColorless) terms.push("colors = '[]'")
+    if (wantColorless) terms.push(colorlessNonLand)
     return `(${terms.join(' OR ')})`
   }
   if (mode === 'exact') {
-    if (picked.length === 0) return "colors = '[]'"
+    if (picked.length === 0) return colorlessNonLand
     return `(${[...picked.map(has), ...ALL.filter((c) => !picked.includes(c)).map(lacks)].join(' AND ')})`
   }
   // 'only' — W+U means white, blue, or white-blue; nothing outside the picks.
-  // Colourless is included only when the ◇ chip is also selected.
-  if (picked.length === 0) return "colors = '[]'" // ◇ alone
+  // Colourless (non-land) joins only when the ◇ chip is also selected.
+  if (picked.length === 0) return colorlessNonLand // ◇ alone
   const terms = ALL.filter((c) => !picked.includes(c)).map(lacks)
-  if (!wantColorless) terms.push("colors <> '[]'")
-  return terms.length > 0 ? `(${terms.join(' AND ')})` : null
+  terms.push(wantColorless ? "(colors <> '[]' OR type_line NOT LIKE '%Land%')" : "colors <> '[]'")
+  return `(${terms.join(' AND ')})`
 }
 
 /** Parse a stored colors JSON array, tolerating junk. */
