@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell, systemPreferences } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import Database from 'better-sqlite3'
@@ -97,6 +97,39 @@ function resolveAppIcon(): string | undefined {
   const packaged = path.join(process.resourcesPath, 'icon.png')
   if (fs.existsSync(packaged)) return packaged
   return undefined
+}
+
+/**
+ * Default menu, except Zoom In actually works from the keyboard: Electron's
+ * stock accelerator is Ctrl+Plus, but the + key is physically Shift+=, so a
+ * plain Ctrl+= never matched (Zoom Out's Ctrl+- has no such problem). Hidden
+ * duplicate items bind Ctrl+= and the numpad +/− as well.
+ */
+function setupMenu(): void {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'fileMenu' },
+      { role: 'editMenu' },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn', accelerator: 'CommandOrControl+Plus' },
+          { role: 'zoomIn', accelerator: 'CommandOrControl+=', visible: false },
+          { role: 'zoomIn', accelerator: 'CommandOrControl+numadd', visible: false },
+          { role: 'zoomOut' },
+          { role: 'zoomOut', accelerator: 'CommandOrControl+numsub', visible: false },
+          { type: 'separator' },
+          { role: 'togglefullscreen' }
+        ]
+      },
+      { role: 'windowMenu' }
+    ])
+  )
 }
 
 function createWindow(): BrowserWindow {
@@ -617,6 +650,7 @@ app.whenReady().then(() => {
       .catch((err) => console.warn('[cardvault] sets backfill failed:', err))
   }
 
+  setupMenu()
   registerIpc()
   createWindow()
 
