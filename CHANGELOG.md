@@ -1,0 +1,67 @@
+# Changelog
+
+All notable changes to MTG CardVault. Versions are the tagged releases on GitHub — each ships a self-contained Windows `.exe` and macOS `.dmg` with the reference DB and OCR data bundled.
+
+The format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project uses simple `MAJOR.MINOR.PATCH` tags.
+
+## [0.2.1] — 2026-08-06
+
+Viewer filters, card magnifier & deck cost polish.
+
+### Added
+- **Colour + mana-cost filters** in the inventory viewer / any-card browser.
+- **Card magnifier** — enlarge any card on hover, in both the deck builder and the inventory viewer.
+- **Per-category cost** in each Stacks column header in the deck builder (e.g. `Lands  11 · £17.55`).
+- Zoom-In keyboard shortcut bound to `Ctrl+=` and numpad `+`/`-` alongside `Ctrl+Plus`.
+
+### Changed
+- Missing-singles list in decks is now printing-aware.
+- Colour chips default to "Only these", with strict colourless handling; colour filters never match lands.
+- Dropped a redundant viewer header now that the viewer is embedded.
+
+### Fixed
+- Focus recovery for dead name inputs in deck modals (three-layer fix).
+- Window blur/focus workaround to dislodge a stuck out-of-process-iframe keyboard frame.
+
+### Packaging note
+- The v0.2.1 CI run failed on a transient GitHub outage (*"Failed to resolve action download info: Service Unavailable"*), not a code fault. The release installers were built and uploaded manually; the reference DB was built on macOS and copied into `resources/` for the Windows package (SQLite files are cross-platform).
+
+## [0.2.0] — 2026-08-02
+
+Deck builder: build, import, analyse, and export decks against live shop inventory.
+
+### Added
+- **Deck builder** — a full Commander deck workspace:
+  - Create/import decks: New (blank), Clipboard, File (`.txt`), or Archidekt URL (auto-sets commander + exact printings).
+  - Archidekt-style **Stacks view** with hover-fan and a click-a-card modal (big art, set/unset commander, change printing/art, quantity, remove); commander pinned first with eligibility + max-two rules enforced.
+  - **Analysis**: colour breakdown, mana curve, and opening-hand draw-odds by card type (exact hypergeometric).
+  - **Owned-vs-missing** panel + **Copy buy list**.
+  - Printing-specific export to clipboard or `.txt`; excludes art-series and Secret-Lair/promo printings, handles MDFC front faces.
+  - Embedded inventory browser with right-click / full-card "Add to deck" hooks feeding decks from stock.
+- New launcher art (high-res face tiles).
+
+## [0.1.1] — 2026-08-02
+
+Cloud (Dropbox) inventory storage.
+
+### Added
+- The shop's `inventory.db` can live in a Dropbox folder (`<Dropbox>/mtgCardVault`, auto-detected) to back it up and share it between machines, while the large rebuildable `reference.db` stays local. **Settings → Inventory storage** to choose local vs Dropbox and move between them.
+
+### Fixed
+- Synced inventory DBs use `journal_mode = DELETE` (never WAL) so Dropbox can't corrupt a SQLite file by syncing `-wal`/`-shm` sidecars out of step. Dropbox "conflicted copy" files are detected and surfaced.
+
+## [0.1.0] — 2026-08-02
+
+First Windows/macOS installer build.
+
+### Added
+- First end-to-end CI installer build on `windows-latest` + `macos-latest`: self-contained NSIS `.exe` and macOS `.dmg` with bundled `reference.db` + tessdata, needing zero dev tools on the target machine.
+- Steps 1–6 shipped: webcam scan-in with auto-lock loop, corner-only OCR with old-frame resolution, sell/remove mode, the Show-Inventory browser, precon bulk add, and Cardmarket £ pricing throughout.
+
+### Fixed
+- CI: granted `permissions: contents: write` (release-attach was 403ing) and set `fail-fast: false` so one OS failing doesn't cancel the other.
+
+[0.2.1]: https://github.com/jflockton/mtg-cardvault/releases/tag/v0.2.1
+[0.2.0]: https://github.com/jflockton/mtg-cardvault/releases/tag/v0.2.0
+[0.1.1]: https://github.com/jflockton/mtg-cardvault/releases/tag/v0.1.1
+[0.1.0]: https://github.com/jflockton/mtg-cardvault/releases/tag/v0.1.0

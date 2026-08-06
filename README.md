@@ -1,8 +1,8 @@
 # MTG CardVault
 
-Webcam card scanner + local-first inventory app for a game shop's Magic: The Gathering singles (~3000+ loose cards, no existing inventory). Present a card to the camera, get a confident match, write it to the database, repeat — speed of entry is the top priority.
+Webcam card scanner + local-first inventory app for a game shop's Magic: The Gathering singles (~3000+ loose cards, no existing inventory). Present a card to the camera, get a confident match, write it to the database, repeat — speed of entry is the top priority. Beyond scanning, it now browses the collection, builds and analyses Commander decks against live stock, and ships as a self-contained installer on Windows and macOS.
 
-**Status: steps 1–4 done and battle-hardened in live scanning sessions.** Hold a card up, it locks, beeps, and writes itself to inventory; swap to the next card. The operator contract: **beep = counted, no beep = didn't count.**
+**Status: shipping — currently v0.2.1.** The scan-in loop is battle-hardened in live sessions (hold a card up, it locks, beeps, and writes itself to inventory — **beep = counted, no beep = didn't count**). Sell/remove mode, the full Show-Inventory browser, and a complete deck builder are all in the packaged app. Four releases are out (v0.1.0 → v0.2.1), each a self-contained `.exe`/`.dmg` with the reference DB bundled.
 
 | Step | What | Status |
 |---|---|---|
@@ -10,23 +10,28 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 2 | Camera feed + frame capture | ✅ |
 | 3 | OCR pipeline (Tesseract, corner crop, set/collector parse + resolve) | ✅ |
 | 4 | Fast add loop (auto-lock, audio confirm, undo, keyboard flow) | ✅ |
-| — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, collection value + list export | ✅ |
-| — | **Show Inventory browser viewer**: card-image grid with Cardmarket (€) + USD prices, name search with auto big-card view, set dropdown, and an any-card mode that browses the entire Scryfall reference | ✅ |
-| — | **Cardmarket everywhere**: every scan records the Cardmarket price at scan time; the in-app collection value, row prices and scan preview all show Cardmarket £ (ECB-converted, € offline, USD alongside) | ✅ |
-| 5 | Remove mode | ⬜ |
-| 6 | Search / browse UI + exports (collection view, value total; clipboard exports with an **All cards / Scanned this session** scope — plain list `1 Island (FIN) 297` or CSV `quantity,card-name,expansion,id`; filters pending) | 🟡 |
-| 7 | Packaging: NSIS installer via GitHub Actions | 🟡 config in place, unverified |
+| 5 | Sell / remove mode (same lock loop, restock on undo) | ✅ |
+| 6 | Show-Inventory browser: card-image grid, Cardmarket £ + USD prices, set + type/rarity/colour/mana filters, name search, any-card mode over all ~107k printings, clipboard/CSV exports | ✅ |
+| 7 | Packaging: NSIS `.exe` + macOS `.dmg`, self-contained (bundled reference.db + tessdata) | ✅ shipping |
+| 🃏 | **Deck builder**: create/import/analyse/export Commander decks against live inventory | ✅ (v0.2.0) |
+| — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, cloud (Dropbox) inventory storage, card magnifier | ✅ |
 
 ## How it works
 
 - **The bottom-left corner is the whole identity — nothing else is OCR'd.** Modern cards (~2015+) print `0123/280` + `M21 • EN` there: set code + collector number, a direct unique lookup. Older frames print **no set code at all** — just `13/150` and a copyright line — so the resolver identifies the set by its printed size (Scryfall's `printed_size`, exactly what the `/150` means) and breaks ties with the copyright year. `13/150` + `©2008` → Morningtide, one exact hit. Genuinely ambiguous reads produce a tap-to-pick shortlist, never a silent guess. (Name OCR was dropped: webcam-resolution title bars OCR too poorly to be a useful cross-check — the confirm-before-write step is the accuracy gate instead.)
 - **Finish (foil / etched) is not printed on the card**, so it's a manual toggle in the UI (default: nonfoil). Foil and nonfoil of the same printing are separate inventory stacks.
-- **Camera capture** (step 2): live `getUserMedia` feed with a card-outline guide — the operator fills the outline with the card. The on-screen guide and the frame cropper share one set of geometry constants ([src/renderer/src/scan/geometry.ts](src/renderer/src/scan/geometry.ts)), so what you align to is exactly what gets cropped. Space captures; camera choice is remembered.
+- **Camera capture** (step 2): live `getUserMedia` feed with a card-outline guide — the operator fills the outline with the card. The on-screen guide and the frame cropper share one set of geometry constants ([src/renderer/src/scan/geometry.ts](src/renderer/src/scan/geometry.ts)), so what you align to is exactly what gets cropped. Space captures; camera choice is remembered. A capability-driven `⚙ Controls` panel reads `track.getCapabilities()` and surfaces sliders/toggles for whatever the active camera exposes (zoom, focus, exposure, torch…).
 - **OCR** (step 3): the corner crop is extracted at 3×, grayscaled with a percentile contrast stretch, and produced in both polarities (black-border cards print white-on-black; Tesseract wants dark-on-light). tesseract.js runs in the **main process** with bundled traineddata (`npm run fetch:tessdata`), so OCR is fully offline and the renderer carries no wasm/worker plumbing — a scan round-trip is well under 200 ms. The parser handles OCR digit confusions (O→0, I→1…) and both corner formats; the raw read is always shown in the UI for tuning.
-- **Auto scan — the fast loop** (step 4): toggle **▶ Auto scan** and the app OCRs frames continuously (~2/sec). A **lock requires two consecutive frames resolving to the same exact printing, each with ≥65% confidence on the number token** — a misread or blurry read can't silently write a wrong card (low-confidence locks open a preview for a one-glance Enter-confirm instead). On lock: the card is added, a soft two-tone beep confirms, and the same card won't re-add until it's seen leaving the frame — duplicates count naturally as you feed them one by one. Can't lock after a few frames → one gentle low double-blip and the raw read is shown; ambiguous old frames pause with the tap-to-pick shortlist.
-- **Finish is handled after the scan, not during.** Auto-adds land as nonfoil (or the printing's only finish); the loop never stops for foils. Tap **F** right after a beep to flip the just-added copy (foil → etched → back), use the per-row finish selector in the Just Added list for later corrections (it moves one copy between stacks), **Backspace** undoes the last add, and every row has a −1 button.
-- **Offline-first Scryfall data.** No per-card API calls. The app imports Scryfall's `default_cards` bulk file (gzipped JSONL, ~77MB, streamed to disk then stream-parsed into SQLite) so every scan is an instant local lookup. Installers ship with a pre-built reference DB, so the app works on first launch with no internet. A "Refresh card data" button rebuilds it (needed roughly weekly / after a set release). Only a genuine cache miss (e.g. a brand-new set) falls back to one live API call, which is then cached locally.
-- **Show Inventory — the browser viewer.** One button starts a loopback-only web server (`127.0.0.1`, ephemeral port — no firewall prompts) and opens the default browser on a card-image grid of the collection: totals and per-card prices in **Cardmarket £** (Cardmarket is euro-native — like their own site's GBP display, the € price is converted at the ECB daily rate, fetched once and cached; the native € is shown alongside, and it falls back to € when offline) plus USD, quantity/foil badges, a set dropdown with per-set counts, and a name search that pops the card up big the moment it narrows to one. Untick **"In my inventory"** for any-card mode: search the entire reference DB (or browse a whole set in collector order) with the same prices — owned copies get an "own ×N" badge. Works offline too: missing images fall back to text tiles.
+- **Auto scan — the fast loop** (step 4): toggle **▶ Auto scan** and the app OCRs frames continuously (~2/sec). A **lock requires two consecutive frames resolving to the same exact printing, each with ≥65% confidence on the number token** — a misread or blurry read can't silently write a wrong card (low-confidence locks open a preview for a one-glance Enter-confirm instead). On lock: the card is added, a soft two-tone beep confirms, and the same card won't re-add until it's seen physically leaving the frame (two genuinely empty frames, then a new card) — duplicates count naturally as you feed them one by one. Can't lock after a few frames → one gentle low double-blip and the raw read is shown; ambiguous old frames pause with the tap-to-pick shortlist. A right-hand session panel shows the big "just scanned" image and a running list of everything scanned this session, with a per-row ✨ Shiny finish toggle and a Remove-that-scan button.
+- **Sell / remove mode** (step 5): the same lock loop, inverted — a locked scan removes a copy from stock (nonfoil → foil → etched), with a sale blip vs. an attention beep when a card is already out of stock (quantity never goes negative). Backspace restocks the last removal; manual entry removes too. Leaving Sell mode drops any staged removals; leaving Scan mode commits staged adds.
+- **Offline-first Scryfall data.** No per-card API calls. The app imports Scryfall's `default_cards` bulk file (gzipped JSONL, ~77 MB, streamed to disk then stream-parsed into SQLite) so every scan is an instant local lookup. Installers ship with a pre-built reference DB, so the app works on first launch with no internet. A "Refresh card data" button rebuilds it (needed roughly weekly / after a set release). Only a genuine cache miss (e.g. a brand-new set) falls back to one live API call, which is then cached locally.
+- **Show Inventory — the embedded browser.** The collection browser is a card-image grid: totals and per-card prices in **Cardmarket £** (Cardmarket is euro-native — like their own site's GBP display, the € price is converted at the ECB daily rate, fetched once and cached; the native € is shown alongside, and it falls back to € when offline) plus USD, quantity/foil badges, a set dropdown with per-set counts, and a name search that pops the card up big the moment it narrows to one. Filters cover **card type/subtype, rarity, Commander-legality, foil, colour, and mana cost**; a **card magnifier** enlarges any card on hover. Untick **"In my inventory"** for any-card mode: search or page the entire ~107k-printing reference DB in collector order with the same prices and filters — owned copies get an "own ×N" badge. Works offline too: missing images fall back to text tiles. Exports copy the current view to the clipboard or CSV.
+- **Deck builder.** A full Commander deck workspace (see [src/renderer/src/components/DeckBuilding.tsx](src/renderer/src/components/DeckBuilding.tsx)):
+  - **Create / import:** New (blank), **Clipboard**, **File (.txt)**, or **Archidekt URL** (auto-sets the commander and exact printings). Moxfield is export→paste (Cloudflare blocks direct fetch). You can also import a list into an existing deck.
+  - **Stacks view** (Archidekt-style) with hover-fan and wrap-to-rows; click any card for a modal with big art, set/unset commander, set-as-deck-image, **change printing/art**, quantity, and remove. The commander is pinned first, with eligibility and the max-two-commanders rule enforced. Each Stacks column header shows its **per-category card count and £ cost** (e.g. `Lands  11 · £17.55`).
+  - **Analysis** ([src/shared/deckStats.ts](src/shared/deckStats.ts), pure/dependency-free): colour breakdown by pip and by card, mana curve (mana value parsed from the printed cost, capped at 7+), average mana value, and opening-hand draw-odds per card type via an exact hypergeometric calculation. Anything the reference DB couldn't resolve is skipped, never guessed.
+  - **Owned-vs-missing** panel with a printing-aware missing-singles list and a **Copy buy list** button, so a deck turns straight into a shopping list against current stock.
+  - **Printing-specific export** to clipboard or `.txt`. Smart resolution excludes art-series cards and Secret-Lair/promo printings and handles modal double-faced front faces.
 - **Cardmarket is the house currency.** Every add writes the Cardmarket (EUR) price at scan time into the scan log alongside USD; the in-app collection value, per-row prices and the scan preview all display Cardmarket **£** (converted at the ECB daily rate, native € shown when offline, USD kept alongside). Inventories created before this feature are migrated automatically, with pre-existing scan events stamped at the then-current Cardmarket price.
 
 ## Tech stack
@@ -39,10 +44,10 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 
 ## Data model
 
-Two SQLite files in the OS app-data dir (`%APPDATA%/mtg-cardvault/data` on Windows, `~/Library/Application Support/mtg-cardvault/data` on macOS) — they survive reinstalls and are what the shop backs up:
+Two SQLite files in the OS app-data dir (`%APPDATA%/mtg-cardvault/data` on Windows, `~/Library/Application Support/mtg-cardvault/data` on macOS) — they survive reinstalls and are what the shop backs up. The inventory DB can optionally live in a Dropbox folder to back it up / share it between machines (Settings → Inventory storage); the big rebuildable reference DB always stays local.
 
-- **`reference.db`** — `scryfall_cards` imported from bulk data plus `scryfall_sets` (set names, release dates, `printed_size` for old-frame resolution); read-only after import, rebuilt wholesale on refresh (built to a `.tmp` and atomically swapped). Indexed on `(set_code, collector_number)` and `name`.
-- **`inventory.db`** — `inventory` table: what the shop owns. Denormalised card fields (name, set, rarity, …) so the collection stays browsable independently of reference data. `UNIQUE(scryfall_id, finish)` — adding an existing stack increments `quantity`.
+- **`reference.db`** — `scryfall_cards` imported from bulk data plus `scryfall_sets` (set names, release dates, `printed_size` for old-frame resolution) and Cardmarket EUR prices; read-only after import, rebuilt wholesale on refresh (built to a `.tmp` and atomically swapped). Indexed on `(set_code, collector_number)` and `name`. **This file is a plain, cross-platform SQLite database** — one built on any OS is byte-for-byte usable on any other, which matters for packaging (see Deployment).
+- **`inventory.db`** — `inventory` table: what the shop owns. Denormalised card fields (name, set, rarity, …) so the collection stays browsable independently of reference data. `UNIQUE(scryfall_id, finish)` — adding an existing stack increments `quantity`. A `decks` table + join hold saved decks. When the inventory DB lives in Dropbox it uses `journal_mode = DELETE` (never WAL) so a synced SQLite file stays self-consistent.
 
 Lookups normalise OCR-style input: `"M21"` + `"0123/274"` → set `m21`, collector `123`.
 
@@ -50,7 +55,7 @@ Lookups normalise OCR-style input: `"M21"` + `"0123/274"` → set `m21`, collect
 
 ```bash
 npm install                                  # deps; better-sqlite3 compiled for Node
-npm run build:refdb                          # one-off: build ./data/reference.db from Scryfall bulk (~2GB download, deleted after import)
+npm run build:refdb                          # one-off: build ./data/reference.db from Scryfall bulk (~77MB download, deleted after import)
 npm run fetch:tessdata                       # one-off: Tesseract eng traineddata (~4MB) for offline OCR
 npm run check:refdb                          # sanity-check lookups, old-frame resolution, inventory logic
 npm run rebuild:electron                     # recompile better-sqlite3 for Electron's ABI
@@ -62,31 +67,31 @@ MTG_CARDVAULT_DATA_DIR=./data npm run dev    # run the app against the local dat
 - `npm run rebuild:node` → for the CLI scripts (`build:refdb`, `check:refdb`)
 - `npm run rebuild:electron` → for `npm run dev` / packaged builds
 
-If you see `NODE_MODULE_VERSION` mismatch errors, you're one `rebuild:*` away from fixing it.
+If you see `NODE_MODULE_VERSION` mismatch errors, you're one `rebuild:*` away from fixing it. On a machine with **no C++ toolchain**, `rebuild:node` can't actually compile and may silently fall back to a prebuilt binary that crashes (segfault on the first query) — on Windows that means installing the Visual Studio "Desktop development with C++" workload, or building `reference.db` on another machine and copying the file across (it's cross-platform).
 
 Without `MTG_CARDVAULT_DATA_DIR`, the app uses the real app-data location and (in a packaged build) seeds `reference.db` from the installer's bundled copy on first launch.
 
 ## Install as a Mac app
 
-The dev loop is fine for hacking, but the app also builds as a normal macOS application (Launchpad, Spotlight, Dock — the lot), with a front-facing Chocobo-face icon ([build/icon.svg](build/icon.svg), rendered to `icon.icns`/`icon.png` for the packagers):
+The dev loop is fine for hacking, but the app also builds as a normal macOS application (Launchpad, Spotlight, Dock — the lot), with a front-facing icon ([build/icon.svg](build/icon.svg), rendered to `icon.icns`/`icon.png` for the packagers):
 
 ```bash
 npm run build:refdb                       # if ./data/reference.db doesn't exist yet
 cp data/reference.db resources/reference.db
 npm run fetch:tessdata                    # if resources/tessdata is missing
-npm run dist:mac
+npm run dist:mac                          # add -- --universal for an Intel + Apple Silicon build
 cp -R "dist/mac-arm64/MTG CardVault.app" /Applications/
 ```
 
 Notes:
 
 - The packaged app stores its data in `~/Library/Application Support/mtg-cardvault/data/` (Electron uses the package *name*, not the display name; the repo's `./data` is dev-only). On first launch it seeds `reference.db` from the copy bundled inside the app, so it works offline immediately. To carry a dev inventory over, copy `data/inventory.db` into that folder (quit the app first).
-- The build is ad-hoc signed (no Apple Developer cert). Locally built apps run fine; if you ever distribute the `.dmg` to another Mac, the recipient right-clicks → Open the first time.
-- `dist/` also contains the `.dmg` for passing to another Mac.
+- The build is ad-hoc signed (no Apple Developer cert). Locally built apps run fine; when you hand the `.dmg` to another Mac, the recipient **right-clicks → Open** the first time (Gatekeeper blocks a plain double-click for unsigned apps).
+- `npm run dist:mac` builds for the host architecture by default (an arm64 `.dmg` on Apple Silicon); add `-- --universal` for one `.dmg` that runs on both Intel and Apple Silicon.
 
 ## Deployment
 
-**Hard constraint:** the shop's Windows machine has *zero* dev tools — no Node, no Python, no compilers. The deliverable is a single self-contained `.exe` installer. "Runs on a clean Windows box" is the definition of done.
+**Hard constraint:** the shop's Windows machine has *zero* dev tools — no Node, no Python, no compilers. The deliverable is a single self-contained `.exe` installer with the reference DB and OCR data baked in. "Runs on a clean Windows box" is the definition of done.
 
 ### Primary path — GitHub Actions (no Windows machine needed)
 
@@ -98,21 +103,24 @@ Notes:
 4. `npm run build` + `electron-builder --win` — electron-builder recompiles better-sqlite3 for Electron's ABI (`npmRebuild: true`) and produces the NSIS installer with the reference DB in `resources/`.
 5. The `.exe` (and the Mac `.dmg`) are uploaded as build artifacts and attached to the GitHub Release for the tag.
 
-Release procedure:
+The workflow needs `permissions: contents: write` (else the release-attach 403s) and `fail-fast: false` (else one OS failure cancels the other) — both are set. Cut a release by pushing a tag:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
-# → download the .exe from the workflow artifacts / release page
+npm version patch                 # bumps package.json + package-lock, commits, tags vX.Y.Z
+git push && git push --tags       # tag push triggers the build + release
 ```
+
+> **Note:** CI depends on GitHub's action-download service; a transient GitHub outage can fail a run with *"Failed to resolve action download info: Service Unavailable"* (this hit the v0.2.1 tag). It's not a repo/workflow fault — re-run the workflow (`gh run rerun <run-id>`) or fall back to a local build below.
 
 ### Fallbacks (documented, not the default)
 
-- **Build on Windows directly** (PC/VM with Node): `npm ci && npm run build:refdb -- --out resources/reference.db && npm run dist:win`.
-- **Pure-Mac path:** swap `better-sqlite3` for WASM SQLite (`sql.js`) — no native compilation, identical build on every platform, but the whole DB lives in memory and large writes are slower. The data layer is isolated in [src/main/store.ts](src/main/store.ts) + [src/main/refdb.ts](src/main/refdb.ts) precisely so this swap stays cheap if ever needed.
+- **Build on Windows directly** (PC/VM with Node **and** a C++ toolchain): `npm ci && npm run build:refdb -- --out resources/reference.db && npm run dist:win`. If the box has no compiler, `build:refdb` can't run — instead build `reference.db` on another machine, copy it into `resources/reference.db` (SQLite files are cross-platform), then `npm run dist:win`. Packaging itself doesn't need a working Node build of better-sqlite3 — electron-builder rebuilds it for Electron and copies `reference.db` in as a static resource. **The installer ships without card data if `resources/reference.db` is missing** — the build only warns, so always confirm the file is in place first.
+- **Build on macOS** for the Mac `.dmg`: same `cp data/reference.db resources/reference.db` step, then `npm run dist:mac`. Attach with `gh release upload vX.Y.Z "dist/…"`.
+- **Pure-Mac path (no native module):** swap `better-sqlite3` for WASM SQLite (`sql.js`) — no native compilation, identical build on every platform, but the whole DB lives in memory and large writes are slower. The data layer is isolated in [src/main/store.ts](src/main/store.ts) + [src/main/refdb.ts](src/main/refdb.ts) precisely so this swap stays cheap if ever needed.
 
 ### Code signing (optional)
 
-The unsigned installer triggers a SmartScreen "unknown publisher" warning (More info → Run anyway) — acceptable for a single shop. An OV/EV certificate removes it: configure `win.certificateFile` in [electron-builder.yml](electron-builder.yml) or the `CSC_LINK` / `CSC_KEY_PASSWORD` env vars in CI.
+Signing is not configured, so the installer is unsigned → SmartScreen "unknown publisher" warning (More info → Run anyway), acceptable for a single shop. An OV/EV certificate removes it: configure `win.certificateFile` in [electron-builder.yml](electron-builder.yml) or the `CSC_LINK` / `CSC_KEY_PASSWORD` env vars in CI.
 
 ## Scryfall etiquette
 
@@ -124,11 +132,13 @@ All live calls send a real `User-Agent` (`MTGCardVault/…`) and `Accept` header
 src/
   main/           Electron main process
     index.ts      app entry, IPC, app-data resolution, first-launch DB seeding
-    store.ts      DataStore — all SQL (reference lookups + inventory upserts)
+    store.ts      DataStore — all SQL (reference lookups + inventory + decks)
     refdb.ts      Scryfall bulk download + streaming import (Electron-free)
+    dataLocation.ts   local vs Dropbox inventory storage + relocation
+    deckImport.ts     decklist / Archidekt import + printing resolution
   preload/        contextBridge API exposed to the renderer
-  renderer/       React UI
-  shared/         types shared across processes
+  renderer/       React UI (scan, sell, viewer, DeckBuilding)
+  shared/         types + deckStats.ts (pure deck analysis), shared across processes
 scripts/
   build-reference-db.ts   build reference.db under plain Node (dev + CI)
   check-refdb.ts          sanity checks: lookups, normalisation, inventory cycle
