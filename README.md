@@ -16,6 +16,22 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 🃏 | **Deck builder**: create/import/analyse/export Commander decks against live inventory | ✅ (v0.2.0) |
 | — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, cloud (Dropbox) inventory storage, card magnifier | ✅ |
 
+## Index
+
+| Section | Description |
+|---|---|
+| [How it works](#how-it-works) | Corner OCR identity, camera capture, the auto-scan lock loop, sell mode, and the inventory browser |
+| [Tech stack](#tech-stack) | Electron, React, better-sqlite3, tesseract.js, electron-builder |
+| [Data model](#data-model) | `reference.db` vs `inventory.db`, where they live, and Dropbox storage |
+| [Development](#development-mac-or-any-machine-with-node) | Local dev loop and the better-sqlite3 native-ABI gotcha |
+| [Install as a Mac app](#install-as-a-mac-app) | Building and installing the `.app`, plus Gatekeeper notes |
+| [Deployment](#deployment) | The zero-dev-tools Windows constraint and how the installer is produced |
+| [Primary path — GitHub Actions](#primary-path--github-actions-no-windows-machine-needed) | Tag-triggered CI build and release attach |
+| [Fallbacks](#fallbacks-documented-not-the-default) | Building on Windows or macOS directly, and the WASM-SQLite escape hatch |
+| [Code signing](#code-signing-optional) | Why the installer is unsigned and what removes the warning |
+| [Scryfall etiquette](#scryfall-etiquette) | Rate limits, User-Agent, and when live calls actually happen |
+| [Project layout](#project-layout) | Directory map of `src/`, `scripts/` and the packaging config |
+
 ## How it works
 
 - **The bottom-left corner is the whole identity — nothing else is OCR'd.** Modern cards (~2015+) print `0123/280` + `M21 • EN` there: set code + collector number, a direct unique lookup. Older frames print **no set code at all** — just `13/150` and a copyright line — so the resolver identifies the set by its printed size (Scryfall's `printed_size`, exactly what the `/150` means) and breaks ties with the copyright year. `13/150` + `©2008` → Morningtide, one exact hit. Genuinely ambiguous reads produce a tap-to-pick shortlist, never a silent guess. (Name OCR was dropped: webcam-resolution title bars OCR too poorly to be a useful cross-check — the confirm-before-write step is the accuracy gate instead.)
