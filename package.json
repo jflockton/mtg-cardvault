@@ -1,6 +1,6 @@
 {
   "name": "mtg-cardvault",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Webcam MTG card scanner + local-first inventory for game shops. Electron + React + SQLite.",
   "type": "module",
   "main": "out/main/index.js",
