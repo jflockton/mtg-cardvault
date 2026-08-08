@@ -12,6 +12,48 @@ const MAX_DISPLAY_HEIGHT = 340
 
 const DEVICE_KEY = 'cardvault.cameraDeviceId'
 
+// Camera capabilities/settings carry image-capture extras (zoom, focus,
+// exposure, torch…) that the DOM lib's types don't declare — widen them.
+type CamCaps = MediaTrackCapabilities & Record<string, unknown>
+type CamSettings = MediaTrackSettings & Record<string, unknown>
+
+/** Sliders we surface when the active camera reports a numeric range for them. */
+const NUMERIC_CONTROLS: { key: string; label: string; pairFocus?: boolean }[] = [
+  { key: 'zoom', label: 'Zoom' },
+  { key: 'focusDistance', label: 'Focus', pairFocus: true },
+  { key: 'exposureCompensation', label: 'Exposure' },
+  { key: 'brightness', label: 'Brightness' },
+  { key: 'contrast', label: 'Contrast' },
+  { key: 'saturation', label: 'Saturation' },
+  { key: 'sharpness', label: 'Sharpness' }
+]
+
+/** Dropdowns we surface when the camera reports more than one mode. */
+const MODE_CONTROLS: { key: string; label: string }[] = [
+  { key: 'focusMode', label: 'Focus mode' },
+  { key: 'exposureMode', label: 'Exposure mode' },
+  { key: 'whiteBalanceMode', label: 'White balance' }
+]
+
+/** A capability's numeric range, normalised (or null if the camera lacks it). */
+function numRange(
+  caps: CamCaps | null,
+  key: string
+): { min: number; max: number; step: number } | null {
+  const c = caps?.[key] as { min?: number; max?: number; step?: number } | undefined
+  if (c && typeof c.min === 'number' && typeof c.max === 'number' && c.max > c.min) {
+    const step = typeof c.step === 'number' && c.step > 0 ? c.step : (c.max - c.min) / 100
+    return { min: c.min, max: c.max, step }
+  }
+  return null
+}
+
+/** A mode capability's options (only worth showing when there's a choice). */
+function modeOptions(caps: CamCaps | null, key: string): string[] | null {
+  const c = caps?.[key]
+  return Array.isArray(c) && c.length > 1 ? (c as string[]) : null
+}
+
 export interface CapturedFrame {
   /** Full frame at native camera resolution. */
   frame: HTMLCanvasElement
@@ -186,6 +228,13 @@ export default function CameraPanel({
 }): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+  // What the active camera can actually be told to do, and its current values.
+  // iPhone Continuity Camera vs a USB webcam expose wildly different sets, so
+  // the controls panel is built from whatever this reports at runtime.
+  const [caps, setCaps] = useState<CamCaps | null>(null)
+  const [settings, setSettings] = useState<CamSettings | null>(null)
+  const [showControls, setShowControls] = useState(false)
   // Bumped on every start(); stale starts (dev double-mount, quick device
   // switches) see a newer generation and bow out instead of erroring.
   const startSeq = useRef(0)
@@ -237,6 +286,9 @@ export default function CameraPanel({
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    trackRef.current = null
+    setCaps(null)
+    setSettings(null)
     setRunning(false)
   }, [])
 
@@ -280,10 +332,20 @@ export default function CameraPanel({
           await videoRef.current.play()
         }
         setRunning(true)
+        // Probe what this camera exposes so the controls panel can be built
+        // from reality (getCapabilities is absent on some drivers — tolerate).
+        const track = stream.getVideoTracks()[0]
+        trackRef.current = track ?? null
+        try {
+          setCaps((track?.getCapabilities?.() as CamCaps) ?? null)
+          setSettings((track?.getSettings() as CamSettings) ?? null)
+        } catch {
+          setCaps(null)
+        }
         // Labels only populate after permission is granted.
         const all = await navigator.mediaDevices.enumerateDevices()
         setDevices(all.filter((d) => d.kind === 'videoinput'))
-        const actualId = stream.getVideoTracks()[0]?.getSettings().deviceId
+        const actualId = track?.getSettings().deviceId
         if (actualId) {
           setDeviceId(actualId)
           localStorage.setItem(DEVICE_KEY, actualId)
@@ -328,6 +390,19 @@ export default function CameraPanel({
     [running, onCapture]
   )
 
+  /** Push a camera setting to the live track (best-effort — advanced
+   *  constraints the driver can't honour are ignored rather than throwing). */
+  const applyCam = useCallback(async (constraint: Record<string, unknown>) => {
+    const track = trackRef.current
+    if (!track) return
+    try {
+      await track.applyConstraints({ advanced: [constraint] as MediaTrackConstraintSet[] })
+      setSettings((track.getSettings() as CamSettings) ?? null)
+    } catch (e) {
+      setError(`Camera didn't accept that setting: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [])
+
   // Auto mode: pump frames on an interval. The consumer decides whether a
   // frame is worth acting on (it may still be busy with the previous one).
   useEffect(() => {
@@ -370,6 +445,15 @@ export default function CameraPanel({
     height: `${r.h * 100}%`
   })
 
+  // Build the controls panel from what THIS camera actually reports.
+  const availableNumeric = NUMERIC_CONTROLS.filter((c) => numRange(caps, c.key))
+  const availableModes = MODE_CONTROLS.filter((c) => modeOptions(caps, c.key))
+  const hasTorch =
+    caps?.torch === true || (Array.isArray(caps?.torch) && (caps.torch as boolean[]).includes(true))
+  const anyControls = availableNumeric.length > 0 || availableModes.length > 0 || hasTorch
+  const fmtCtl = (key: string, v: number): string =>
+    key === 'zoom' ? `${v.toFixed(1)}×` : `${Math.round(v * 100) / 100}`
+
   return (
     <div className="camera-panel">
       <div className="camera-toolbar">
@@ -398,6 +482,14 @@ export default function CameraPanel({
             {error ? 'Retry' : 'Start camera'}
           </button>
         )}
+        {running && (
+          <button
+            className={showControls ? 'active' : ''}
+            onClick={() => setShowControls((v) => !v)}
+          >
+            {showControls ? 'Hide controls' : '⚙ Controls'}
+          </button>
+        )}
         <button className="primary" onClick={() => capture(false)} disabled={!running}>
           Capture (Space)
         </button>
@@ -423,6 +515,74 @@ export default function CameraPanel({
           )}
         </div>
       </div>
+
+      {showControls && running && (
+        <div className="camera-controls">
+          {!anyControls ? (
+            <p className="muted small">
+              This camera exposes no adjustable controls to the app — common for the
+              iPhone Continuity Camera on macOS. Use the menu-bar{' '}
+              <b>Control Center → Video Effects</b> for zoom (which switches lenses),
+              Center Stage and lighting.
+            </p>
+          ) : (
+            <>
+              {availableNumeric.map((c) => {
+                const r = numRange(caps, c.key)!
+                const cur = Number(settings?.[c.key] ?? r.min)
+                return (
+                  <label key={c.key} className="cam-ctl">
+                    <span className="cam-ctl-label">{c.label}</span>
+                    <input
+                      type="range"
+                      min={r.min}
+                      max={r.max}
+                      step={r.step}
+                      value={Number.isFinite(cur) ? cur : r.min}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        void applyCam(
+                          c.pairFocus ? { focusMode: 'manual', [c.key]: v } : { [c.key]: v }
+                        )
+                      }}
+                    />
+                    <span className="cam-ctl-val">{fmtCtl(c.key, cur)}</span>
+                  </label>
+                )
+              })}
+              {availableModes.map((c) => {
+                const opts = modeOptions(caps, c.key)!
+                const cur = String(settings?.[c.key] ?? opts[0])
+                return (
+                  <label key={c.key} className="cam-ctl">
+                    <span className="cam-ctl-label">{c.label}</span>
+                    <select value={cur} onChange={(e) => void applyCam({ [c.key]: e.target.value })}>
+                      {opts.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              })}
+              {hasTorch && (
+                <label className="cam-ctl cam-ctl-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings?.torch === true}
+                    onChange={(e) => void applyCam({ torch: e.target.checked })}
+                  />
+                  <span className="cam-ctl-label">Torch</span>
+                </label>
+              )}
+              <button className="cam-ctl-reset" onClick={() => start(deviceId || undefined)}>
+                Reset
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

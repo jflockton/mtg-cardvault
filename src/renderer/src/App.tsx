@@ -30,6 +30,18 @@ interface CapturePreview {
   height: number
 }
 
+/** One row in the right-hand "scanned this session" list. */
+interface SessionScan {
+  /** Local-only key so repeat scans of the same card stay distinct rows. */
+  key: number
+  scryfallId: string
+  name: string
+  setCode: string
+  collectorNumber: string
+  imageUri: string | null
+  finish: Finish
+}
+
 /** One face button per app section — the home screen launcher. */
 type Section =
   | 'home'
@@ -651,6 +663,12 @@ export default function App(): React.JSX.Element {
   const [capture, setCapture] = useState<CapturePreview | null>(null)
   const [scan, setScan] = useState<ScanState>({ status: 'idle' })
 
+  // Right-hand scan panel: a big image of the most-recent card plus a running
+  // log of everything scanned in this session (each row tick-able as foil).
+  const [lastScan, setLastScan] = useState<CardRef | null>(null)
+  const [sessionScans, setSessionScans] = useState<SessionScan[]>([])
+  const sessionKey = useRef(0)
+
   // Auto scan is the shop's default mode — remembered across launches.
   const [autoMode, setAutoMode] = useState(
     () => localStorage.getItem('cardvault.autoScan') !== '0'
@@ -680,8 +698,7 @@ export default function App(): React.JSX.Element {
     hits: 0, // consecutive frames agreeing on lastId
     lockConf: 0, // lowest number-token confidence across the agreeing frames
     lastAddedId: null as string | null,
-    lastAddTime: 0, // same-card cooldown floor: flaky frames can't fake a swap
-    clearFrames: 0, // frames since add that did NOT show lastAddedId
+    clearFrames: 0, // empty/different-card frames since add — 2 re-arms the same card
     missStreak: 0, // consecutive frames with content but no lock
     warned: false // attention beep already played this episode
   })
@@ -805,10 +822,72 @@ export default function App(): React.JSX.Element {
   const applyCard = useCallback(
     (c: CardRef) => {
       setCard(c)
+      setLastScan(c)
       if (!c.finishes.includes(finish)) setFinish(c.finishes[0] ?? 'nonfoil')
     },
     [finish]
   )
+
+  /**
+   * Log a card into the right-hand session list (newest first) and show it big.
+   * Called only on the scan-IN add path — sell mode keeps its own flow.
+   */
+  const recordScan = useCallback((c: CardRef, f: Finish) => {
+    setLastScan(c)
+    setSessionScans((prev) => [
+      {
+        key: ++sessionKey.current,
+        scryfallId: c.scryfallId,
+        name: c.name,
+        setCode: c.setCode,
+        collectorNumber: c.collectorNumber,
+        imageUri: c.imageUri,
+        finish: f
+      },
+      ...prev
+    ])
+  }, [])
+
+  /** Tick/untick "shiny": move one copy of this row between nonfoil and foil. */
+  const toggleShiny = useCallback(
+    async (entry: SessionScan) => {
+      const to: Finish = entry.finish === 'foil' ? 'nonfoil' : 'foil'
+      const moved = await window.api.moveFinish(entry.scryfallId, entry.finish, to, 1)
+      if (!moved) {
+        setMessage(`Couldn't mark ${entry.name} ${to} — no ${entry.finish} copy in stock`)
+        return
+      }
+      setSessionScans((prev) =>
+        prev.map((s) => (s.key === entry.key ? { ...s, finish: to } : s))
+      )
+      playUndo()
+      setMessage(`★ ${entry.name} → ${to}`)
+      loadInventory()
+    },
+    [loadInventory]
+  )
+
+  /** Remove button on a session row: undo that scan — drop the row AND take
+   *  the copy back out of stock (corrects a mis-scan). */
+  const removeScan = useCallback(
+    async (entry: SessionScan) => {
+      const removed = await window.api.removeCard(entry.scryfallId, entry.finish, 1)
+      setSessionScans((prev) => prev.filter((s) => s.key !== entry.key))
+      playUndo()
+      setMessage(
+        removed
+          ? `↩ Removed 1× ${entry.name} — off the list and out of stock`
+          : `Removed ${entry.name} from the list (no ${entry.finish} copy was in stock)`
+      )
+      loadInventory()
+    },
+    [loadInventory]
+  )
+
+  const clearSession = useCallback(() => {
+    setSessionScans([])
+    setLastScan(null)
+  }, [])
 
   const lookup = useCallback(async () => {
     if (!setCode.trim() || !collectorNumber.trim()) return
@@ -839,6 +918,7 @@ export default function App(): React.JSX.Element {
         name: c.name,
         action: 'add'
       })
+      recordScan(c, addFinish)
       playSuccess()
       setFlash(true)
       setTimeout(() => setFlash(false), 350)
@@ -847,7 +927,7 @@ export default function App(): React.JSX.Element {
       )
       loadInventory()
     },
-    [loadInventory]
+    [loadInventory, recordScan]
   )
 
   /**
@@ -911,7 +991,6 @@ export default function App(): React.JSX.Element {
     // (or back) in frame, it must not immediately re-stage.
     auto.current.lastAddedId = p.card.scryfallId
     auto.current.clearFrames = 0
-    auto.current.lastAddTime = Date.now()
     await applyStock(p.card, p.finish)
   }, [applyStock, setPending])
 
@@ -1023,20 +1102,16 @@ export default function App(): React.JSX.Element {
             }
             return
           }
-          if (
-            id === a.lastAddedId &&
-            (a.clearFrames < 2 || Date.now() - a.lastAddTime < 2500)
-          ) {
-            window.api.note?.(
-              `BLOCK cooldown ${res.card.name} clear=${a.clearFrames} dt=${Date.now() - a.lastAddTime}`
-            )
-            // Same card shortly after its add. Crucially: seeing it again
-            // RESETS the departure evidence — flaky cards (basic lands)
-            // scatter unreadable frames while still being held, and those
-            // must not accumulate into a fake "card swapped" signal. The
-            // card has to be CONTINUOUSLY gone to count as gone.
+          if (id === a.lastAddedId && a.clearFrames < 2) {
+            window.api.note?.(`BLOCK cooldown ${res.card.name} clear=${a.clearFrames}`)
+            // The just-added card is still (or again) in frame. It must
+            // physically LEAVE before it can count a second time — the same
+            // card is NEVER added twice in a row. Re-seeing it here proves it
+            // never left, so wipe the departure evidence: only a run of two
+            // genuinely EMPTY frames (or a different card) re-arms it. Flaky
+            // misreads on a held card no longer accumulate into a fake "gone".
             a.clearFrames = 0
-            setAutoStatus(`✓ added — next card…`)
+            setAutoStatus('✓ added — remove this card before the next')
             return
           }
           if (id === a.lastId) {
@@ -1073,7 +1148,6 @@ export default function App(): React.JSX.Element {
             if (lockConf >= 65) {
               a.lastAddedId = id
               a.clearFrames = 0
-              a.lastAddTime = Date.now()
               setAutoStatus('')
               await applyStock(res.card)
             } else {
@@ -1099,10 +1173,9 @@ export default function App(): React.JSX.Element {
           return
         }
 
-        // Not an exact hit on this frame — counts as "last-added card gone".
+        // Not an exact hit on this frame.
         a.lastId = null
         a.hits = 0
-        a.clearFrames++
 
         if (res.kind === 'candidates') {
           // Needs a human tap — ask ONCE per presentation, not every frame.
@@ -1115,6 +1188,11 @@ export default function App(): React.JSX.Element {
         }
 
         if (readSomething) {
+          // Saw text but matched nothing: the card is almost certainly still
+          // in frame, just misread this frame. That is NOT proof it left, so
+          // it must NOT count toward re-arming the same-card cooldown — flaky
+          // reads on a held card accumulating into a fake "gone" is exactly
+          // what double-added a card left sitting in front of the camera.
           a.missStreak++
           const p = result.parsed
           setAutoStatus(
@@ -1130,7 +1208,11 @@ export default function App(): React.JSX.Element {
             setAutoStatus("can't lock — nudge the card or check focus (raw read below)")
           }
         } else {
-          // Empty frame: episode over, ready for the next card.
+          // Genuinely empty strip: the card has physically left the frame.
+          // This is the ONLY signal that re-arms the same-card cooldown — two
+          // such frames and the just-added card may count again (a real second
+          // copy brought later), but never one-after-another.
+          a.clearFrames++
           a.missStreak = 0
           a.warned = false
           setAutoStatus('watching — no card text in the strip')
@@ -1181,7 +1263,6 @@ export default function App(): React.JSX.Element {
       // so the card still in frame doesn't immediately re-add (or re-sell).
       auto.current.lastAddedId = card.scryfallId
       auto.current.clearFrames = 0
-      auto.current.lastAddTime = Date.now()
     }
     if (sectionRef.current === 'remove') {
       await removeStock(card, finish, quantity)
@@ -1190,6 +1271,7 @@ export default function App(): React.JSX.Element {
     }
     const item = await window.api.addCard(card, finish, quantity)
     undoStack.current.push({ scryfallId: card.scryfallId, finish, name: card.name, action: 'add' })
+    recordScan(card, finish)
     playSuccess()
     setMessage(
       `Added ${item.name} (${item.setCode.toUpperCase()} #${item.collectorNumber}, ${item.finish}) — now ×${item.quantity}`
@@ -1198,7 +1280,7 @@ export default function App(): React.JSX.Element {
     setTimeout(() => setFlash(false), 350)
     loadInventory()
     resetForNext()
-  }, [card, finish, quantity, autoMode, loadInventory, resetForNext, removeStock])
+  }, [card, finish, quantity, autoMode, loadInventory, resetForNext, removeStock, recordScan])
 
   /** Navigate between sections; scanning state never leaks across. */
   const go = useCallback(
@@ -1218,7 +1300,6 @@ export default function App(): React.JSX.Element {
         hits: 0,
         lockConf: 0,
         lastAddedId: null,
-        lastAddTime: 0,
         clearFrames: 0,
         missStreak: 0,
         warned: false
@@ -1341,13 +1422,15 @@ export default function App(): React.JSX.Element {
       )}
 
       {(section === 'scan' || section === 'remove') && (
-      <div className="section-body">
+      <div className={`section-body ${section === 'scan' ? 'scan-body' : ''}`}>
       {section === 'remove' && (
         <p className="sell-banner">
           ✂ Sell mode — every locked scan REMOVES one copy from stock. Cards not in stock
           beep and are ignored.
         </p>
       )}
+      <div className={section === 'scan' ? 'scan-grid' : ''}>
+      <div className={section === 'scan' ? 'scan-left' : ''}>
       <section className="panel">
         <div className="ref-row">
           <h2>{section === 'remove' ? 'Scan card to sell' : 'Scan card'}</h2>
@@ -1364,7 +1447,6 @@ export default function App(): React.JSX.Element {
                   hits: 0,
                   lockConf: 0,
                   lastAddedId: null,
-                  lastAddTime: 0,
                   clearFrames: 0,
                   missStreak: 0,
                   warned: false
@@ -1582,7 +1664,78 @@ export default function App(): React.JSX.Element {
           </div>
         )}
       </details>
+      </div>
 
+      {section === 'scan' && (
+        <aside className="scan-right">
+          <div className="last-scan">
+            <h2>Just scanned</h2>
+            <div className="last-scan-frame">
+              {lastScan?.imageUri ? (
+                <img src={lastScan.imageUri} alt={lastScan.name} />
+              ) : (
+                <div className="last-scan-empty">Scan a card to see it here</div>
+              )}
+            </div>
+            {lastScan && (
+              <p className="muted small last-scan-name">
+                {lastScan.name} · {lastScan.setCode.toUpperCase()} #{lastScan.collectorNumber}
+              </p>
+            )}
+          </div>
+
+          <section className="panel session-panel">
+            <div className="session-head">
+              <h2>This session ({sessionScans.length})</h2>
+              {sessionScans.length > 0 && (
+                <button className="clear-btn" onClick={clearSession}>
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+            {sessionScans.length === 0 ? (
+              <p className="muted small">Cards you scan in will be listed here.</p>
+            ) : (
+              <ul className="session-list">
+                {sessionScans.map((s) => (
+                  <li key={s.key} className="session-row">
+                    {s.imageUri ? (
+                      <img className="session-thumb" src={s.imageUri} alt="" />
+                    ) : (
+                      <span className="session-thumb placeholder" />
+                    )}
+                    <div className="session-info">
+                      <span className="session-cardname">{s.name}</span>
+                      <span className="muted small">
+                        {s.setCode.toUpperCase()} #{s.collectorNumber}
+                      </span>
+                      <div className="session-actions">
+                        <label className="shiny-label" title="Mark this copy as foil">
+                          <input
+                            type="checkbox"
+                            checked={s.finish === 'foil'}
+                            onChange={() => toggleShiny(s)}
+                          />
+                          ✨ Shiny
+                        </label>
+                        <button
+                          className="row-remove"
+                          title="Remove this scan — takes the copy back out of stock"
+                          onClick={() => removeScan(s)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      )}
+
+      </div>
       </div>
       )}
 
