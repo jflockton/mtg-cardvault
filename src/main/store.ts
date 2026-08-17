@@ -1883,6 +1883,23 @@ export class DataStore {
 
         // strip foil / etched markers and a trailing (SET) collector number
         rest = rest.replace(/\*[fFeE]\*/g, '').trim()
+
+        // Archidekt exports tag each line with its category —
+        // "1 Sol Ring (LTC) 288 *F* [Ramp]", "[Commander{top}]",
+        // "[Maybeboard{noDeck}{noPrice}]". Those functional names are
+        // Archidekt's own taxonomy rather than our boards, so the tag is
+        // dropped; only the board-level ones carry over, and they beat the
+        // section header the line sits under. Left in place it would glue
+        // itself to the card name and nothing would resolve.
+        const tag = rest.match(/\s*\[([^\]]+)\]\s*$/)
+        if (tag) {
+          rest = rest.slice(0, tag.index).trim()
+          const t = tag[1].replace(/\{[^}]*\}/g, '').trim().toLowerCase()
+          if (t === 'commander' || t === 'command zone') lineCategory = 'commander'
+          else if (t === 'sideboard') lineCategory = 'sideboard'
+          else if (t === 'maybeboard' || t === 'maybe') lineCategory = 'maybe'
+        }
+
         let setCode: string | null = null
         let collectorNumber: string | null = null
         const setMatch = rest.match(/^(.*?)\s*\(([A-Za-z0-9]{2,6})\)\s*([A-Za-z0-9-★]+)?\s*$/)
