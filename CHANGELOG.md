@@ -19,6 +19,7 @@ Inventory viewer: value filter, sorting, full-art filter, and a self-updating pa
 ### Fixed
 - An open inventory viewer no longer shows stale totals: the page caches the collection for fast filtering but now polls a cheap change token (`/api/stamp`) and redraws within ~5s of any inventory write — a scan-in, a sale, a ± adjustment in another window, or a Dropbox-synced change from the shop's other machine. It also re-checks the moment the page regains focus.
 - Overlapping refreshes can no longer paint out of order: a slow any-card query returning after a newer one used to leave the wrong result set (and the wrong status line) on screen.
+- A **"Refresh card data"** now also refreshes the viewer's cached collection. The change token was built from inventory writes alone, so a reference-DB rebuild left the cached cards carrying stale reference-derived fields — most visibly, owned full-art cards vanished under the Full art filter until the page was reloaded by hand.
 
 ## [0.2.1] — 2026-08-06
 
