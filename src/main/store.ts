@@ -92,6 +92,8 @@ interface ViewerFilters {
   /** Card value band, always in EUR (Cardmarket) — the page converts from £. */
   valMin?: number | null
   valMax?: number | null
+  /** Only full-art printings (Scryfall's full_art flag). */
+  fullArt?: boolean
   sort?: ViewerSort
 }
 
@@ -409,6 +411,15 @@ export class DataStore {
     if (!fs.existsSync(this.referenceDbPath)) return
     this.refDb = new Database(this.referenceDbPath, { readonly: false })
     this.refDb.exec(REF_SCHEMA)
+    // Migration: full_art column, added after reference.db first shipped. An
+    // existing DB keeps its rows at 0 until the next data refresh repopulates
+    // them — this only stops the new full_art queries erroring on old DBs.
+    const refCols = this.refDb.prepare('PRAGMA table_info(scryfall_cards)').all() as {
+      name: string
+    }[]
+    if (!refCols.some((c) => c.name === 'full_art')) {
+      this.refDb.exec('ALTER TABLE scryfall_cards ADD COLUMN full_art INTEGER NOT NULL DEFAULT 0')
+    }
     this.refDb.exec(REF_INDEXES)
     // mana_value(mana_cost) in SQL — powers the viewer's mana-cost filter
     // without needing a cmc column in the schema.
@@ -1119,7 +1130,7 @@ export class DataStore {
   } {
     this.openReferenceIfPresent()
     const refStmt = this.refDb?.prepare(
-      `SELECT set_name, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil
+      `SELECT set_name, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil, full_art
        FROM scryfall_cards WHERE scryfall_id = ?`
     )
     const rows = this.invDb
@@ -1156,6 +1167,7 @@ export class DataStore {
               prices_usd_foil: number | null
               prices_eur: number | null
               prices_eur_foil: number | null
+              full_art: number
             }
           | undefined
         card = {
@@ -1174,7 +1186,8 @@ export class DataStore {
           priceUsd: ref?.prices_usd ?? null,
           priceUsdFoil: ref?.prices_usd_foil ?? null,
           priceEur: ref?.prices_eur ?? null,
-          priceEurFoil: ref?.prices_eur_foil ?? null
+          priceEurFoil: ref?.prices_eur_foil ?? null,
+          fullArt: ref?.full_art === 1
         }
         byId.set(r.scryfall_id, card)
       }
@@ -1254,6 +1267,7 @@ export class DataStore {
     }
     if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
     if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
+    if (f.fullArt) where.push('full_art = 1')
     where.push(...colorAndMvSql(f), ...valueSql(f))
     const whereSql = where.length > 0 ? where.join(' AND ') : '1=1'
     const order = viewerOrderSql(f.sort, Boolean(set) && !name)
@@ -1281,6 +1295,7 @@ export class DataStore {
       prices_usd_foil: number | null
       prices_eur: number | null
       prices_eur_foil: number | null
+      full_art: number
     }[]
 
     const owned = new Map<string, number>()
@@ -1306,7 +1321,8 @@ export class DataStore {
       priceUsd: r.prices_usd,
       priceUsdFoil: r.prices_usd_foil,
       priceEur: r.prices_eur,
-      priceEurFoil: r.prices_eur_foil
+      priceEurFoil: r.prices_eur_foil,
+      fullArt: r.full_art === 1
     }))
     return { cards, total }
   }
@@ -1348,6 +1364,7 @@ export class DataStore {
       this.openReferenceIfPresent()
       if (!this.refDb) return []
       if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
+      if (f.fullArt) where.push('full_art = 1')
       where.push(...valueSql(f))
       if (where.length === 0) {
         return this.listSets().map((s) => ({ ...s, count: 0 }))
@@ -1932,4 +1949,6 @@ export interface ViewerCard {
   /** Cardmarket (EUR) prices from the Scryfall bulk data. */
   priceEur: number | null
   priceEurFoil: number | null
+  /** True for full-art printings (Scryfall's full_art flag). */
+  fullArt?: boolean
 }

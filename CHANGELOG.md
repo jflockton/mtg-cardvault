@@ -6,11 +6,12 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/); this
 
 ## [Unreleased]
 
-Inventory viewer: value filter, sorting, and a self-updating page.
+Inventory viewer: value filter, sorting, full-art filter, and a self-updating page.
 
 ### Added
 - **Card value filter** in the inventory viewer / any-card browser — a min/max band in **£** (€ when offline), matched against the Cardmarket price shown on the tile. Unpriced cards fall outside every band rather than counting as £0.
 - **Sort dropdown** — value high→low / low→high, mana cost either way, or name A–Z, on top of any combination of filters. In any-card mode the sort runs in SQL so it orders the whole result set, not just the current page.
+- **Full-art filter + badge** — a "Full art" chip restricts the grid to full-art printings (Scryfall's `full_art` flag: full-art basic lands, textless promos, etc.), and full-art tiles carry a ◈ badge in both inventory and any-card mode. The reference DB gained a `full_art` column, populated on the next **Refresh card data** (existing DBs migrate the column in and default it to 0 until refreshed).
 
 ### Changed
 - The `Cost:` filter is now labelled **`Mana cost:`** — it filters by mana value, and the new `Value £:` boxes are the money one.

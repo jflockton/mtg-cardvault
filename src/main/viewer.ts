@@ -52,6 +52,7 @@ function viewerFilterParams(url: URL): {
   mvMax: number | null
   valMin: number | null
   valMax: number | null
+  fullArt: boolean
   sort: ViewerSort
 } {
   const num = (k: string): number | null => {
@@ -76,6 +77,7 @@ function viewerFilterParams(url: URL): {
     mvMax: num('mvMax'),
     valMin: num('valMin'),
     valMax: num('valMax'),
+    fullArt: url.searchParams.get('fullArt') === '1',
     sort
   }
 }
@@ -235,6 +237,7 @@ const PAGE = /* html */ `<!doctype html>
     font-size: 12px; font-weight: 700; }
   .badge.own { left: auto; right: 6px; border-color: var(--gold); color: var(--gold); }
   .badge.foil { top: 32px; color: #9ad1ff; }
+  .badge.fullart { top: 58px; color: #ffd479; border-color: #ffd479; }
   #overlay { position: fixed; inset: 0; background: rgba(10,8,14,.82); display: none;
     align-items: center; justify-content: center; z-index: 20; padding: 24px; }
   #overlay.show { display: flex; }
@@ -350,6 +353,7 @@ const PAGE = /* html */ `<!doctype html>
   <span class="chip-sep"></span>
   <button class="chip" id="chipCommander">Commander</button>
   <button class="chip" id="chipFoil">Foil</button>
+  <button class="chip" id="chipFullArt" title="Full-art printings only (e.g. full-art basic lands, textless promos)">Full art</button>
   <span class="chip-sep"></span>
   <button class="chip color-chip" data-color="W" title="White">⚪</button>
   <button class="chip color-chip" data-color="U" title="Blue">🔵</button>
@@ -431,6 +435,7 @@ let setFilterText = '';
 const activeRarities = new Set();
 let wantCommander = false;
 let wantFoil = false;
+let wantFullArt = false;
 let selectedType = '';
 let subtypeText = '';
 const activeColors = new Set();  // W/U/B/R/G + 'C' (colourless)
@@ -588,11 +593,12 @@ function chipMatch(c) {
       : (c.priceEurFoil != null || c.priceUsdFoil != null);
     if (!foil) return false;
   }
+  if (wantFullArt && !c.fullArt) return false;
   return true;
 }
 
 function chipsActive() {
-  return activeRarities.size > 0 || wantCommander || wantFoil ||
+  return activeRarities.size > 0 || wantCommander || wantFoil || wantFullArt ||
     selectedType !== '' || subtypeText.trim() !== '' ||
     activeColors.size > 0 || mvMinVal !== '' || mvMaxVal !== '' ||
     valMinVal !== '' || valMaxVal !== '' || sortBy !== 'auto';
@@ -631,6 +637,7 @@ function filterQuery() {
     '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
     (wantCommander ? '&commander=1' : '') +
     (wantFoil ? '&foil=1' : '') +
+    (wantFullArt ? '&fullArt=1' : '') +
     '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
     (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
     (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : '') +
@@ -685,6 +692,7 @@ function render() {
       (c.quantity > 1 && inv.checked ? '<div class="badge">×' + c.quantity + '</div>' : '') +
       (!inv.checked && c.quantity > 0 ? '<div class="badge own">own ×' + c.quantity + '</div>' : '') +
       (hasFoil ? '<div class="badge foil">✦ foil</div>' : '') +
+      (c.fullArt ? '<div class="badge fullart">◈ full art</div>' : '') +
       (c.imageUri
         ? '<img loading="lazy" alt="" src="' + esc(c.imageUri) + '">'
         : '<div class="noimg">' + esc(c.name) + '</div>') +
@@ -948,6 +956,14 @@ chipFoil.onclick = () => {
   updateClear();
   refresh();
 };
+const chipFullArt = $('chipFullArt');
+chipFullArt.onclick = () => {
+  page = 0;
+  wantFullArt = !wantFullArt;
+  chipFullArt.classList.toggle('on', wantFullArt);
+  updateClear();
+  refresh();
+};
 document.querySelectorAll('.color-chip').forEach((chip) => {
   chip.onclick = () => {
     const col = chip.dataset.color;
@@ -1005,6 +1021,7 @@ clearBtn.onclick = () => {
   activeRarities.clear();
   wantCommander = false;
   wantFoil = false;
+  wantFullArt = false;
   activeColors.clear();
   colorMode = 'only';
   colorModeSel.value = 'only';
