@@ -14,6 +14,7 @@ import {
 import { buildReferenceDb, fetchCardLive, fetchSetsList } from './refdb'
 import { fetchPreconList, fetchPrecon } from './precon'
 import { fetchDeckFromUrl } from './deckImport'
+import { listVaultDeckNotes, readVaultDeckNote } from './obsidianDecks'
 import { scanCorner, scanTitle, terminateOcr } from './ocr'
 import { openInventoryViewer, closeInventoryViewer, gbpRate } from './viewer'
 import type { CornerScanResult, DeckFormat, Finish, LookupQuery, RefProgress } from '../shared/types'
@@ -519,6 +520,10 @@ function registerIpc(): void {
     const text = fs.readFileSync(filePaths[0], 'utf8')
     return { name: path.basename(filePaths[0]).replace(/\.[^.]+$/, ''), text }
   })
+  // Obsidian vault decks: list every note with a "## 📜 Deck List" section,
+  // and read one note's decklist (commander lifted into its own section).
+  ipcMain.handle('deck:vaultList', () => listVaultDeckNotes())
+  ipcMain.handle('deck:vaultRead', (_e, filePath: string) => readVaultDeckNote(filePath))
   // Cross-origin iframes (the embedded viewer) run out-of-process and can
   // wedge keyboard routing even after the frame is gone — plain
   // webContents.focus() doesn't always recover it. A full OS-level blur→focus
