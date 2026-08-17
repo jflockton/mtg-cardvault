@@ -53,6 +53,7 @@ function viewerFilterParams(url: URL): {
   valMin: number | null
   valMax: number | null
   fullArt: boolean
+  borderless: boolean
   sort: ViewerSort
 } {
   const num = (k: string): number | null => {
@@ -78,6 +79,7 @@ function viewerFilterParams(url: URL): {
     valMin: num('valMin'),
     valMax: num('valMax'),
     fullArt: url.searchParams.get('fullArt') === '1',
+    borderless: url.searchParams.get('borderless') === '1',
     sort
   }
 }
@@ -238,6 +240,7 @@ const PAGE = /* html */ `<!doctype html>
   .badge.own { left: auto; right: 6px; border-color: var(--gold); color: var(--gold); }
   .badge.foil { top: 32px; color: #9ad1ff; }
   .badge.fullart { top: 58px; color: #ffd479; border-color: #ffd479; }
+  .badge.borderless { top: 84px; color: #c8a2ff; border-color: #c8a2ff; }
   #overlay { position: fixed; inset: 0; background: rgba(10,8,14,.82); display: none;
     align-items: center; justify-content: center; z-index: 20; padding: 24px; }
   #overlay.show { display: flex; }
@@ -354,6 +357,7 @@ const PAGE = /* html */ `<!doctype html>
   <button class="chip" id="chipCommander">Commander</button>
   <button class="chip" id="chipFoil">Foil</button>
   <button class="chip" id="chipFullArt" title="Full-art printings only (e.g. full-art basic lands, textless promos)">Full art</button>
+  <button class="chip" id="chipBorderless" title="Borderless printings only — the art runs to the card edge with no black border">Borderless</button>
   <span class="chip-sep"></span>
   <button class="chip color-chip" data-color="W" title="White">⚪</button>
   <button class="chip color-chip" data-color="U" title="Blue">🔵</button>
@@ -436,6 +440,7 @@ const activeRarities = new Set();
 let wantCommander = false;
 let wantFoil = false;
 let wantFullArt = false;
+let wantBorderless = false;
 let selectedType = '';
 let subtypeText = '';
 const activeColors = new Set();  // W/U/B/R/G + 'C' (colourless)
@@ -594,11 +599,12 @@ function chipMatch(c) {
     if (!foil) return false;
   }
   if (wantFullArt && !c.fullArt) return false;
+  if (wantBorderless && !c.borderless) return false;
   return true;
 }
 
 function chipsActive() {
-  return activeRarities.size > 0 || wantCommander || wantFoil || wantFullArt ||
+  return activeRarities.size > 0 || wantCommander || wantFoil || wantFullArt || wantBorderless ||
     selectedType !== '' || subtypeText.trim() !== '' ||
     activeColors.size > 0 || mvMinVal !== '' || mvMaxVal !== '' ||
     valMinVal !== '' || valMaxVal !== '' || sortBy !== 'auto';
@@ -638,6 +644,7 @@ function filterQuery() {
     (wantCommander ? '&commander=1' : '') +
     (wantFoil ? '&foil=1' : '') +
     (wantFullArt ? '&fullArt=1' : '') +
+    (wantBorderless ? '&borderless=1' : '') +
     '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
     (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
     (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : '') +
@@ -693,6 +700,7 @@ function render() {
       (!inv.checked && c.quantity > 0 ? '<div class="badge own">own ×' + c.quantity + '</div>' : '') +
       (hasFoil ? '<div class="badge foil">✦ foil</div>' : '') +
       (c.fullArt ? '<div class="badge fullart">◈ full art</div>' : '') +
+      (c.borderless ? '<div class="badge borderless">▢ borderless</div>' : '') +
       (c.imageUri
         ? '<img loading="lazy" alt="" src="' + esc(c.imageUri) + '">'
         : '<div class="noimg">' + esc(c.name) + '</div>') +
@@ -964,6 +972,14 @@ chipFullArt.onclick = () => {
   updateClear();
   refresh();
 };
+const chipBorderless = $('chipBorderless');
+chipBorderless.onclick = () => {
+  page = 0;
+  wantBorderless = !wantBorderless;
+  chipBorderless.classList.toggle('on', wantBorderless);
+  updateClear();
+  refresh();
+};
 document.querySelectorAll('.color-chip').forEach((chip) => {
   chip.onclick = () => {
     const col = chip.dataset.color;
@@ -1022,6 +1038,7 @@ clearBtn.onclick = () => {
   wantCommander = false;
   wantFoil = false;
   wantFullArt = false;
+  wantBorderless = false;
   activeColors.clear();
   colorMode = 'only';
   colorModeSel.value = 'only';

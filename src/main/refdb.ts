@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS scryfall_cards (
   prices_eur_foil  REAL,
   finishes         TEXT NOT NULL DEFAULT '["nonfoil"]',
   full_art         INTEGER NOT NULL DEFAULT 0,
+  borderless       INTEGER NOT NULL DEFAULT 0,
   released_at      TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -97,6 +98,7 @@ interface ScryfallCardJson {
   }
   finishes?: string[]
   full_art?: boolean
+  border_color?: string
   games?: string[]
   released_at?: string
 }
@@ -118,6 +120,7 @@ interface RefRow {
   prices_eur_foil: number | null
   finishes: string
   full_art: number
+  borderless: number
   released_at: string | null
 }
 
@@ -157,6 +160,9 @@ export function mapCard(c: ScryfallCardJson): RefRow | null {
     prices_eur_foil: toNum(c.prices?.eur_foil),
     finishes: JSON.stringify(c.finishes ?? ['nonfoil']),
     full_art: c.full_art ? 1 : 0,
+    // Scryfall's borderless treatment (showcase/extended-art frames keep their
+    // black border and are flagged separately, via frame_effects).
+    borderless: c.border_color === 'borderless' ? 1 : 0,
     released_at: c.released_at ?? null
   }
 }
@@ -335,11 +341,11 @@ export async function importBulkFile(
     INSERT OR REPLACE INTO scryfall_cards
       (scryfall_id, name, set_code, set_name, collector_number, rarity, type_line,
        mana_cost, colors, image_uri, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil,
-       finishes, full_art, released_at)
+       finishes, full_art, borderless, released_at)
     VALUES
       (@scryfall_id, @name, @set_code, @set_name, @collector_number, @rarity, @type_line,
        @mana_cost, @colors, @image_uri, @prices_usd, @prices_usd_foil, @prices_eur, @prices_eur_foil,
-       @finishes, @full_art, @released_at)
+       @finishes, @full_art, @borderless, @released_at)
   `)
   const insertBatch = db.transaction((rows: RefRow[]) => {
     for (const row of rows) insert.run(row)
