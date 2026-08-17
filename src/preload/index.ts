@@ -110,6 +110,22 @@ export interface CardVaultApi {
   readClipboard: () => Promise<string>
   /** Pick a .txt decklist file; returns its basename + contents, or null if cancelled. */
   readDeckFile: () => Promise<{ name: string; text: string } | null>
+  /** Obsidian vault notes with a "## 📜 Deck List" section, newest first. */
+  deckVaultList: () => Promise<{
+    vaultDir: string | null
+    notes: {
+      path: string
+      title: string
+      deckName: string | null
+      commander: string | null
+      folder: string
+      modifiedAt: string
+    }[]
+  }>
+  /** One vault note's decklist (commander lifted into a Commander section). */
+  deckVaultRead: (
+    path: string
+  ) => Promise<{ name: string; commander: string | null; text: string } | { error: string }>
   /** Refocus the app's top frame (fixes typing after the embedded viewer grabbed focus). */
   focusMainFrame: () => void
   deckImportUrl: (url: string) => Promise<{
@@ -190,6 +206,8 @@ const api: CardVaultApi = {
   deckImportText: (deckId, text) => ipcRenderer.invoke('deck:importText', { deckId, text }),
   readClipboard: () => ipcRenderer.invoke('clipboard:read'),
   readDeckFile: () => ipcRenderer.invoke('deck:readFile'),
+  deckVaultList: () => ipcRenderer.invoke('deck:vaultList'),
+  deckVaultRead: (p) => ipcRenderer.invoke('deck:vaultRead', p),
   focusMainFrame: () => ipcRenderer.send('window:focusTop'),
   deckImportUrl: (url) => ipcRenderer.invoke('deck:importUrl', url),
   deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId),

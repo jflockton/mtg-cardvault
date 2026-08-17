@@ -219,6 +219,97 @@ function TextImportModal(props: {
   )
 }
 
+/**
+ * Pick a deck note from the Obsidian vault. Lists every note carrying a
+ * "## 📜 Deck List" section (newest first, searchable); choosing one hands its
+ * decklist to the normal review-and-import modal.
+ */
+function VaultModal(props: {
+  onPick: (path: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [notes, setNotes] = useState<
+    | {
+        path: string
+        title: string
+        deckName: string | null
+        commander: string | null
+        folder: string
+      }[]
+    | null
+  >(null)
+  const [vaultDir, setVaultDir] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const inputRef = useStubbornFocus()
+  useEffect(() => {
+    void window.api.deckVaultList().then((r) => {
+      setVaultDir(r.vaultDir)
+      setNotes(r.notes)
+    })
+  }, [])
+  const q = query.trim().toLowerCase()
+  const shown = (notes ?? []).filter(
+    (n) =>
+      !q ||
+      n.title.toLowerCase().includes(q) ||
+      (n.deckName ?? '').toLowerCase().includes(q) ||
+      (n.commander ?? '').toLowerCase().includes(q) ||
+      n.folder.toLowerCase().includes(q)
+  )
+  return (
+    <div className="modal-overlay" onClick={props.onCancel}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <h3>Import a deck from Obsidian</h3>
+        {notes == null ? (
+          <p className="muted">Looking through the vault…</p>
+        ) : vaultDir == null ? (
+          <p className="muted">
+            No Obsidian vault found — expected an <code>obsidianVault</code> folder in Dropbox on
+            this machine.
+          </p>
+        ) : notes.length === 0 ? (
+          <p className="muted">
+            No deck notes found — looking for notes with a <code>## 📜 Deck List</code> section.
+          </p>
+        ) : (
+          <>
+            <input
+              ref={inputRef}
+              autoFocus
+              className="modal-input"
+              value={query}
+              placeholder={`Search ${notes.length} deck notes…`}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') props.onCancel()
+                if (e.key === 'Enter' && shown.length === 1) props.onPick(shown[0].path)
+              }}
+            />
+            <div className="vault-note-list">
+              {shown.length === 0 ? (
+                <p className="muted small">Nothing matches.</p>
+              ) : (
+                shown.map((n) => (
+                  <button key={n.path} className="vault-note" onClick={() => props.onPick(n.path)}>
+                    <span className="vault-note-title">
+                      {n.deckName ?? n.title}
+                      <span className="vault-note-folder">{n.folder}</span>
+                    </span>
+                    {n.commander && <span className="vault-note-meta">⚔ {n.commander}</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
+        <div className="modal-actions">
+          <button onClick={props.onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Import-from-URL modal (Archidekt supported; Moxfield steers to paste). */
 function UrlModal(props: {
   busy: boolean
@@ -859,7 +950,9 @@ export default function DeckBuilding(): React.JSX.Element {
   const [openId, setOpenId] = useState<number | null>(null)
   const [detail, setDetail] = useState<DeckDetail | null>(null)
   const [gbpPerEur, setGbpPerEur] = useState<number | null>(null)
-  const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | 'text' | null>(null)
+  const [modal, setModal] = useState<'new' | 'rename' | 'import' | 'url' | 'text' | 'vault' | null>(
+    null
+  )
   const [urlBusy, setUrlBusy] = useState(false)
   const [textSeed, setTextSeed] = useState<{ name: string; text: string }>({ name: '', text: '' })
   const [message, setMessage] = useState('')
@@ -884,6 +977,19 @@ export default function DeckBuilding(): React.JSX.Element {
     const f = await window.api.readDeckFile()
     if (!f) return
     setTextSeed({ name: f.name, text: f.text })
+    setModal('text')
+  }
+
+  // Vault note picked → pull its decklist and drop into the same
+  // review-name-and-import modal the clipboard/file paths use.
+  const importFromVault = async (notePath: string): Promise<void> => {
+    const r = await window.api.deckVaultRead(notePath)
+    if ('error' in r) {
+      setModal(null)
+      setMessage(r.error)
+      return
+    }
+    setTextSeed({ name: r.name, text: r.text })
     setModal('text')
   }
 
@@ -1035,6 +1141,12 @@ export default function DeckBuilding(): React.JSX.Element {
             <button title="An Archidekt deck link" onClick={() => setModal('url')}>
               🔗 URL
             </button>
+            <button
+              title="A deck note in the Obsidian vault (its 📜 Deck List section)"
+              onClick={() => setModal('vault')}
+            >
+              💎 Obsidian
+            </button>
             <button className="primary" title="An empty deck" onClick={() => setModal('new')}>
               ✚ Blank
             </button>
@@ -1101,6 +1213,12 @@ export default function DeckBuilding(): React.JSX.Element {
         <UrlModal
           busy={urlBusy}
           onConfirm={(u) => void importUrl(u)}
+          onCancel={() => setModal(null)}
+        />
+      )}
+      {modal === 'vault' && (
+        <VaultModal
+          onPick={(p) => void importFromVault(p)}
           onCancel={() => setModal(null)}
         />
       )}
