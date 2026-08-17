@@ -16,6 +16,7 @@ Inventory viewer: value filter, sorting, full-art filter, and a self-updating pa
 
 ### Changed
 - The `Cost:` filter is now labelled **`Mana cost:`** — it filters by mana value, and the new `Value £:` boxes are the money one.
+- **Set filtering ignores punctuation and word order.** It was a literal substring match, so `spiderman` and `spider man` both missed "Marvel's Spider-Man" over a hyphen. Now the query and the set name are compared on letters and digits only, with each word matched independently — `spiderman`, `spider man`, `marvel spider` and the set code `spm` all find it, and `assassins creed` finds "Assassin's Creed".
 
 ### Fixed
 - An open inventory viewer no longer shows stale totals: the page caches the collection for fast filtering but now polls a cheap change token (`/api/stamp`) and redraws within ~5s of any inventory write — a scan-in, a sale, a ± adjustment in another window, or a Dropbox-synced change from the shop's other machine. It also re-checks the moment the page regains focus.

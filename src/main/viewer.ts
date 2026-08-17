@@ -612,10 +612,18 @@ function chipsActive() {
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
 
+// Set names are full of punctuation ("Marvel's Spider-Man", "Assassin's Creed"),
+// so match on letters and digits only and let the words come in any order:
+// "spiderman", "spider man" and "marvel spider" all find the same set.
+const normSet = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
 function renderSetOptions() {
-  const f = setFilterText.trim().toLowerCase();
-  const shown = f
-    ? setsCache.filter((s) => s.code.includes(f) || s.name.toLowerCase().includes(f))
+  const terms = setFilterText.trim().split(/\s+/).map(normSet).filter(Boolean);
+  const shown = terms.length
+    ? setsCache.filter((s) => {
+        const name = normSet(s.name), code = normSet(s.code);
+        return terms.every((t) => name.includes(t) || code.includes(t));
+      })
     : setsCache;
   const keep = setSel.value;
   setSel.innerHTML = '<option value="">All sets</option>' + shown.map((s) =>
