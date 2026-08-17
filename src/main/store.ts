@@ -1207,6 +1207,11 @@ export class DataStore {
    * write (scan-in, sell, finish move, viewer ± buttons), including writes made
    * by another window or synced in from Dropbox. Two counts + the newest
    * timestamps, so it never misses an add that's balanced by a removal.
+   *
+   * It also carries the reference DB's import stamp, because the viewer caches
+   * the collection and its cards borrow reference-derived fields (prices,
+   * full_art). Without this a "Refresh card data" left that cache stale — the
+   * new columns read as empty until the page was manually reloaded.
    */
   inventoryStamp(): string {
     const inv = this.invDb
@@ -1218,7 +1223,17 @@ export class DataStore {
     const log = this.invDb.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM scan_log').get() as {
       id: number
     }
-    return `${inv.stacks}:${inv.qty}:${inv.touched}:${log.id}`
+    let ref = ''
+    try {
+      this.openReferenceIfPresent()
+      const m = this.refDb
+        ?.prepare("SELECT value FROM meta WHERE key = 'updated_at'")
+        .get() as { value: string } | undefined
+      ref = m?.value ?? ''
+    } catch {
+      /* no reference DB yet (or mid-rebuild) — the inventory half still works */
+    }
+    return `${inv.stacks}:${inv.qty}:${inv.touched}:${log.id}:${ref}`
   }
 
   /**
