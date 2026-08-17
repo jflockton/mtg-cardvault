@@ -4,7 +4,7 @@
 
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
-import type { DataStore } from './store'
+import type { DataStore, ViewerSort } from './store'
 import type { Finish } from '../shared/types'
 // Inlined art: Gwen badges the page header, Spidey rides the menu button.
 
@@ -50,6 +50,9 @@ function viewerFilterParams(url: URL): {
   colorMode: 'any' | 'only' | 'exact'
   mvMin: number | null
   mvMax: number | null
+  valMin: number | null
+  valMax: number | null
+  sort: ViewerSort
 } {
   const num = (k: string): number | null => {
     const v = url.searchParams.get(k)
@@ -57,6 +60,9 @@ function viewerFilterParams(url: URL): {
   }
   const rawMode = url.searchParams.get('colorMode')
   const mode = rawMode === 'any' || rawMode === 'exact' ? rawMode : 'only'
+  const SORTS = ['auto', 'name', 'value-desc', 'value-asc', 'mv-asc', 'mv-desc'] as const
+  const rawSort = url.searchParams.get('sort') ?? 'auto'
+  const sort = (SORTS as readonly string[]).includes(rawSort) ? (rawSort as ViewerSort) : 'auto'
   return {
     name: url.searchParams.get('name') ?? '',
     type: url.searchParams.get('type') ?? '',
@@ -67,7 +73,10 @@ function viewerFilterParams(url: URL): {
     colors: (url.searchParams.get('colors') ?? '').split(',').filter(Boolean),
     colorMode: mode,
     mvMin: num('mvMin'),
-    mvMax: num('mvMax')
+    mvMax: num('mvMax'),
+    valMin: num('valMin'),
+    valMax: num('valMax'),
+    sort
   }
 }
 
@@ -102,6 +111,10 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
               viewerFilterParams(url)
             )
           )
+        } else if (url.pathname === '/api/stamp') {
+          // Polled by the page so an open viewer picks up cards scanned in
+          // (or sold) while it was on screen, without a manual reload.
+          json(res, { stamp: store.inventoryStamp() })
         } else if (url.pathname === '/api/rate') {
           void gbpRate().then((r) => json(res, r))
         } else if (url.pathname === '/api/adjust') {
@@ -265,6 +278,8 @@ const PAGE = /* html */ `<!doctype html>
   .color-chip.on { background: #2d1b2e; }
   #colorMode { padding: 6px 8px; font-size: 12.5px; }
   #filterbar #mvMin, #filterbar #mvMax { width: 58px; max-width: 58px; padding: 6px 8px; }
+  #filterbar #valMin, #filterbar #valMax { width: 72px; max-width: 72px; padding: 6px 8px; }
+  #sortSel { padding: 6px 8px; font-size: 12.5px; }
   .card.owned { border-color: #3fae5c; }
   .close-x { position: absolute; top: -48px; left: 0; width: 38px; height: 38px;
     border-radius: 50%; background: rgba(13, 11, 18, 0.65); color: #fff;
@@ -347,10 +362,23 @@ const PAGE = /* html */ `<!doctype html>
     <option value="any">Any of</option>
     <option value="exact">Exactly</option>
   </select>
-  <span class="lbl">Cost:</span>
+  <span class="lbl" title="Mana value of the printed cost">Mana cost:</span>
   <input id="mvMin" type="number" min="0" max="20" placeholder="min">
   <span class="lbl">–</span>
   <input id="mvMax" type="number" min="0" max="20" placeholder="max">
+  <span class="lbl" id="valLbl" title="Cardmarket value per card">Value £:</span>
+  <input id="valMin" type="number" min="0" step="0.01" placeholder="min">
+  <span class="lbl">–</span>
+  <input id="valMax" type="number" min="0" step="0.01" placeholder="max">
+  <span class="lbl">Sort:</span>
+  <select id="sortSel" title="Applies to whatever the filters have left on screen">
+    <option value="auto" selected>Default (name / set order)</option>
+    <option value="value-desc">Value: high → low</option>
+    <option value="value-asc">Value: low → high</option>
+    <option value="mv-asc">Mana cost: low → high</option>
+    <option value="mv-desc">Mana cost: high → low</option>
+    <option value="name">Name A–Z</option>
+  </select>
   <button id="clearFilters">✕ Clear filters</button>
 </div>
 <div class="banner" id="banner">Can’t reach MTG CardVault — is the app still running? Reopen this page from the app.</div>
@@ -409,6 +437,13 @@ const activeColors = new Set();  // W/U/B/R/G + 'C' (colourless)
 let colorMode = 'only';          // only (default) | any | exact
 let mvMinVal = '';
 let mvMaxVal = '';
+let valMinVal = '';   // as typed: £ when we have a rate, else €
+let valMaxVal = '';
+let sortBy = 'auto';
+
+// The value boxes are typed in the displayed currency; everything downstream
+// (this page's comparisons and the server's SQL) works in Cardmarket euros.
+const toEur = (v) => (fxRate ? v / fxRate : v);
 
 // Mana value from a "{2}{U}{U}" cost — mirrors the app's shared parser.
 function manaValueOf(cost) {
@@ -452,6 +487,51 @@ function mvMatch(c) {
   if (mvMinVal !== '' && v < Number(mvMinVal)) return false;
   if (mvMaxVal !== '' && v > Number(mvMaxVal)) return false;
   return true;
+}
+
+/**
+ * Value band, in the same Cardmarket price the tile displays (foil price when
+ * the only copies owned are foils). A card with no price can't be inside a
+ * band, so it drops out — matching the server-side rule for any-card mode.
+ */
+function valMatch(c) {
+  if (valMinVal === '' && valMaxVal === '') return true;
+  const v = cardPrice(c).eur;
+  if (v == null) return false;
+  if (valMinVal !== '' && v < toEur(Number(valMinVal))) return false;
+  if (valMaxVal !== '' && v > toEur(Number(valMaxVal))) return false;
+  return true;
+}
+
+// Sort comparators: a missing price/cost always sinks to the bottom, whichever
+// direction is picked, so the top of the list is never a wall of blanks.
+function cmpNum(a, b, desc) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return desc ? b - a : a - b;
+}
+
+/** Sort the on-screen cards (inventory mode); any-card mode sorts in SQL. */
+function sortCards(arr, setPicked) {
+  const val = (c) => cardPrice(c).eur;
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const byCollector = (a, b) =>
+    ((parseInt(a.collectorNumber, 10) || 0) - (parseInt(b.collectorNumber, 10) || 0)) ||
+    a.collectorNumber.localeCompare(b.collectorNumber);
+  const out = [...arr];
+  switch (sortBy) {
+    case 'value-desc': return out.sort((a, b) => cmpNum(val(a), val(b), true) || byName(a, b));
+    case 'value-asc':  return out.sort((a, b) => cmpNum(val(a), val(b), false) || byName(a, b));
+    case 'mv-asc':     return out.sort((a, b) =>
+      manaValueOf(a.manaCost) - manaValueOf(b.manaCost) || byName(a, b));
+    case 'mv-desc':    return out.sort((a, b) =>
+      manaValueOf(b.manaCost) - manaValueOf(a.manaCost) || byName(a, b));
+    case 'name':       return out.sort(byName);
+    // Default: collector order inside a chosen set, otherwise the name order
+    // the collection already comes back in.
+    default: return setPicked ? out.sort(byCollector) : out;
+  }
 }
 
 function typeSection(line) {
@@ -499,7 +579,7 @@ function rebuildSubtypes() {
 /** Chip filters, applied on top of search + set in both modes. */
 function chipMatch(c) {
   if (!typeMatch(c)) return false;
-  if (!colorMatch(c) || !mvMatch(c)) return false;
+  if (!colorMatch(c) || !mvMatch(c) || !valMatch(c)) return false;
   if (activeRarities.size > 0 && !activeRarities.has(c.rarity)) return false;
   if (wantCommander && !(c.typeLine || '').includes('Legendary Creature')) return false;
   if (wantFoil) {
@@ -514,7 +594,8 @@ function chipMatch(c) {
 function chipsActive() {
   return activeRarities.size > 0 || wantCommander || wantFoil ||
     selectedType !== '' || subtypeText.trim() !== '' ||
-    activeColors.size > 0 || mvMinVal !== '' || mvMaxVal !== '';
+    activeColors.size > 0 || mvMinVal !== '' || mvMaxVal !== '' ||
+    valMinVal !== '' || valMaxVal !== '' || sortBy !== 'auto';
 }
 const setFilterInput = $('setFilter');
 const clearBtn = $('clearFilters');
@@ -543,18 +624,25 @@ function updateClear() {
     (setFilterText || setSel.value || chipsActive()) ? 'inline-block' : 'none';
 }
 
-async function loadSets() {
-  const mode = inv.checked ? 'inventory' : 'all';
-  setsCache = await api('/api/sets?mode=' + mode +
-    '&name=' + encodeURIComponent(q.value.trim()) +
-    '&type=' + encodeURIComponent(selectedType) +
+/** The filter state as query params, shared by /api/sets and /api/cards. */
+function filterQuery() {
+  return '&type=' + encodeURIComponent(selectedType) +
     '&subtype=' + encodeURIComponent(subtypeText) +
     '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
     (wantCommander ? '&commander=1' : '') +
     (wantFoil ? '&foil=1' : '') +
     '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
     (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
-    (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : ''));
+    (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : '') +
+    (valMinVal !== '' ? '&valMin=' + toEur(Number(valMinVal)) : '') +
+    (valMaxVal !== '' ? '&valMax=' + toEur(Number(valMaxVal)) : '') +
+    '&sort=' + sortBy;
+}
+
+async function loadSets() {
+  const mode = inv.checked ? 'inventory' : 'all';
+  setsCache = await api('/api/sets?mode=' + mode +
+    '&name=' + encodeURIComponent(q.value.trim()) + filterQuery());
   renderSetOptions();
 }
 
@@ -635,6 +723,7 @@ async function adjust(c, finish, delta) {
     '&finish=' + encodeURIComponent(finish) + '&delta=' + delta);
   inventory = null;
   await refresh();
+  stamp = await readStamp();   // our own write — don't let the poll re-refresh
   const pool = inv.checked && inventory ? inventory.cards : cards;
   const updated = pool.find((x) => x.scryfallId === c.scryfallId);
   if (updated) showBig(updated);
@@ -757,7 +846,13 @@ async function openDeckMenu(scryfallId, name, x, y) {
   deckMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
 }
 
-async function refresh() {
+// Refreshes overlap (typing, the tick, the freshness poll) and the any-card
+// query is the slow one — so only the newest run is allowed to paint.
+let refreshSeq = 0;
+
+async function refresh(opts) {
+  const background = !!(opts && opts.background);
+  const my = ++refreshSeq;
   void loadSets();
   const name = q.value.trim().toLowerCase();
   const set = setSel.value;
@@ -766,16 +861,14 @@ async function refresh() {
     if (!inventory) {
       status.textContent = 'Loading collection…';
       inventory = await api('/api/inventory');
+      if (my !== refreshSeq) return;
     }
     totals.innerHTML = inventory.totalCards + ' cards · <b title="Cardmarket' +
       (fxAsOf ? ', converted at the ECB rate of ' + fxAsOf : '') + '">' +
       (cm(inventory.totalValueEur) ?? '—') + '</b> · ' + (usd(inventory.totalValueUsd) ?? '$0.00');
-    cards = inventory.cards.filter((c) =>
+    cards = sortCards(inventory.cards.filter((c) =>
       (!name || c.name.toLowerCase().includes(name)) && (!set || c.setCode === set) &&
-      chipMatch(c));
-    if (set) cards = [...cards].sort((a, b) =>
-      (parseInt(a.collectorNumber, 10) || 0) - (parseInt(b.collectorNumber, 10) || 0) ||
-      a.collectorNumber.localeCompare(b.collectorNumber));
+      chipMatch(c)), !!set);
     status.textContent = cards.length
       ? cards.length + ' card' + (cards.length === 1 ? '' : 's') + ' shown'
       : 'Nothing matches — clear the search or pick another set.';
@@ -785,14 +878,8 @@ async function refresh() {
     status.textContent = 'Loading…';
     const r = await api('/api/cards?name=' + encodeURIComponent(name) +
       '&set=' + encodeURIComponent(set) + '&offset=' + (page * PAGE_SIZE) +
-      '&type=' + encodeURIComponent(selectedType) +
-      '&subtype=' + encodeURIComponent(subtypeText) +
-      '&rarities=' + encodeURIComponent([...activeRarities].join(',')) +
-      (wantCommander ? '&commander=1' : '') +
-      (wantFoil ? '&foil=1' : '') +
-      '&colors=' + [...activeColors].join(',') + '&colorMode=' + colorMode +
-      (mvMinVal !== '' ? '&mvMin=' + mvMinVal : '') +
-      (mvMaxVal !== '' ? '&mvMax=' + mvMaxVal : ''));
+      filterQuery());
+    if (my !== refreshSeq) return;
     totalResults = r.total;
     cards = r.cards;
     const ownedCount = cards.filter((c) => c.quantity > 0).length;
@@ -806,8 +893,9 @@ async function refresh() {
     renderPager();
   }
   render();
-  // Auto-open the big view when a name search narrows to exactly one card name.
-  if (name && cards.length >= 1) {
+  // Auto-open the big view when a name search narrows to exactly one card name
+  // — but never on a background refresh, which would pop a modal unprompted.
+  if (!background && name && cards.length >= 1) {
     const names = new Set(cards.map((c) => c.name.toLowerCase()));
     if (names.size === 1 && (cards.length === 1 || inv.checked)) showBig(cards[0]);
   }
@@ -886,6 +974,24 @@ function onMvChange() {
 }
 mvMinInput.addEventListener('input', onMvChange);
 mvMaxInput.addEventListener('input', onMvChange);
+const valMinInput = $('valMin'), valMaxInput = $('valMax');
+function onValChange() {
+  valMinVal = valMinInput.value.trim();
+  valMaxVal = valMaxInput.value.trim();
+  page = 0;
+  updateClear();
+  clearTimeout(debounce);
+  debounce = setTimeout(refresh, 250);
+}
+valMinInput.addEventListener('input', onValChange);
+valMaxInput.addEventListener('input', onValChange);
+const sortSel = $('sortSel');
+sortSel.addEventListener('change', () => {
+  sortBy = sortSel.value;
+  page = 0;   // a new order makes the old page number meaningless
+  updateClear();
+  refresh();
+});
 clearBtn.onclick = () => {
   page = 0;
   setFilterText = '';
@@ -906,6 +1012,12 @@ clearBtn.onclick = () => {
   mvMaxVal = '';
   mvMinInput.value = '';
   mvMaxInput.value = '';
+  valMinVal = '';
+  valMaxVal = '';
+  valMinInput.value = '';
+  valMaxInput.value = '';
+  sortBy = 'auto';
+  sortSel.value = 'auto';
   document.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
   renderSetOptions();
   refresh();
@@ -914,11 +1026,40 @@ clearBtn.onclick = () => {
 // exists in the new mode (it always does when unticking into all-sets).
 inv.addEventListener('change', () => { page = 0; refresh(); });
 
+// --- Stay current: cards scanned in (or sold) while this page is open ---
+// The collection is cached here for snappy filtering, so a write elsewhere in
+// the app would otherwise leave stale totals on screen until a reload. Poll a
+// tiny change token instead — it only differs after an actual inventory write.
+let stamp = null;
+async function readStamp() {
+  try {
+    const r = await fetch('/api/stamp');
+    return r.ok ? (await r.json()).stamp : null;
+  } catch (e) { return null; }
+}
+async function checkFresh() {
+  if (document.hidden) return;
+  const s = await readStamp();
+  if (s == null) return;
+  if (stamp !== null && s !== stamp) {
+    stamp = s;
+    inventory = null;
+    await refresh({ background: true });
+  } else {
+    stamp = s;
+  }
+}
+setInterval(checkFresh, 5000);
+document.addEventListener('visibilitychange', checkFresh);
+window.addEventListener('focus', checkFresh);
+
 (async () => {
   try {
     const r = await api('/api/rate');
     fxRate = r.gbpPerEur; fxAsOf = r.asOf;
   } catch (e) { /* € fallback */ }
+  if (!fxRate) $('valLbl').textContent = 'Value €:';   // offline: prices show in €
+  stamp = await readStamp();
   await refresh();
 })();
 </script>

@@ -4,6 +4,21 @@ All notable changes to MTG CardVault. Versions are the tagged releases on GitHub
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project uses simple `MAJOR.MINOR.PATCH` tags.
 
+## [Unreleased]
+
+Inventory viewer: value filter, sorting, and a self-updating page.
+
+### Added
+- **Card value filter** in the inventory viewer / any-card browser — a min/max band in **£** (€ when offline), matched against the Cardmarket price shown on the tile. Unpriced cards fall outside every band rather than counting as £0.
+- **Sort dropdown** — value high→low / low→high, mana cost either way, or name A–Z, on top of any combination of filters. In any-card mode the sort runs in SQL so it orders the whole result set, not just the current page.
+
+### Changed
+- The `Cost:` filter is now labelled **`Mana cost:`** — it filters by mana value, and the new `Value £:` boxes are the money one.
+
+### Fixed
+- An open inventory viewer no longer shows stale totals: the page caches the collection for fast filtering but now polls a cheap change token (`/api/stamp`) and redraws within ~5s of any inventory write — a scan-in, a sale, a ± adjustment in another window, or a Dropbox-synced change from the shop's other machine. It also re-checks the moment the page regains focus.
+- Overlapping refreshes can no longer paint out of order: a slow any-card query returning after a newer one used to leave the wrong result set (and the wrong status line) on screen.
+
 ## [0.2.1] — 2026-08-06
 
 Viewer filters, card magnifier & deck cost polish.

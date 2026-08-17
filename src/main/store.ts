@@ -89,7 +89,23 @@ interface ViewerFilters {
   colorMode?: 'any' | 'only' | 'exact'
   mvMin?: number | null
   mvMax?: number | null
+  /** Card value band, always in EUR (Cardmarket) — the page converts from £. */
+  valMin?: number | null
+  valMax?: number | null
+  sort?: ViewerSort
 }
+
+/** Sort orders offered by the viewer. 'auto' = name, or collector order in a set. */
+export type ViewerSort =
+  | 'auto'
+  | 'name'
+  | 'value-desc'
+  | 'value-asc'
+  | 'mv-asc'
+  | 'mv-desc'
+
+/** The Cardmarket price a card is shown at: nonfoil, else the foil price. */
+const PRICE_EUR = 'COALESCE(prices_eur, prices_eur_foil)'
 
 /** Colour + mana-value WHERE fragments (mana_value is a registered UDF). */
 function colorAndMvSql(f: ViewerFilters): string[] {
@@ -103,6 +119,47 @@ function colorAndMvSql(f: ViewerFilters): string[] {
     where.push(`mana_value(mana_cost) <= ${Math.floor(f.mvMax)}`)
   }
   return where
+}
+
+/**
+ * Card-value WHERE fragments — reference-DB tables only (the inventory table
+ * carries no prices). An unpriced card can't satisfy a value band, so it drops
+ * out of the results rather than counting as £0.
+ */
+function valueSql(f: ViewerFilters): string[] {
+  const where: string[] = []
+  if (f.valMin != null && Number.isFinite(f.valMin)) {
+    where.push(`(${PRICE_EUR} IS NOT NULL AND ${PRICE_EUR} >= ${f.valMin})`)
+  }
+  if (f.valMax != null && Number.isFinite(f.valMax)) {
+    where.push(`(${PRICE_EUR} IS NOT NULL AND ${PRICE_EUR} <= ${f.valMax})`)
+  }
+  return where
+}
+
+/**
+ * ORDER BY for any-card mode. Sorting has to happen in SQL because the results
+ * are paged — sorting one page would only shuffle the page. Unpriced cards sort
+ * last in both value directions.
+ */
+function viewerOrderSql(sort: ViewerSort | undefined, setBrowse: boolean): string {
+  switch (sort) {
+    case 'value-desc':
+      return `ORDER BY (${PRICE_EUR} IS NULL), ${PRICE_EUR} DESC, name COLLATE NOCASE`
+    case 'value-asc':
+      return `ORDER BY (${PRICE_EUR} IS NULL), ${PRICE_EUR} ASC, name COLLATE NOCASE`
+    case 'mv-asc':
+      return 'ORDER BY mana_value(mana_cost), name COLLATE NOCASE'
+    case 'mv-desc':
+      return 'ORDER BY mana_value(mana_cost) DESC, name COLLATE NOCASE'
+    case 'name':
+      return 'ORDER BY name COLLATE NOCASE, released_at DESC'
+    default:
+      // Set browse reads in collector order; everything else alphabetically.
+      return setBrowse
+        ? 'ORDER BY CAST(collector_number AS INTEGER), collector_number'
+        : 'ORDER BY name COLLATE NOCASE, released_at DESC'
+  }
 }
 
 const INV_SCHEMA = `
@@ -1133,6 +1190,25 @@ export class DataStore {
   }
 
   /**
+   * A cheap change token for the viewer to poll: it changes on every inventory
+   * write (scan-in, sell, finish move, viewer ± buttons), including writes made
+   * by another window or synced in from Dropbox. Two counts + the newest
+   * timestamps, so it never misses an add that's balanced by a removal.
+   */
+  inventoryStamp(): string {
+    const inv = this.invDb
+      .prepare(
+        `SELECT COUNT(*) AS stacks, COALESCE(SUM(quantity), 0) AS qty,
+                COALESCE(MAX(updated_at), '') AS touched FROM inventory`
+      )
+      .get() as { stacks: number; qty: number; touched: string }
+    const log = this.invDb.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM scan_log').get() as {
+      id: number
+    }
+    return `${inv.stacks}:${inv.qty}:${inv.touched}:${log.id}`
+  }
+
+  /**
    * Any-card mode: search or browse the whole reference DB, paged. With no
    * name and no set this browses EVERYTHING (name order) — the page size
    * keeps that light.
@@ -1178,12 +1254,9 @@ export class DataStore {
     }
     if (f.commander) where.push("type_line LIKE '%Legendary Creature%'")
     if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
-    where.push(...colorAndMvSql(f))
+    where.push(...colorAndMvSql(f), ...valueSql(f))
     const whereSql = where.length > 0 ? where.join(' AND ') : '1=1'
-    // Set browse reads in collector order; everything else alphabetically.
-    const order = set && !name
-      ? 'ORDER BY CAST(collector_number AS INTEGER), collector_number'
-      : 'ORDER BY name COLLATE NOCASE, released_at DESC'
+    const order = viewerOrderSql(f.sort, Boolean(set) && !name)
     const total = (
       this.refDb
         .prepare(`SELECT COUNT(*) AS n FROM scryfall_cards WHERE ${whereSql}`)
@@ -1275,6 +1348,7 @@ export class DataStore {
       this.openReferenceIfPresent()
       if (!this.refDb) return []
       if (f.foil) where.push('(prices_eur_foil IS NOT NULL OR prices_usd_foil IS NOT NULL)')
+      where.push(...valueSql(f))
       if (where.length === 0) {
         return this.listSets().map((s) => ({ ...s, count: 0 }))
       }
@@ -1294,6 +1368,9 @@ export class DataStore {
 
     if (f.foil) where.push("finish != 'nonfoil'")
     where.push('quantity > 0')
+    // No value filter here: prices live in reference.db, which isn't joinable
+    // from this connection — so with a value band active the per-set counts are
+    // a superset of what the grid shows (the grid filters on price itself).
     const rows = this.invDb
       .prepare(
         `SELECT set_code, SUM(quantity) AS qty FROM inventory
