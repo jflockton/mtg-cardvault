@@ -6,9 +6,10 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/); this
 
 ## [Unreleased]
 
-Inventory viewer: value filter, sorting, full-art filter, and a self-updating page.
+Inventory viewer: value filter, sorting, full-art filter, two-sided cards, and a self-updating page.
 
 ### Added
+- **Flip double-faced cards** — open a two-sided printing (transform, modal DFC, double-faced token, reversible or art-series card — e.g. *Norman Osborn // Green Goblin*, Marvel's Spider-Man #220) in the inventory viewer and a button under the set line turns it over with a 3D rotation, landing on the other face. The button is named after the face it will show ("⟳ Green Goblin", then "⟳ Norman Osborn"), `F` does the same from the keyboard, and the magnifier still zooms and pans whichever side is up. The reference DB gained `layout` and `back_image_uri` columns, populated on the next **Refresh card data**; until then the viewer resolves a card's faces from Scryfall the first time it's opened (one small call) and caches the answer, so flipping works without waiting for a rebuild.
 - **Import decks from Obsidian** — a 💎 Obsidian button in the deck builder lists every vault note with a `## 📜 Deck List` section (searchable, newest first, with commander shown), parses the decklist code block under that heading, and imports it through the usual review modal. The note's commander (frontmatter `commander:`, or the body line the analysis briefs use) is lifted into a Commander section so the commander comes through set. Vault discovery is automatic (the `obsidianVault` folder in Dropbox), and only files inside the vault are readable through this channel.
 - **Card value filter** in the inventory viewer / any-card browser — a min/max band in **£** (€ when offline), matched against the Cardmarket price shown on the tile. Unpriced cards fall outside every band rather than counting as £0.
 - **Sort dropdown** — value high→low / low→high, mana cost either way, or name A–Z, on top of any combination of filters. In any-card mode the sort runs in SQL so it orders the whole result set, not just the current page.

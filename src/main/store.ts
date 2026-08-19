@@ -425,6 +425,14 @@ export class DataStore {
     if (!refCols.some((c) => c.name === 'borderless')) {
       this.refDb.exec('ALTER TABLE scryfall_cards ADD COLUMN borderless INTEGER NOT NULL DEFAULT 0')
     }
+    // Two-sided cards. Old rows keep layout '' — "faces not known yet" — and
+    // the viewer resolves those one at a time against the live API.
+    if (!refCols.some((c) => c.name === 'layout')) {
+      this.refDb.exec("ALTER TABLE scryfall_cards ADD COLUMN layout TEXT NOT NULL DEFAULT ''")
+    }
+    if (!refCols.some((c) => c.name === 'back_image_uri')) {
+      this.refDb.exec('ALTER TABLE scryfall_cards ADD COLUMN back_image_uri TEXT')
+    }
     this.refDb.exec(REF_INDEXES)
     // mana_value(mana_cost) in SQL — powers the viewer's mana-cost filter
     // without needing a cmc column in the schema.
@@ -1136,7 +1144,7 @@ export class DataStore {
     this.openReferenceIfPresent()
     const refStmt = this.refDb?.prepare(
       `SELECT set_name, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil,
-              full_art, borderless
+              full_art, borderless, layout, back_image_uri
        FROM scryfall_cards WHERE scryfall_id = ?`
     )
     const rows = this.invDb
@@ -1175,6 +1183,8 @@ export class DataStore {
               prices_eur_foil: number | null
               full_art: number
               borderless: number
+              layout: string
+              back_image_uri: string | null
             }
           | undefined
         card = {
@@ -1195,7 +1205,9 @@ export class DataStore {
           priceEur: ref?.prices_eur ?? null,
           priceEurFoil: ref?.prices_eur_foil ?? null,
           fullArt: ref?.full_art === 1,
-          borderless: ref?.borderless === 1
+          borderless: ref?.borderless === 1,
+          backImageUri: ref?.back_image_uri ?? null,
+          facesKnown: Boolean(ref && ref.layout !== '')
         }
         byId.set(r.scryfall_id, card)
       }
@@ -1321,6 +1333,8 @@ export class DataStore {
       prices_eur_foil: number | null
       full_art: number
       borderless: number
+      layout: string
+      back_image_uri: string | null
     }[]
 
     const owned = new Map<string, number>()
@@ -1348,9 +1362,35 @@ export class DataStore {
       priceEur: r.prices_eur,
       priceEurFoil: r.prices_eur_foil,
       fullArt: r.full_art === 1,
-      borderless: r.borderless === 1
+      borderless: r.borderless === 1,
+      backImageUri: r.back_image_uri,
+      facesKnown: r.layout !== ''
     }))
     return { cards, total }
+  }
+
+  /**
+   * What faces a printing has. `known` is false only on a reference DB built
+   * before the layout column existed — the caller then looks the card up live
+   * and hands the answer back to recordCardFaces.
+   */
+  cardFaces(scryfallId: string): { known: boolean; backImageUri: string | null } {
+    this.openReferenceIfPresent()
+    const row = this.refDb
+      ?.prepare('SELECT layout, back_image_uri FROM scryfall_cards WHERE scryfall_id = ?')
+      .get(scryfallId) as { layout: string; back_image_uri: string | null } | undefined
+    if (!row) return { known: false, backImageUri: null }
+    return { known: row.layout !== '', backImageUri: row.back_image_uri }
+  }
+
+  /** Cache a live face lookup, so the card only ever costs one API call. */
+  recordCardFaces(scryfallId: string, layout: string, backImageUri: string | null): void {
+    this.openReferenceIfPresent()
+    this.refDb
+      ?.prepare(
+        'UPDATE scryfall_cards SET layout = ?, back_image_uri = ? WHERE scryfall_id = ?'
+      )
+      .run(layout || 'normal', backImageUri, scryfallId)
   }
 
   /**
@@ -1997,4 +2037,8 @@ export interface ViewerCard {
   fullArt?: boolean
   /** True for borderless printings. */
   borderless?: boolean
+  /** Back face art for two-sided printings — the viewer's flip button. */
+  backImageUri?: string | null
+  /** False on pre-flip reference DBs: the faces still have to be looked up. */
+  facesKnown?: boolean
 }

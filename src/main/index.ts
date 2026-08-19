@@ -45,14 +45,14 @@ function seedReferenceDbFromResources(dataDir: string): void {
   if (!app.isPackaged || !fs.existsSync(bundled)) return
   if (fs.existsSync(target)) {
     // Keep the existing copy unless its schema predates this app version
-    // (e.g. missing the borderless column added later) — then re-seed. The
+    // (e.g. missing the back_image_uri column added later) — then re-seed. The
     // sentinel is the most recently added column, so bumping it here forces
     // installed copies onto the newer schema.
     try {
       const db = new Database(target, { readonly: true })
       const cols = db.prepare('PRAGMA table_info(scryfall_cards)').all() as { name: string }[]
       db.close()
-      if (cols.some((c) => c.name === 'borderless')) return
+      if (cols.some((c) => c.name === 'back_image_uri')) return
     } catch {
       // unreadable/corrupt → fall through and re-seed
     }

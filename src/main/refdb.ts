@@ -47,7 +47,12 @@ CREATE TABLE IF NOT EXISTS scryfall_cards (
   finishes         TEXT NOT NULL DEFAULT '["nonfoil"]',
   full_art         INTEGER NOT NULL DEFAULT 0,
   borderless       INTEGER NOT NULL DEFAULT 0,
-  released_at      TEXT
+  released_at      TEXT,
+  -- Scryfall's layout ('normal', 'transform', 'modal_dfc', …). '' means the
+  -- row predates this column and its faces are unknown (see faces()).
+  layout           TEXT NOT NULL DEFAULT '',
+  -- Back face art for two-sided printings, NULL for ordinary one-sided cards.
+  back_image_uri   TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `
@@ -84,6 +89,7 @@ interface ScryfallCardJson {
   mana_cost?: string
   colors?: string[]
   color_identity?: string[]
+  layout?: string
   image_uris?: { normal?: string }
   card_faces?: {
     mana_cost?: string
@@ -122,6 +128,20 @@ interface RefRow {
   full_art: number
   borderless: number
   released_at: string | null
+  layout: string
+  back_image_uri: string | null
+}
+
+/**
+ * The back face's art, for the printings that have one: transform / modal_dfc
+ * cards, double-faced tokens, reversible cards and art series. Everything
+ * else (adventures, sagas, split cards…) is one-sided with a Magic card back,
+ * and Scryfall gives its faces no images of their own — which is exactly the
+ * test used here, so no layout allow-list has to be maintained.
+ */
+export function backFaceImage(c: ScryfallCardJson): string | null {
+  const back = Array.isArray(c.card_faces) && c.card_faces.length > 1 ? c.card_faces[1] : null
+  return back?.image_uris?.normal ?? null
 }
 
 function toNum(v: string | null | undefined): number | null {
@@ -163,7 +183,9 @@ export function mapCard(c: ScryfallCardJson): RefRow | null {
     // Scryfall's borderless treatment (showcase/extended-art frames keep their
     // black border and are flagged separately, via frame_effects).
     borderless: c.border_color === 'borderless' ? 1 : 0,
-    released_at: c.released_at ?? null
+    released_at: c.released_at ?? null,
+    layout: c.layout ?? 'normal',
+    back_image_uri: backFaceImage(c)
   }
 }
 
@@ -341,11 +363,11 @@ export async function importBulkFile(
     INSERT OR REPLACE INTO scryfall_cards
       (scryfall_id, name, set_code, set_name, collector_number, rarity, type_line,
        mana_cost, colors, image_uri, prices_usd, prices_usd_foil, prices_eur, prices_eur_foil,
-       finishes, full_art, borderless, released_at)
+       finishes, full_art, borderless, released_at, layout, back_image_uri)
     VALUES
       (@scryfall_id, @name, @set_code, @set_name, @collector_number, @rarity, @type_line,
        @mana_cost, @colors, @image_uri, @prices_usd, @prices_usd_foil, @prices_eur, @prices_eur_foil,
-       @finishes, @full_art, @borderless, @released_at)
+       @finishes, @full_art, @borderless, @released_at, @layout, @back_image_uri)
   `)
   const insertBatch = db.transaction((rows: RefRow[]) => {
     for (const row of rows) insert.run(row)
@@ -502,4 +524,23 @@ export async function fetchCardLive(
   if (!res.ok) throw new Error(`Scryfall lookup failed: HTTP ${res.status}`)
   const row = mapCard((await res.json()) as ScryfallCardJson)
   return row ? rowToCardRef(row, 'live') : null
+}
+
+/**
+ * Ask Scryfall what faces one printing has. Only needed for reference DBs
+ * built before the layout/back_image_uri columns existed: the viewer resolves
+ * a card the first time it's opened and caches the answer, so a shop that
+ * never refreshes its card data still gets working flips. One tiny call, made
+ * on a click — nothing like the scan loop's budget.
+ */
+export async function fetchCardFacesLive(
+  scryfallId: string
+): Promise<{ layout: string; backImageUri: string | null } | null> {
+  const res = await fetch(`https://api.scryfall.com/cards/${encodeURIComponent(scryfallId)}`, {
+    headers: SCRYFALL_HEADERS,
+    signal: AbortSignal.timeout(6000)
+  })
+  if (!res.ok) return null
+  const card = (await res.json()) as ScryfallCardJson
+  return { layout: card.layout ?? 'normal', backImageUri: backFaceImage(card) }
 }

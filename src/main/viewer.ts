@@ -4,6 +4,7 @@
 
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { fetchCardFacesLive } from './refdb'
 import type { DataStore, ViewerSort } from './store'
 import type { Finish } from '../shared/types'
 // Inlined art: Gwen badges the page header, Spidey rides the menu button.
@@ -128,6 +129,12 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
             Number(url.searchParams.get('delta') ?? 0)
           )
           json(res, { ok })
+        } else if (url.pathname === '/api/faces') {
+          // Back-face art for a printing the reference DB predates — resolved
+          // live once, then cached in the DB (see DataStore.cardFaces).
+          void cardBackImage(store, url.searchParams.get('id') ?? '').then((backImageUri) =>
+            json(res, { backImageUri })
+          )
         } else if (url.pathname === '/api/decks') {
           json(res, store.listDecks())
         } else if (url.pathname === '/api/deck-add') {
@@ -165,6 +172,26 @@ export function closeInventoryViewer(): void {
   server?.close()
   server = null
   baseUrl = null
+}
+
+/**
+ * The back face of a printing, or null if it's an ordinary one-sided card.
+ * Answered from the reference DB; only a DB built before the face columns
+ * existed falls through to Scryfall, and that answer is cached back into the
+ * DB so it costs one call per card, ever. Offline → null, no flip offered.
+ */
+async function cardBackImage(store: DataStore, scryfallId: string): Promise<string | null> {
+  if (!scryfallId) return null
+  const cached = store.cardFaces(scryfallId)
+  if (cached.known) return cached.backImageUri
+  try {
+    const live = await fetchCardFacesLive(scryfallId)
+    if (!live) return null
+    store.recordCardFaces(scryfallId, live.layout, live.backImageUri)
+    return live.backImageUri
+  } catch {
+    return null
+  }
 }
 
 function json(res: http.ServerResponse, payload: unknown): void {
@@ -248,10 +275,28 @@ const PAGE = /* html */ `<!doctype html>
          position: relative; }
   #big img { height: min(80vh, 640px); border-radius: 18px;
              box-shadow: 0 12px 60px rgba(0,0,0,.6); }
-  .zoom-wrap { overflow: hidden; border-radius: 18px; cursor: zoom-in; line-height: 0; }
-  .zoom-wrap img { transition: transform .15s ease; display: block; }
+  .zoom-wrap { overflow: hidden; border-radius: 18px; cursor: zoom-in; line-height: 0;
+    perspective: 1800px; }
+  .zoom-wrap img { display: block; }
   .zoom-wrap.zoomed { cursor: zoom-out; }
-  .zoom-wrap.zoomed img { transform: scale(2.4); }
+  /* The art sits on a 3D stage so a two-sided card can turn over in place.
+     One-sided cards get the same stage with a single face — the zoom then has
+     one element to scale either way. */
+  .flipper { position: relative; transform-style: preserve-3d;
+    transition: transform .15s ease; }
+  .flipper .face { backface-visibility: hidden; }
+  .flipper .back { position: absolute; top: 0; left: 0; transform: rotateY(180deg); }
+  /* Only the flip itself gets the slow, weighted turn; zooming stays snappy. */
+  .flipper.turning { transition: transform .72s cubic-bezier(.22,.72,.24,1); }
+  .flipper.flipped { transform: rotateY(180deg); }
+  .zoom-wrap.zoomed .flipper { transform: scale(2.4); }
+  .zoom-wrap.zoomed .flipper.flipped { transform: scale(2.4) rotateY(180deg); }
+  .flip-btn { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px;
+    padding: 7px 14px; border: 1px solid var(--gold); border-radius: 8px;
+    background: rgba(216,182,74,.12); color: var(--text); font-weight: 700;
+    font-size: 13px; cursor: pointer; }
+  .flip-btn:hover { background: rgba(216,182,74,.26); }
+  .flip-btn .turn { font-size: 15px; line-height: 1; }
   #big .info { max-width: 300px; }
   #big h2 { margin: 0 0 6px; font-size: 20px; }
   #big .st { color: var(--dim); margin-bottom: 12px; }
@@ -754,17 +799,89 @@ async function adjust(c, finish, delta) {
   else overlay.classList.remove('show');
 }
 
+// --- Two-sided cards -------------------------------------------------------
+// Transform and modal DFC printings carry a second face; the reference DB
+// stores its art, and the button below turns the card over rather than just
+// swapping the picture.
+
+/** The face names of a "Norman Osborn // Green Goblin" style card name. */
+function faceNames(c) {
+  const parts = String(c.name).split(' // ');
+  return parts.length === 2 ? parts : null;
+}
+
+function flipButtonHtml(c) {
+  const names = faceNames(c);
+  const label = names ? names[1] : 'Flip card';
+  return '<button class="flip-btn" id="flipBtn" title="Turn the card over (F)">' +
+    '<span class="turn">⟳</span><span class="flip-label">' + esc(label) + '</span></button>';
+}
+
+/** Wire the flip button to the 3D stage, if this card has both. */
+function wireFlip(c) {
+  const btn = big.querySelector('#flipBtn'), flipper = big.querySelector('.flipper');
+  if (!btn || !flipper) return;
+  const names = faceNames(c);
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    flipper.classList.add('turning');
+    const showingBack = flipper.classList.toggle('flipped');
+    if (names) btn.querySelector('.flip-label').textContent = names[showingBack ? 0 : 1];
+  };
+  // Drop the slow transition once the turn lands, so zooming stays snappy.
+  flipper.addEventListener('transitionend', () => flipper.classList.remove('turning'));
+}
+
+/**
+ * A reference DB built before the face columns existed knows nothing about
+ * back faces, so resolve this one printing live (cached server-side) and slot
+ * the back + button in if it turns out to be two-sided. The token guards
+ * against the answer landing after the shop has moved on to another card.
+ */
+async function resolveFaces(c, token) {
+  let backImageUri = null;
+  try {
+    const r = await api('/api/faces?id=' + encodeURIComponent(c.scryfallId));
+    backImageUri = r && r.backImageUri ? r.backImageUri : null;
+  } catch (e) { /* offline — no flip on offer */ }
+  c.backImageUri = backImageUri;
+  c.facesKnown = true;
+  if (token !== bigToken || !backImageUri) return;
+  const flipper = big.querySelector('.flipper'), st = big.querySelector('.info .st');
+  if (!flipper || !st || flipper.querySelector('.back')) return;
+  const img = document.createElement('img');
+  img.className = 'face back';
+  img.onerror = () => { img.onerror = null; img.src = backImageUri; };
+  img.src = backImageUri.replace('/normal/', '/large/');
+  flipper.appendChild(img);
+  st.insertAdjacentHTML('afterend', flipButtonHtml(c));
+  wireFlip(c);
+}
+
+// Bumped on every overlay open, so a slow face lookup can tell whether the
+// card it was asked about is still the one on screen.
+let bigToken = 0;
+
 function showBig(c) {
   const bigUri = c.imageUri ? c.imageUri.replace('/normal/', '/large/') : null;
+  const backUri = c.backImageUri ? c.backImageUri.replace('/normal/', '/large/') : null;
+  const token = ++bigToken;
   big.innerHTML =
     '<button class="close-x" title="Close (Esc)">✕</button>' +
     (bigUri
-      ? '<div class="zoom-wrap" title="click to zoom"><img src="' + esc(bigUri) +
-        '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'"></div>'
+      ? '<div class="zoom-wrap" title="click to zoom"><div class="flipper">' +
+        '<img class="face front" src="' + esc(bigUri) +
+        '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' +
+        (backUri
+          ? '<img class="face back" src="' + esc(backUri) +
+            '" onerror="this.src=\\'' + esc(c.backImageUri) + '\\'">'
+          : '') +
+        '</div></div>'
       : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
     '<div class="st">' + esc(c.setName) + ' (' + esc(c.setCode.toUpperCase()) + ') · #' +
     esc(c.collectorNumber) + (c.rarity ? ' · ' + esc(c.rarity) : '') + '</div>' +
+    (backUri ? flipButtonHtml(c) : '') +
     '<div class="prices">' +
     '<div class="eur">' + (cm(c.priceEur) ?? '—') + ' <small>Cardmarket' +
       (fxRate && c.priceEur != null ? ' (' + eur(c.priceEur) + ')' : '') + '</small></div>' +
@@ -795,20 +912,36 @@ function showBig(c) {
   // Magnifier: click the art to zoom, mouse pans, click again to zoom out.
   const zw = big.querySelector('.zoom-wrap');
   if (zw) {
-    zw.onclick = (e) => { e.stopPropagation(); zw.classList.toggle('zoomed'); };
+    const stage = zw.querySelector('.flipper');
+    zw.onclick = (e) => {
+      e.stopPropagation();
+      // Back to centre when un-zooming, or the next flip would swing off-axis.
+      if (zw.classList.toggle('zoomed') === false) stage.style.transformOrigin = '';
+    };
     zw.onmousemove = (e) => {
       if (!zw.classList.contains('zoomed')) return;
       const r = zw.getBoundingClientRect();
-      zw.querySelector('img').style.transformOrigin =
+      stage.style.transformOrigin =
         ((e.clientX - r.left) / r.width * 100).toFixed(1) + '% ' +
         ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%';
     };
   }
+  wireFlip(c);
+  if (!c.facesKnown && bigUri) resolveFaces(c, token);
   big.querySelector('.close-x').onclick = () => overlay.classList.remove('show');
   overlay.classList.add('show');
 }
 overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove('show'); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('show'); });
+// F turns the open card over — as long as the shop isn't typing in a filter.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'f' && e.key !== 'F') return;
+  if (!overlay.classList.contains('show')) return;
+  const t = e.target;
+  if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+  const btn = big.querySelector('#flipBtn');
+  if (btn) { e.preventDefault(); btn.click(); }
+});
 
 // --- Add to deck (right-click a card, or the button on the full-card view) ---
 let decks = [];
