@@ -291,8 +291,10 @@ const PAGE = /* html */ `<!doctype html>
   .flipper.flipped { transform: rotateY(180deg); }
   .zoom-wrap.zoomed .flipper { transform: scale(2.4); }
   .zoom-wrap.zoomed .flipper.flipped { transform: scale(2.4) rotateY(180deg); }
-  .flip-btn { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px;
-    padding: 7px 14px; border: 1px solid var(--gold); border-radius: 8px;
+  /* Art column: the card, with its flip button directly beneath it. */
+  .art { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .flip-btn { display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 16px; border: 1px solid var(--gold); border-radius: 8px;
     background: rgba(216,182,74,.12); color: var(--text); font-weight: 700;
     font-size: 13px; cursor: pointer; }
   .flip-btn:hover { background: rgba(216,182,74,.26); }
@@ -847,14 +849,14 @@ async function resolveFaces(c, token) {
   c.backImageUri = backImageUri;
   c.facesKnown = true;
   if (token !== bigToken || !backImageUri) return;
-  const flipper = big.querySelector('.flipper'), st = big.querySelector('.info .st');
-  if (!flipper || !st || flipper.querySelector('.back')) return;
+  const flipper = big.querySelector('.flipper'), art = big.querySelector('.art');
+  if (!flipper || !art || flipper.querySelector('.back')) return;
   const img = document.createElement('img');
   img.className = 'face back';
   img.onerror = () => { img.onerror = null; img.src = backImageUri; };
   img.src = backImageUri.replace('/normal/', '/large/');
   flipper.appendChild(img);
-  st.insertAdjacentHTML('afterend', flipButtonHtml(c));
+  art.insertAdjacentHTML('beforeend', flipButtonHtml(c));
   wireFlip(c);
 }
 
@@ -869,19 +871,20 @@ function showBig(c) {
   big.innerHTML =
     '<button class="close-x" title="Close (Esc)">✕</button>' +
     (bigUri
-      ? '<div class="zoom-wrap" title="click to zoom"><div class="flipper">' +
+      ? '<div class="art"><div class="zoom-wrap" title="click to zoom"><div class="flipper">' +
         '<img class="face front" src="' + esc(bigUri) +
         '" onerror="this.src=\\'' + esc(c.imageUri) + '\\'">' +
         (backUri
           ? '<img class="face back" src="' + esc(backUri) +
             '" onerror="this.src=\\'' + esc(c.backImageUri) + '\\'">'
           : '') +
-        '</div></div>'
+        '</div></div>' +
+        // The button lives under the card, where the eye already is.
+        (backUri ? flipButtonHtml(c) : '') + '</div>'
       : '') +
     '<div class="info"><h2>' + esc(c.name) + '</h2>' +
     '<div class="st">' + esc(c.setName) + ' (' + esc(c.setCode.toUpperCase()) + ') · #' +
     esc(c.collectorNumber) + (c.rarity ? ' · ' + esc(c.rarity) : '') + '</div>' +
-    (backUri ? flipButtonHtml(c) : '') +
     '<div class="prices">' +
     '<div class="eur">' + (cm(c.priceEur) ?? '—') + ' <small>Cardmarket' +
       (fxRate && c.priceEur != null ? ' (' + eur(c.priceEur) + ')' : '') + '</small></div>' +
