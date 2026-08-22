@@ -193,6 +193,53 @@ export interface DeckDetail {
   cards: DeckCard[]
 }
 
+/**
+ * A wish list: printings the shop wants to buy. Deliberately plainer than a
+ * deck — no formats, boards, categories or quantities, just cards on a list.
+ */
+export interface WishlistSummary {
+  id: number
+  name: string
+  cardCount: number
+  /** tile art: the most recently added card's image, else null */
+  imageUri: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** One card on a wish list; the ref fields are joined from reference.db. */
+export interface WishlistCard {
+  rowId: number
+  scryfallId: string
+  name: string
+  setCode: string | null
+  collectorNumber: string | null
+  rarity: string | null
+  imageUri: string | null
+  priceEur: number | null
+  priceUsd: number | null
+  /** copies of this card (any printing) already in stock — 0 if none */
+  owned: number
+  addedAt: string
+}
+
+export interface WishlistDetail {
+  id: number
+  name: string
+  createdAt: string
+  updatedAt: string
+  cards: WishlistCard[]
+}
+
+/** Outcome of an "add to wish list": a repeat printing is refused, not stacked. */
+export interface WishlistAddResult {
+  ok: boolean
+  /** true when the printing was already on the list — the card is unchanged */
+  duplicate: boolean
+  /** the list it went on (or already sat on), for the confirmation message */
+  listName: string
+}
+
 export interface DeckImportResult {
   deckId: number
   /** total copies added across all resolved + unresolved lines */

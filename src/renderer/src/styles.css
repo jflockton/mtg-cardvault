@@ -1710,3 +1710,97 @@ button.danger {
   width: 100%;
   padding: 9px 12px;
 }
+
+/* --- Wish lists ---------------------------------------------------------- */
+/* Deliberately spare: a header row and a wall of card art. No filters, no
+   curve, no stats — the deck builder is where that lives. */
+.wish-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.wish-head h2 {
+  margin: 0;
+}
+.wish-note {
+  margin: 0 0 10px;
+  color: var(--ok);
+}
+.wish-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.wish-card {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.wish-card img,
+.wish-noimg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 488 / 680;
+  object-fit: cover;
+  background: #0d0f13;
+}
+.wish-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.wish-meta {
+  padding: 8px 10px;
+}
+.wish-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Already in stock — a wish list can outlive the buying of the card. */
+.wish-owned {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--ok);
+  background: rgba(13, 15, 19, 0.85);
+  color: var(--ok);
+  font-size: 11px;
+  font-weight: 700;
+}
+.wish-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(13, 15, 19, 0.85);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.wish-card:hover .wish-remove {
+  opacity: 1;
+}
+.wish-remove:hover {
+  border-color: #e0574f;
+  color: #ff8f88;
+}

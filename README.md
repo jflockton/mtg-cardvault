@@ -14,6 +14,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
 | 6 | Show-Inventory browser: card-image grid, Cardmarket £ + USD prices, set + type/rarity/colour/mana/value/full-art/borderless filters, name search, any-card mode over all ~107k printings, clipboard/CSV exports | ✅ |
 | 7 | Packaging: NSIS `.exe` + macOS `.dmg`, self-contained (bundled reference.db + tessdata) | ✅ shipping |
 | 🃏 | **Deck builder**: create/import/analyse/export Commander decks against live inventory | ✅ (v0.2.0) |
+| ⭐ | **Wish lists**: named lists of cards to buy, added from the inventory, exported as buyable lines | ✅ |
 | — | Extras: Name mode (old cards), precon bulk add (MTGJSON), token sets, scan log with value+UTC, cloud (Dropbox) inventory storage, card magnifier, double-faced card flip | ✅ |
 
 ## Index
@@ -48,6 +49,7 @@ Webcam card scanner + local-first inventory app for a game shop's Magic: The Gat
   - **Analysis** ([src/shared/deckStats.ts](src/shared/deckStats.ts), pure/dependency-free): colour breakdown by pip and by card, mana curve (mana value parsed from the printed cost, capped at 7+), average mana value, and opening-hand draw-odds per card type via an exact hypergeometric calculation. Anything the reference DB couldn't resolve is skipped, never guessed.
   - **Owned-vs-missing** panel with a printing-aware missing-singles list and a **Copy buy list** button, so a deck turns straight into a shopping list against current stock.
   - **Printing-specific export** to clipboard or `.txt`. Smart resolution excludes art-series cards and Secret-Lair/promo printings and handles modal double-faced front faces.
+- **Wish lists.** Named lists of cards the shop *wants*, kept next to the decks (see [src/renderer/src/components/WishLists.tsx](src/renderer/src/components/WishLists.tsx)). Cards go on from the inventory browser — open a card, hit **☆ Add to wish list**, then pick an existing list or name a new one — and a list is deliberately plain next to the deck builder: no formats, boards, filters or curves, just the cards with their art, what each costs, and an *in stock ×N* badge when the shop already owns one. A printing can only be on a list once; a repeat add warns instead of stacking. Export gives buyable lines (`Kaldra Compleat (CMM) 958`) to the clipboard or a `.txt`, ready for a shop search or the `/buy-deck` skill. Lists live in `inventory.db`, so they're backed up and Dropbox-synced with the stock.
 - **Cardmarket is the house currency.** Every add writes the Cardmarket (EUR) price at scan time into the scan log alongside USD; the in-app collection value, per-row prices and the scan preview all display Cardmarket **£** (converted at the ECB daily rate, native € shown when offline, USD kept alongside). Inventories created before this feature are migrated automatically, with pre-existing scan events stamped at the then-current Cardmarket price.
 
 ## Tech stack

@@ -149,6 +149,19 @@ export function openInventoryViewer(store: DataStore): Promise<string> {
           }
         } else if (url.pathname === '/api/deck-create') {
           json(res, store.createDeck(url.searchParams.get('name') ?? 'Untitled deck'))
+        } else if (url.pathname === '/api/wishlists') {
+          json(res, store.listWishlists())
+        } else if (url.pathname === '/api/wishlist-add') {
+          const listId = Number(url.searchParams.get('wishlistId'))
+          const sid = url.searchParams.get('id') ?? ''
+          json(
+            res,
+            listId && sid
+              ? store.addCardToWishlist(listId, sid)
+              : { ok: false, duplicate: false, listName: '' }
+          )
+        } else if (url.pathname === '/api/wishlist-create') {
+          json(res, store.createWishlist(url.searchParams.get('name') ?? 'Untitled wish list'))
         } else {
           res.writeHead(404, { 'Content-Type': 'application/json' })
           res.end('{"error":"not found"}')
@@ -355,6 +368,10 @@ const PAGE = /* html */ `<!doctype html>
     border: 1.5px solid var(--accent); border-radius: 8px; background: rgba(79,142,247,.14);
     color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
   .add-deck-btn:hover { background: rgba(79,142,247,.28); }
+  .add-wish-btn { display: inline-block; margin: 14px 0 0 10px; padding: 7px 14px;
+    border: 1.5px solid var(--gold); border-radius: 8px; background: rgba(216,182,74,.14);
+    color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; }
+  .add-wish-btn:hover { background: rgba(216,182,74,.28); }
   .ctx-menu { position: fixed; z-index: 9999; display: none; min-width: 230px; max-height: 62vh;
     overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     padding: 6px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
@@ -902,6 +919,7 @@ function showBig(c) {
       '" title="Rulings, legality, card backs / transforms, every printing — opens in your browser">' +
       'Full details on Scryfall ↗</a>' +
     '<button class="add-deck-btn" id="addDeckBtn">＋ Add to deck</button>' +
+    '<button class="add-wish-btn" id="addWishBtn">☆ Add to wish list</button>' +
     '</div>';
   big.querySelectorAll('.adj').forEach((btn) => {
     btn.onclick = () => adjust(c, btn.dataset.f, Number(btn.dataset.d));
@@ -911,6 +929,12 @@ function showBig(c) {
     e.stopPropagation();
     const r = addBtn.getBoundingClientRect();
     openDeckMenu(c.scryfallId, c.name, r.left, r.bottom + 6);
+  };
+  const wishBtn = big.querySelector('#addWishBtn');
+  if (wishBtn) wishBtn.onclick = (e) => {
+    e.stopPropagation();
+    const r = wishBtn.getBoundingClientRect();
+    openWishMenu(c.scryfallId, c.name, r.left, r.bottom + 6);
   };
   // Magnifier: click the art to zoom, mouse pans, click again to zoom out.
   const zw = big.querySelector('.zoom-wrap');
@@ -946,65 +970,97 @@ document.addEventListener('keydown', (e) => {
   if (btn) { e.preventDefault(); btn.click(); }
 });
 
-// --- Add to deck (right-click a card, or the button on the full-card view) ---
-let decks = [];
-const deckMenu = $('deckMenu'), toastEl = $('toast');
-function closeDeckMenu() { deckMenu.style.display = 'none'; deckMenu.innerHTML = ''; }
+// --- Add to a deck or a wish list ------------------------------------------
+// Right-click a tile for decks; the full-card view has a button for each. Both
+// use the same little picker: pick an existing group, or name a new one.
+const ctxMenu = $('deckMenu'), toastEl = $('toast');
+function closeCtxMenu() { ctxMenu.style.display = 'none'; ctxMenu.innerHTML = ''; }
 document.addEventListener('click', (e) => {
-  if (deckMenu.style.display === 'block' && !deckMenu.contains(e.target)) closeDeckMenu();
+  if (ctxMenu.style.display === 'block' && !ctxMenu.contains(e.target)) closeCtxMenu();
 }, true);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDeckMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtxMenu(); });
 function toast(msg) {
   toastEl.textContent = msg; toastEl.classList.add('show');
   clearTimeout(toastEl._t); toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 1800);
 }
+
 async function addToDeck(scryfallId, deckId, deckName) {
-  closeDeckMenu();
+  closeCtxMenu();
   try {
     const r = await api('/api/deck-add?deckId=' + deckId + '&id=' + encodeURIComponent(scryfallId) + '&qty=1');
     toast(r && r.ok ? ('Added to ' + deckName) : 'Could not add card');
   } catch (e) { toast('Could not add card'); }
 }
-function newDeckInput(scryfallId) {
-  deckMenu.innerHTML = '';
+
+// A wish list holds one of each printing, so a repeat add is a warning rather
+// than a second copy.
+async function addToWishlist(scryfallId, listId, listName) {
+  closeCtxMenu();
+  try {
+    const r = await api('/api/wishlist-add?wishlistId=' + listId + '&id=' + encodeURIComponent(scryfallId));
+    if (r && r.ok) toast('Added to ' + listName);
+    else if (r && r.duplicate) toast('Already on ' + listName);
+    else toast('Could not add card');
+  } catch (e) { toast('Could not add card'); }
+}
+
+/** The "new group" row: a name box that creates the group, then adds the card. */
+function newGroupInput(opts, scryfallId) {
+  ctxMenu.innerHTML = '';
   const wrap = document.createElement('div'); wrap.className = 'ctx-newdeck';
-  const inp = document.createElement('input'); inp.className = 'ctx-input'; inp.placeholder = 'New deck name…';
+  const inp = document.createElement('input'); inp.className = 'ctx-input'; inp.placeholder = opts.placeholder;
   const go = document.createElement('button'); go.className = 'ctx-item new'; go.textContent = 'Create';
   const create = async () => {
     const nm = inp.value.trim(); if (!nm) return;
     try {
-      const d = await api('/api/deck-create?name=' + encodeURIComponent(nm));
-      if (d && d.id) await addToDeck(scryfallId, d.id, nm);
-    } catch (e) { toast('Could not create deck'); }
+      const g = await api(opts.createUrl + encodeURIComponent(nm));
+      if (g && g.id) await opts.add(scryfallId, g.id, nm);
+    } catch (e) { toast('Could not create ' + opts.noun); }
   };
   go.onclick = (ev) => { ev.stopPropagation(); create(); };
   inp.onclick = (ev) => ev.stopPropagation();
   inp.onkeydown = (ev) => { if (ev.key === 'Enter') create(); };
-  wrap.appendChild(inp); wrap.appendChild(go); deckMenu.appendChild(wrap); inp.focus();
+  wrap.appendChild(inp); wrap.appendChild(go); ctxMenu.appendChild(wrap); inp.focus();
 }
-async function openDeckMenu(scryfallId, name, x, y) {
-  try { decks = (await api('/api/decks')) || []; } catch (e) { decks = []; }
-  deckMenu.innerHTML = '';
+
+/** Pick a group for this card: existing ones listed, or make a new one. */
+async function openPicker(opts, scryfallId, name, x, y) {
+  let groups = [];
+  try { groups = (await api(opts.listUrl)) || []; } catch (e) { groups = []; }
+  ctxMenu.innerHTML = '';
   const t = document.createElement('div'); t.className = 'ctx-title';
-  t.textContent = 'Add "' + name + '" to…'; deckMenu.appendChild(t);
-  if (!decks.length) {
+  t.textContent = 'Add "' + name + '" to' + String.fromCharCode(8230); ctxMenu.appendChild(t);
+  if (!groups.length) {
     const em = document.createElement('div'); em.className = 'ctx-empty';
-    em.textContent = 'No decks yet — make one below.'; deckMenu.appendChild(em);
+    em.textContent = opts.emptyText; ctxMenu.appendChild(em);
   }
-  decks.forEach((d) => {
+  groups.forEach((g) => {
     const b = document.createElement('button'); b.className = 'ctx-item';
-    b.textContent = d.name + '  (' + d.cardCount + ')';
-    b.onclick = (ev) => { ev.stopPropagation(); addToDeck(scryfallId, d.id, d.name); };
-    deckMenu.appendChild(b);
+    b.textContent = g.name + '  (' + g.cardCount + ')';
+    b.onclick = (ev) => { ev.stopPropagation(); opts.add(scryfallId, g.id, g.name); };
+    ctxMenu.appendChild(b);
   });
-  const nw = document.createElement('button'); nw.className = 'ctx-item new'; nw.textContent = '＋ New deck…';
-  nw.onclick = (ev) => { ev.stopPropagation(); newDeckInput(scryfallId); };
-  deckMenu.appendChild(nw);
-  deckMenu.style.display = 'block';
-  const w = deckMenu.offsetWidth, h = deckMenu.offsetHeight;
-  deckMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
-  deckMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+  const nw = document.createElement('button'); nw.className = 'ctx-item new'; nw.textContent = opts.newLabel;
+  nw.onclick = (ev) => { ev.stopPropagation(); newGroupInput(opts, scryfallId); };
+  ctxMenu.appendChild(nw);
+  ctxMenu.style.display = 'block';
+  const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+  ctxMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+  ctxMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
 }
+
+const DECK_PICKER = {
+  listUrl: '/api/decks', createUrl: '/api/deck-create?name=', noun: 'deck',
+  emptyText: 'No decks yet — make one below.', newLabel: '＋ New deck…',
+  placeholder: 'New deck name…', add: addToDeck
+};
+const WISH_PICKER = {
+  listUrl: '/api/wishlists', createUrl: '/api/wishlist-create?name=', noun: 'wish list',
+  emptyText: 'No wish lists yet — make one below.', newLabel: '＋ New wish list…',
+  placeholder: 'New wish list name…', add: addToWishlist
+};
+const openDeckMenu = (id, name, x, y) => openPicker(DECK_PICKER, id, name, x, y);
+const openWishMenu = (id, name, x, y) => openPicker(WISH_PICKER, id, name, x, y);
 
 // Refreshes overlap (typing, the tick, the freshness poll) and the any-card
 // query is the slow one — so only the newest run is allowed to paint.

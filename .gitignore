@@ -22,3 +22,6 @@ npm-debug.log*
 
 # TS incremental build info
 *.tsbuildinfo
+
+# check-script bundles (see scripts/check-wishlists.ts)
+scripts/.check-*.cjs

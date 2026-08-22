@@ -9,7 +9,9 @@ import faceOck from './assets/faces/doc-ock.png'
 import faceDoom from './assets/faces/doom.png'
 import faceNoir from './assets/faces/noir.png'
 import faceMiles from './assets/faces/miles.png'
+import faceDaredevil from './assets/faces/daredevil.png'
 import DeckBuilding from './components/DeckBuilding'
+import WishLists from './components/WishLists'
 import InventoryViewer from './components/InventoryViewer'
 import spideyIcon from './assets/spidey.svg'
 import type {
@@ -50,6 +52,7 @@ type Section =
   | 'collection'
   | 'viewer'
   | 'deckbuild'
+  | 'wishlist'
   | 'precon'
   | 'data'
   | 'settings'
@@ -60,6 +63,7 @@ const SECTIONS: { id: Exclude<Section, 'home'>; label: string; face: string; blu
   { id: 'collection', label: 'Collection', face: faceFisk, blurb: 'Stock list, values & exports' },
   { id: 'viewer', label: 'Show Inventory', face: faceGwen, blurb: 'Browse the collection in your browser' },
   { id: 'deckbuild', label: 'Deck building', face: faceMiles, blurb: 'Build & analyse decks; import from text' },
+  { id: 'wishlist', label: 'Wish lists', face: faceDaredevil, blurb: 'Cards to buy, grouped & exportable' },
   { id: 'precon', label: 'Precon import', face: faceOck, blurb: 'Bulk-add a preconstructed deck' },
   { id: 'data', label: 'Card data', face: faceDoom, blurb: 'Refresh the Scryfall reference' },
   { id: 'settings', label: 'Settings', face: faceNoir, blurb: 'Sounds & preferences' }
@@ -1740,6 +1744,8 @@ export default function App(): React.JSX.Element {
       )}
 
       {section === 'deckbuild' && <DeckBuilding />}
+
+      {section === 'wishlist' && <WishLists />}
 
       {section === 'precon' && (
         <div className="section-body">

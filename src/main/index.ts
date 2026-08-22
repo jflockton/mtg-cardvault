@@ -579,6 +579,39 @@ function registerIpc(): void {
     return { ok: true, path: filePath, lines: text.split('\n').length }
   })
 
+  // --- wish lists (what the shop wants, as opposed to what it stocks)
+  ipcMain.handle('wish:list', () => store.listWishlists())
+  ipcMain.handle('wish:create', (_e, name: string) => store.createWishlist(name))
+  ipcMain.handle('wish:rename', (_e, a: { id: number; name: string }) =>
+    store.renameWishlist(a.id, a.name)
+  )
+  ipcMain.handle('wish:delete', (_e, id: number) => store.deleteWishlist(id))
+  ipcMain.handle('wish:get', (_e, id: number) => store.getWishlist(id))
+  ipcMain.handle('wish:addCard', (_e, a: { wishlistId: number; scryfallId: string }) =>
+    store.addCardToWishlist(a.wishlistId, a.scryfallId)
+  )
+  ipcMain.handle('wish:removeCard', (_e, rowId: number) => store.removeWishlistCard(rowId))
+  // Buyable lines — "Kaldra Compleat (CMM) 958" — to the clipboard…
+  ipcMain.handle('wish:exportCopy', (_e, id: number) => {
+    const text = store.wishlistExportText(id)
+    clipboard.writeText(text)
+    return { lines: text ? text.split('\n').length : 0 }
+  })
+  // …or to a .txt file named after the list.
+  ipcMain.handle('wish:exportFile', async (_e, id: number) => {
+    const text = store.wishlistExportText(id)
+    if (!text) return { canceled: true }
+    const list = store.getWishlist(id)
+    const safeName = (list?.name ?? 'wishlist').replace(/[\\/:*?"<>|]/g, '-').trim()
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export wish list',
+      defaultPath: path.join(app.getPath('downloads'), `${safeName || 'wishlist'}.txt`)
+    })
+    if (canceled || !filePath) return { canceled: true }
+    fs.writeFileSync(filePath, text + '\n')
+    return { ok: true, path: filePath, lines: text.split('\n').length }
+  })
+
   ipcMain.handle('scan:corner', async (_e, imageVariants: string[]): Promise<CornerScanResult> => {
     const scan = await scanCorner(imageVariants, resolveTessdataDir())
     let resolution = store.resolveCorner(scan.parse)

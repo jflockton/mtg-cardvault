@@ -16,7 +16,10 @@ import type {
   PreconSummary,
   SetInfo,
   RefProgress,
-  RefStatus
+  RefStatus,
+  WishlistAddResult,
+  WishlistDetail,
+  WishlistSummary
 } from '../shared/types'
 
 export interface CardVaultApi {
@@ -144,6 +147,22 @@ export interface CardVaultApi {
   deckExportFile: (
     deckId: number
   ) => Promise<{ ok?: boolean; path?: string; lines?: number; canceled?: boolean }>
+
+  // --- wish lists
+  wishList: () => Promise<WishlistSummary[]>
+  wishCreate: (name: string) => Promise<WishlistSummary>
+  wishRename: (id: number, name: string) => Promise<void>
+  wishDelete: (id: number) => Promise<void>
+  wishGet: (id: number) => Promise<WishlistDetail | null>
+  /** Put a printing on a list; a repeat printing comes back as a duplicate. */
+  wishAddCard: (wishlistId: number, scryfallId: string) => Promise<WishlistAddResult>
+  wishRemoveCard: (rowId: number) => Promise<void>
+  /** Copy the list as "Name (SET) 123" lines to the clipboard. */
+  wishExportCopy: (id: number) => Promise<{ lines: number }>
+  /** Save those same lines to a .txt file the user picks. */
+  wishExportFile: (
+    id: number
+  ) => Promise<{ ok?: boolean; path?: string; lines?: number; canceled?: boolean }>
 }
 
 const api: CardVaultApi = {
@@ -212,7 +231,18 @@ const api: CardVaultApi = {
   deckImportUrl: (url) => ipcRenderer.invoke('deck:importUrl', url),
   deckCopyMissing: (deckId) => ipcRenderer.invoke('deck:copyMissing', deckId),
   deckExportCopy: (deckId) => ipcRenderer.invoke('deck:exportCopy', deckId),
-  deckExportFile: (deckId) => ipcRenderer.invoke('deck:exportFile', deckId)
+  deckExportFile: (deckId) => ipcRenderer.invoke('deck:exportFile', deckId),
+
+  wishList: () => ipcRenderer.invoke('wish:list'),
+  wishCreate: (name) => ipcRenderer.invoke('wish:create', name),
+  wishRename: (id, name) => ipcRenderer.invoke('wish:rename', { id, name }),
+  wishDelete: (id) => ipcRenderer.invoke('wish:delete', id),
+  wishGet: (id) => ipcRenderer.invoke('wish:get', id),
+  wishAddCard: (wishlistId, scryfallId) =>
+    ipcRenderer.invoke('wish:addCard', { wishlistId, scryfallId }),
+  wishRemoveCard: (rowId) => ipcRenderer.invoke('wish:removeCard', rowId),
+  wishExportCopy: (id) => ipcRenderer.invoke('wish:exportCopy', id),
+  wishExportFile: (id) => ipcRenderer.invoke('wish:exportFile', id)
 }
 
 contextBridge.exposeInMainWorld('api', api)

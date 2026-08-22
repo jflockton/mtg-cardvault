@@ -27,7 +27,10 @@ import type {
   InventoryItem,
   InventorySummary,
   RefStatus,
-  ScanResolution
+  ScanResolution,
+  WishlistAddResult,
+  WishlistDetail,
+  WishlistSummary
 } from '../shared/types'
 import type { CornerParse } from './cornerParse'
 import { canBeCommander, manaValue, MAX_COMMANDERS } from '../shared/deckStats'
@@ -234,6 +237,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_deckcards_stack
   ON deck_cards (deck_id, scryfall_id, category) WHERE scryfall_id IS NOT NULL;
 `
 
+// Wish lists: what the shop WANTS, as opposed to what it stocks. They live in
+// inventory.db beside the decks, so they ride along with the Dropbox backup.
+// A list holds printings, not card names — you wish for a particular art — and
+// one printing can only be on a list once (the unique index below is what
+// turns a second add into the "already on this list" warning).
+const WISHLIST_SCHEMA = `
+CREATE TABLE IF NOT EXISTS wishlists (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wishlist_cards (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  wishlist_id INTEGER NOT NULL REFERENCES wishlists(id) ON DELETE CASCADE,
+  scryfall_id TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  added_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_wishcards_list ON wishlist_cards (wishlist_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wishcards_printing
+  ON wishlist_cards (wishlist_id, scryfall_id);
+`
+
 /** Market price for a finish; etched falls back to foil (bulk data has no etched price). */
 function priceForFinish(pricesUsd: number | null, pricesUsdFoil: number | null, finish: Finish): number | null {
   return finish === 'nonfoil' ? pricesUsd : (pricesUsdFoil ?? pricesUsd)
@@ -363,6 +390,7 @@ export class DataStore {
     )
     this.invDb.exec(INV_SCHEMA)
     this.invDb.exec(DECK_SCHEMA)
+    this.invDb.exec(WISHLIST_SCHEMA)
     // Migration: deck tile art, added after the decks tables first shipped.
     const deckCols = this.invDb.prepare('PRAGMA table_info(decks)').all() as { name: string }[]
     if (!deckCols.some((c) => c.name === 'image_uri')) {
@@ -2003,6 +2031,184 @@ export class DataStore {
     })
     run()
     return { deckId, added, missing }
+  }
+
+  // ------------------------------------------------------------- wish lists
+
+  /** Every wish list, most recently touched first. Tile art = newest card. */
+  listWishlists(): WishlistSummary[] {
+    const rows = this.invDb
+      .prepare(
+        `SELECT w.id, w.name, w.created_at, w.updated_at,
+                (SELECT COUNT(*) FROM wishlist_cards c WHERE c.wishlist_id = w.id) AS card_count,
+                (SELECT c.scryfall_id FROM wishlist_cards c WHERE c.wishlist_id = w.id
+                  ORDER BY c.id DESC LIMIT 1) AS art_id
+         FROM wishlists w ORDER BY w.updated_at DESC`
+      )
+      .all() as {
+      id: number
+      name: string
+      created_at: string
+      updated_at: string
+      card_count: number
+      art_id: string | null
+    }[]
+    this.openReferenceIfPresent()
+    const imgStmt = this.refDb?.prepare('SELECT image_uri FROM scryfall_cards WHERE scryfall_id = ?')
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      cardCount: r.card_count,
+      imageUri: r.art_id
+        ? ((imgStmt?.get(r.art_id) as { image_uri: string | null } | undefined)?.image_uri ?? null)
+        : null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    }))
+  }
+
+  createWishlist(name: string): WishlistSummary {
+    const clean = name.trim() || 'Untitled wish list'
+    const info = this.invDb.prepare('INSERT INTO wishlists (name) VALUES (?)').run(clean)
+    const now = new Date().toISOString()
+    return {
+      id: Number(info.lastInsertRowid),
+      name: clean,
+      cardCount: 0,
+      imageUri: null,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  renameWishlist(id: number, name: string): void {
+    this.invDb
+      .prepare("UPDATE wishlists SET name = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(name.trim() || 'Untitled wish list', id)
+  }
+
+  /** ON DELETE CASCADE clears the list's cards with it. */
+  deleteWishlist(id: number): void {
+    this.invDb.prepare('DELETE FROM wishlists WHERE id = ?').run(id)
+  }
+
+  private touchWishlist(id: number): void {
+    this.invDb.prepare("UPDATE wishlists SET updated_at = datetime('now') WHERE id = ?").run(id)
+  }
+
+  /**
+   * One wish list with its cards, newest addition first. Printing details and
+   * art join from reference.db at read time; `owned` counts what the shop
+   * already stocks under that name, in any printing — the whole point of a
+   * wish list being that you don't have it yet.
+   */
+  getWishlist(id: number): WishlistDetail | null {
+    const list = this.invDb.prepare('SELECT * FROM wishlists WHERE id = ?').get(id) as
+      | { id: number; name: string; created_at: string; updated_at: string }
+      | undefined
+    if (!list) return null
+
+    this.openReferenceIfPresent()
+    const refStmt = this.refDb?.prepare(
+      `SELECT set_code, collector_number, rarity, image_uri, prices_eur, prices_usd
+       FROM scryfall_cards WHERE scryfall_id = ?`
+    )
+    const owned = new Map<string, number>()
+    for (const o of this.invDb
+      .prepare('SELECT name, SUM(quantity) AS qty FROM inventory GROUP BY name COLLATE NOCASE')
+      .all() as { name: string; qty: number }[]) {
+      owned.set(o.name.toLowerCase(), o.qty)
+    }
+
+    const rows = this.invDb
+      .prepare('SELECT * FROM wishlist_cards WHERE wishlist_id = ? ORDER BY id DESC')
+      .all(id) as {
+      id: number
+      scryfall_id: string
+      name: string
+      added_at: string
+    }[]
+
+    return {
+      id: list.id,
+      name: list.name,
+      createdAt: list.created_at,
+      updatedAt: list.updated_at,
+      cards: rows.map((r) => {
+        const ref = refStmt?.get(r.scryfall_id) as
+          | {
+              set_code: string
+              collector_number: string
+              rarity: string
+              image_uri: string | null
+              prices_eur: number | null
+              prices_usd: number | null
+            }
+          | undefined
+        return {
+          rowId: r.id,
+          scryfallId: r.scryfall_id,
+          name: r.name,
+          setCode: ref?.set_code ?? null,
+          collectorNumber: ref?.collector_number ?? null,
+          rarity: ref?.rarity ?? null,
+          imageUri: ref?.image_uri ?? null,
+          priceEur: ref?.prices_eur ?? null,
+          priceUsd: ref?.prices_usd ?? null,
+          owned: owned.get(r.name.toLowerCase()) ?? 0,
+          addedAt: r.added_at
+        }
+      })
+    }
+  }
+
+  /**
+   * Put a printing on a list. The same printing twice is refused rather than
+   * stacked — the caller shows "already on this list" — so a wish list stays a
+   * set of cards with no quantities to reconcile.
+   */
+  addCardToWishlist(wishlistId: number, scryfallId: string): WishlistAddResult {
+    const list = this.invDb.prepare('SELECT name FROM wishlists WHERE id = ?').get(wishlistId) as
+      | { name: string }
+      | undefined
+    if (!list) return { ok: false, duplicate: false, listName: '' }
+    const already = this.invDb
+      .prepare('SELECT 1 AS x FROM wishlist_cards WHERE wishlist_id = ? AND scryfall_id = ?')
+      .get(wishlistId, scryfallId)
+    if (already) return { ok: false, duplicate: true, listName: list.name }
+
+    const card = this.byScryfallId(scryfallId)
+    this.invDb
+      .prepare('INSERT INTO wishlist_cards (wishlist_id, scryfall_id, name) VALUES (?, ?, ?)')
+      .run(wishlistId, scryfallId, card?.name ?? scryfallId)
+    this.touchWishlist(wishlistId)
+    return { ok: true, duplicate: false, listName: list.name }
+  }
+
+  removeWishlistCard(rowId: number): void {
+    const row = this.invDb
+      .prepare('SELECT wishlist_id FROM wishlist_cards WHERE id = ?')
+      .get(rowId) as { wishlist_id: number } | undefined
+    if (!row) return
+    this.invDb.prepare('DELETE FROM wishlist_cards WHERE id = ?').run(rowId)
+    this.touchWishlist(row.wishlist_id)
+  }
+
+  /**
+   * The list as buyable lines — "Kaldra Compleat (CMM) 958", the printing-
+   * specific shape the deck export and /buy-deck already speak. A card the
+   * reference DB can't place falls back to its bare name.
+   */
+  wishlistExportText(id: number): string {
+    const list = this.getWishlist(id)
+    if (!list) return ''
+    return list.cards
+      .map((c) =>
+        c.setCode && c.collectorNumber
+          ? `${c.name} (${c.setCode.toUpperCase()}) ${c.collectorNumber}`
+          : c.name
+      )
+      .join('\n')
   }
 
   close(): void {
