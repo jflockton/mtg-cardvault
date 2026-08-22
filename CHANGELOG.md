@@ -18,6 +18,7 @@ Inventory viewer: value filter, sorting, full-art filter, two-sided cards, wish 
 - **Borderless filter + badge** — a "Borderless" chip and a ▢ badge, from Scryfall's `border_color`. Separate from full art: a card can be either, both, or neither. Same `borderless` reference-DB column and refresh rule as above.
 
 ### Changed
+- **Searching the inventory only filters now.** A name search used to fling the full-card view open the moment the results narrowed to a single card name — which fights you while you are still typing, and buries the grid behind a modal you did not ask for. Search filters, clicking a tile opens.
 - The `Cost:` filter is now labelled **`Mana cost:`** — it filters by mana value, and the new `Value £:` boxes are the money one.
 - **Set filtering ignores punctuation and word order.** It was a literal substring match, so `spiderman` and `spider man` both missed "Marvel's Spider-Man" over a hyphen. Now the query and the set name are compared on letters and digits only, with each word matched independently — `spiderman`, `spider man`, `marvel spider` and the set code `spm` all find it, and `assassins creed` finds "Assassin's Creed".
 

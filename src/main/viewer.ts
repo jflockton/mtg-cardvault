@@ -1066,8 +1066,7 @@ const openWishMenu = (id, name, x, y) => openPicker(WISH_PICKER, id, name, x, y)
 // query is the slow one — so only the newest run is allowed to paint.
 let refreshSeq = 0;
 
-async function refresh(opts) {
-  const background = !!(opts && opts.background);
+async function refresh() {
   const my = ++refreshSeq;
   void loadSets();
   const name = q.value.trim().toLowerCase();
@@ -1109,12 +1108,8 @@ async function refresh(opts) {
     renderPager();
   }
   render();
-  // Auto-open the big view when a name search narrows to exactly one card name
-  // — but never on a background refresh, which would pop a modal unprompted.
-  if (!background && name && cards.length >= 1) {
-    const names = new Set(cards.map((c) => c.name.toLowerCase()));
-    if (names.size === 1 && (cards.length === 1 || inv.checked)) showBig(cards[0]);
-  }
+  // Searching only ever filters the grid. It used to pop the big view open as
+  // soon as a name narrowed to one card, which fights you while you type.
 }
 
 q.addEventListener('input', () => { page = 0; clearTimeout(debounce); debounce = setTimeout(refresh, 200); });
@@ -1278,7 +1273,7 @@ async function checkFresh() {
   if (stamp !== null && s !== stamp) {
     stamp = s;
     inventory = null;
-    await refresh({ background: true });
+    await refresh();
   } else {
     stamp = s;
   }
